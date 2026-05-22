@@ -19,9 +19,14 @@ OUT     = BASE / "version.json"
 
 # These are never included in the update manifest
 SKIP = {
-    "school_mis.db", ".update_backup", "venv", "__pycache__",
+    # never-update system files
+    "school_mis.db", "version.json", ".update_backup", "venv", "__pycache__",
     "assets", "exports", ".git", "tools",
+    # installer / setup scripts (not delivered via auto-update)
     "SETUP_WINDOWS.bat", "SETUP_LINUX.sh", "install.py", "get-pip.py",
+    # machine-specific launcher files created by the installer
+    "run_school_mis.sh", "run_school_mis.bat",
+    "SchoolMIS.desktop", "School MIS.lnk",
 }
 SKIP_EXT = {".pyc", ".pyo", ".db", ".db-shm", ".db-wal", ".tmp", ".log", ".lnk"}
 

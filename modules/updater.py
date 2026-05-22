@@ -59,7 +59,16 @@ SKIP_PATHS = {
     "school_mis.db", "version.json", "config.json",
     "assets", "exports", "venv", ".update_backup",
     "SETUP_WINDOWS.bat", "SETUP_LINUX.sh", "install.py",
+    # machine-specific launchers — never downloaded from GitHub
+    "run_school_mis.sh", "run_school_mis.bat",
+    "SchoolMIS.desktop", "School MIS.lnk",
 }
+
+
+def _should_skip(rel_path: str) -> bool:
+    """Return True if this file should never be touched by the updater."""
+    parts = rel_path.replace("\\", "/").split("/")
+    return any(p in SKIP_PATHS for p in parts)
 
 
 def _sha256(path: Path) -> str:
@@ -115,8 +124,9 @@ def check_for_update() -> dict:
     local_files  = local.get("files", {})
     to_update = []
     for rel_path, remote_hash in remote_files.items():
-        local_hash = local_files.get(rel_path, "")
-        disk_hash  = _sha256(BASE_DIR / rel_path)
+        if _should_skip(rel_path):
+            continue
+        disk_hash = _sha256(BASE_DIR / rel_path)
         if remote_hash != disk_hash:
             to_update.append(rel_path)
 
