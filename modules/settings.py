@@ -1,10 +1,10 @@
-"""modules/settings.py — School settings, user management, academic years."""
+"""modules/settings.py — School settings, user management, academic years, themes."""
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTabWidget, QTableWidget, QTableWidgetItem,
     QHeaderView, QDialog, QFormLayout, QComboBox, QMessageBox,
-    QAbstractItemView, QFrame
+    QAbstractItemView, QFrame, QApplication
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -23,10 +23,16 @@ BTN_OUTLINE = """QPushButton{background:#fff;color:#374151;border:1px solid #D1D
 
 
 # ── Add/Edit User dialog ───────────────────────────────────────────────────────
+
+# Roles a head teacher is allowed to create/assign
+_HEAD_TEACHER_ALLOWED_ROLES = {"class_teacher", "subject_teacher"}
+
+
 class UserDialog(QDialog):
-    def __init__(self, parent=None, user_id=None):
+    def __init__(self, parent=None, user_id=None, editor_role="admin"):
         super().__init__(parent)
-        self.user_id = user_id
+        self.user_id     = user_id
+        self.editor_role = editor_role
         self.setWindowTitle("Edit User" if user_id else "Add User")
         self.setMinimumWidth(420)
         self._build()
@@ -45,9 +51,18 @@ class UserDialog(QDialog):
         self.f_user  = QLineEdit(); self.f_user.setPlaceholderText("username (no spaces)")
         self.f_pw    = QLineEdit(); self.f_pw.setEchoMode(QLineEdit.EchoMode.Password)
         self.f_pw.setPlaceholderText("Leave blank to keep existing password")
-        self.f_role  = QComboBox()
+
+        self.f_role = QComboBox()
+        # Head teacher can only assign teacher-level roles
+        allowed = (
+            _HEAD_TEACHER_ALLOWED_ROLES
+            if self.editor_role == "head_teacher"
+            else set(ROLES.keys())
+        )
         for key, info in ROLES.items():
-            self.f_role.addItem(info["label"], key)
+            if key in allowed:
+                self.f_role.addItem(info["label"], key)
+
         self.f_teacher = QComboBox()
         self.f_teacher.addItem("— Not linked to a teacher —", None)
         for t in fetch_all("SELECT id,first_name,last_name FROM teachers WHERE is_active=1"):
@@ -116,10 +131,11 @@ class SettingsWidget(QWidget):
         lay.addWidget(title)
 
         tabs = QTabWidget()
-        tabs.addTab(self._tab_school(),  "🏫  School")
-        tabs.addTab(self._tab_users(),   "👤  Users & Access")
-        tabs.addTab(self._tab_years(),   "📅  Academic Years")
-        tabs.addTab(self._tab_update(),  "🔄  Updates")
+        tabs.addTab(self._tab_school(),      "🏫  School")
+        tabs.addTab(self._tab_users(),       "👤  Users & Access")
+        tabs.addTab(self._tab_years(),       "📅  Academic Years")
+        tabs.addTab(self._tab_appearance(),  "🎨  Appearance")
+        tabs.addTab(self._tab_update(),      "🔄  Updates")
         lay.addWidget(tabs)
 
     # ── School info tab ───────────────────────────────────────────
@@ -192,7 +208,13 @@ class SettingsWidget(QWidget):
         return w
 
     def _load_users(self, tbl):
-        rows = fetch_all("SELECT * FROM users ORDER BY full_name")
+        # Head teacher must not see admin accounts
+        if session.is_admin:
+            rows = fetch_all("SELECT * FROM users ORDER BY full_name")
+        else:
+            rows = fetch_all(
+                "SELECT * FROM users WHERE role != 'admin' ORDER BY full_name"
+            )
         tbl.setRowCount(len(rows))
         self._user_ids = []
         for r, u in enumerate(rows):
@@ -206,16 +228,22 @@ class SettingsWidget(QWidget):
                 item = QTableWidgetItem(v)
                 if c == 2:
                     item.setForeground(QColor(role_color))
-                    item.setFont(item.font())
                 tbl.setItem(r, c, item)
 
     def _add_user(self, tbl):
-        if UserDialog(self).exec(): self._load_users(tbl)
+        if UserDialog(self, editor_role=session.role).exec():
+            self._load_users(tbl)
 
     def _edit_user(self, tbl):
         row = tbl.currentRow()
-        if row < 0: QMessageBox.information(self,"Select","Select a user first."); return
-        if UserDialog(self, user_id=self._user_ids[row]).exec():
+        if row < 0:
+            QMessageBox.information(self, "Select", "Select a user first."); return
+        uid = self._user_ids[row]
+        target = fetch_one("SELECT role FROM users WHERE id=?", (uid,))
+        if target and target["role"] == "admin" and not session.is_admin:
+            QMessageBox.warning(self, "Access denied",
+                                "Only an administrator can edit admin accounts."); return
+        if UserDialog(self, user_id=uid, editor_role=session.role).exec():
             self._load_users(tbl)
 
     def _deactivate_user(self, tbl):
@@ -224,7 +252,12 @@ class SettingsWidget(QWidget):
         uid = self._user_ids[row]
         if uid == session.user_id:
             QMessageBox.warning(self, "Cannot", "You cannot deactivate your own account."); return
-        r = QMessageBox.question(self, "Confirm", "Deactivate this user account?",
+        target = fetch_one("SELECT role, full_name FROM users WHERE id=?", (uid,))
+        if target and target["role"] == "admin" and not session.is_admin:
+            QMessageBox.warning(self, "Access denied",
+                                "Only an administrator can deactivate admin accounts."); return
+        r = QMessageBox.question(self, "Confirm",
+            f"Deactivate account for {target['full_name'] if target else 'this user'}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if r == QMessageBox.StandardButton.Yes:
             execute("UPDATE users SET is_active=0 WHERE id=?", (uid,))
@@ -287,6 +320,109 @@ class SettingsWidget(QWidget):
         lay.addLayout(act)
         reload()
         return w
+
+    # ── Appearance tab ────────────────────────────────────────────
+    def _tab_appearance(self):
+        w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
+
+        title = QLabel("Theme")
+        title.setStyleSheet("font-size:15px;font-weight:700;color:#111827;")
+        lay.addWidget(title)
+
+        hint = QLabel("Choose a theme that is comfortable for your eyes. Changes apply immediately.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("font-size:12px;color:#6B7280;")
+        lay.addWidget(hint)
+
+        from ui.theme import THEMES
+        current_key = get_config(f"theme_user_{session.user_id}", "light")
+
+        cards_row = QHBoxLayout(); cards_row.setSpacing(16)
+        self._theme_cards = {}
+        for key, info in THEMES.items():
+            card = self._build_theme_card(key, info, active=(key == current_key))
+            self._theme_cards[key] = card
+            cards_row.addWidget(card)
+        cards_row.addStretch()
+        lay.addLayout(cards_row)
+        lay.addStretch()
+        return w
+
+    def _build_theme_card(self, key, info, active):
+        bg, panel, accent = info["preview"]
+        card = QFrame()
+        card.setFixedSize(140, 120)
+        card.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._style_theme_card(card, bg, accent, active)
+
+        cl = QVBoxLayout(card); cl.setContentsMargins(10, 10, 10, 10); cl.setSpacing(6)
+
+        # Mini preview pane
+        preview = QFrame()
+        preview.setFixedHeight(52)
+        border_c = "#334155" if key == "dark" else "#E5E7EB"
+        preview.setStyleSheet(
+            f"QFrame{{background:{panel};border:1px solid {border_c};border-radius:5px;}}"
+        )
+        pl = QVBoxLayout(preview); pl.setContentsMargins(7, 5, 7, 5); pl.setSpacing(4)
+        bar_colors = (
+            [accent, "#475569", "#334155"] if key == "dark"
+            else [accent, "#D1D5DB", "#E5E7EB"] if key == "light"
+            else [accent, "#BFDBFE", "#DBEAFE"]
+        )
+        for color in bar_colors:
+            bar = QFrame()
+            bar.setFixedHeight(4)
+            bar.setStyleSheet(f"background:{color};border-radius:2px;border:none;")
+            pl.addWidget(bar)
+        cl.addWidget(preview)
+
+        name_lbl = QLabel(info["name"])
+        name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        text_color = "#F1F5F9" if key == "dark" else "#374151"
+        name_lbl.setStyleSheet(
+            f"font-size:12px;font-weight:600;color:{text_color};background:transparent;"
+        )
+        cl.addWidget(name_lbl)
+
+        if active:
+            active_lbl = QLabel("✓ Active")
+            active_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            active_lbl.setObjectName("active_lbl")
+            active_lbl.setStyleSheet(f"font-size:10px;color:{accent};background:transparent;")
+            cl.addWidget(active_lbl)
+
+        card.mousePressEvent = lambda e, k=key: self._set_theme(k)
+        return card
+
+    @staticmethod
+    def _style_theme_card(card, bg, accent, active):
+        border = accent if active else "#D1D5DB"
+        width  = "2px" if active else "1px"
+        card.setStyleSheet(
+            f"QFrame{{background:{bg};border:{width} solid {border};border-radius:10px;}}"
+        )
+
+    def _set_theme(self, key):
+        from ui.theme import THEMES
+        theme = THEMES.get(key, THEMES["light"])
+
+        # Apply stylesheet + content-area background via MainWindow
+        for widget in QApplication.instance().topLevelWidgets():
+            from ui.main_window import MainWindow
+            if isinstance(widget, MainWindow):
+                widget.apply_theme(key, save=True)
+                break
+
+        # Update card borders to reflect new selection
+        for k, card in self._theme_cards.items():
+            _, _, accent = THEMES[k]["preview"]
+            bg = THEMES[k]["preview"][0]
+            self._style_theme_card(card, bg, accent, active=(k == key))
+            # update/hide the "✓ Active" label
+            for child in card.findChildren(QLabel):
+                if child.objectName() == "active_lbl":
+                    child.setVisible(k == key)
 
     # ── Updates tab ───────────────────────────────────────────────
     def _tab_update(self):

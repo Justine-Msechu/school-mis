@@ -56,6 +56,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1050, 680)
         self.resize(1240, 760)
         self._build()
+        self._load_saved_theme()
         self._start_update_check()
 
     def _build(self):
@@ -141,6 +142,7 @@ class MainWindow(QMainWindow):
 
         # ── Content area ─────────────────────────────────────────
         content = QFrame()
+        self._content_frame = content          # saved so apply_theme can update it
         content.setStyleSheet("QFrame { background: #F3F4F6; }")
         cl = QVBoxLayout(content)
         cl.setContentsMargins(0, 0, 0, 0)
@@ -172,6 +174,23 @@ class MainWindow(QMainWindow):
         # Restart login flow
         from main import run_app
         run_app()
+
+    def _load_saved_theme(self):
+        from database.db import get_config as gc
+        key = gc(f"theme_user_{session.user_id}", "light")
+        self.apply_theme(key, save=False)
+
+    def apply_theme(self, key: str, save: bool = True):
+        from ui.theme import THEMES
+        from PyQt6.QtWidgets import QApplication
+        theme = THEMES.get(key, THEMES["light"])
+        QApplication.instance().setStyleSheet(theme["style"])
+        self._content_frame.setStyleSheet(
+            f"QFrame {{ background: {theme['content_bg']}; }}"
+        )
+        if save:
+            from database.db import set_config
+            set_config(f"theme_user_{session.user_id}", key)
 
     def _build_banner(self):
         banner = QFrame()
