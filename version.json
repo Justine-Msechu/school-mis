@@ -1,0 +1,7 @@
+{
+  "version": "2.0.0",
+  "release_date": "2025-01-01",
+  "release_notes": "Role-based access, setup wizard, theme fix, auto-updater",
+  "min_python": "3.10",
+  "files": {}
+}
