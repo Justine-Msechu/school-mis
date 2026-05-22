@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QStackedWidget, QFrame, QMessageBox
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QMetaObject, Q_ARG
 from auth.session import session
 from database.db import get_config
 
@@ -144,6 +144,12 @@ class MainWindow(QMainWindow):
         content.setStyleSheet("QFrame { background: #F3F4F6; }")
         cl = QVBoxLayout(content)
         cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(0)
+
+        # Update banner (hidden until an update is found)
+        self._banner = self._build_banner()
+        self._banner.setVisible(False)
+        cl.addWidget(self._banner)
         cl.addWidget(self._stack)
 
         layout.addWidget(sidebar)
@@ -167,10 +173,93 @@ class MainWindow(QMainWindow):
         from main import run_app
         run_app()
 
-    def _start_update_check(self):
-        from modules.updater import StartupUpdateChecker, UpdateDialog
-        self._checker = StartupUpdateChecker()
-        self._checker.update_available.connect(
-            lambda info: UpdateDialog(info, self).exec()
+    def _build_banner(self):
+        banner = QFrame()
+        banner.setStyleSheet(
+            "QFrame { background: #DBEAFE; border-bottom: 1px solid #93C5FD; }"
         )
+        banner.setFixedHeight(46)
+        row = QHBoxLayout(banner)
+        row.setContentsMargins(20, 0, 12, 0)
+
+        self._banner_label = QLabel()
+        self._banner_label.setStyleSheet(
+            "color: #1E40AF; font-size: 13px; font-weight: 600; background: transparent;"
+        )
+
+        install_btn = QPushButton("Install now")
+        install_btn.setFixedHeight(28)
+        install_btn.setStyleSheet(
+            "QPushButton { background: #2563EB; color: #fff; border: none; border-radius: 5px;"
+            " padding: 0 14px; font-size: 12px; font-weight: 600; }"
+            "QPushButton:hover { background: #1D4ED8; }"
+        )
+        install_btn.clicked.connect(self._open_update_dialog)
+
+        dismiss_btn = QPushButton("✕")
+        dismiss_btn.setFixedSize(26, 26)
+        dismiss_btn.setStyleSheet(
+            "QPushButton { background: transparent; color: #60A5FA; border: none; font-size: 14px; }"
+            "QPushButton:hover { color: #1E40AF; }"
+        )
+        dismiss_btn.clicked.connect(lambda: self._banner.setVisible(False))
+
+        icon = QLabel("🔄")
+        icon.setStyleSheet("background: transparent;")
+        row.addWidget(icon)
+        row.addSpacing(6)
+        row.addWidget(self._banner_label)
+        row.addStretch()
+        row.addWidget(install_btn)
+        row.addSpacing(6)
+        row.addWidget(dismiss_btn)
+        return banner
+
+    def _start_update_check(self):
+        from modules.updater import StartupUpdateChecker, ConnectivityWatcher
+
+        self._update_info   = None
+        self._check_running = False
+
+        # Immediate check on startup
+        self._checker = StartupUpdateChecker()
+        self._checker.update_available.connect(self._show_update_banner)
         self._checker.start()
+
+        # Connectivity watcher — re-checks whenever internet comes back
+        self._conn_watcher = ConnectivityWatcher()
+        self._conn_watcher.came_online.connect(self._on_came_online)
+        self._conn_watcher.start()
+
+    def _on_came_online(self):
+        """Triggered when internet becomes available. Run a fresh update check."""
+        if self._check_running or (self._update_info and self._banner.isVisible()):
+            return  # already checking or banner already showing
+        from modules.updater import StartupUpdateChecker
+        self._check_running = True
+        checker = StartupUpdateChecker()
+        checker.update_available.connect(self._show_update_banner)
+        checker.finished.connect(lambda: setattr(self, "_check_running", False))
+        checker.start()
+        self._checker = checker  # keep reference
+
+    def _show_update_banner(self, info: dict):
+        self._update_info = info
+        self._banner_label.setText(
+            f"Update available — v{info['local']}  →  v{info['remote']}"
+        )
+        self._banner.setVisible(True)
+
+    def _open_update_dialog(self):
+        if not self._update_info:
+            return
+        from modules.updater import UpdateDialog
+        dlg = UpdateDialog(self._update_info, self)
+        dlg.exec()
+        self._banner.setVisible(False)
+
+    def closeEvent(self, event):
+        if hasattr(self, "_conn_watcher"):
+            self._conn_watcher.requestInterruption()
+            self._conn_watcher.wait(2000)
+        super().closeEvent(event)

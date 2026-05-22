@@ -21,6 +21,8 @@ import os
 import json
 import hashlib
 import shutil
+import socket
+import time
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -292,9 +294,47 @@ class UpdateDialog(QDialog):
         QMessageBox.critical(self, "Update failed", msg)
 
 
+# ── Internet connectivity helper ────────────────────────────────────────────────
+def _is_online() -> bool:
+    """Quick check: can we reach Google DNS on port 53?"""
+    try:
+        socket.setdefaulttimeout(3)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
+        return True
+    except Exception:
+        return False
+
+
+# ── Connectivity watcher (polls every 30 s) ─────────────────────────────────────
+class ConnectivityWatcher(QThread):
+    """
+    Runs in background. Emits came_online whenever internet transitions
+    from unavailable → available (including first detection on startup).
+    """
+    came_online = pyqtSignal()
+
+    _INTERVAL = 30  # seconds between polls
+
+    def __init__(self):
+        super().__init__()
+        self._was_online = False
+
+    def run(self):
+        while not self.isInterruptionRequested():
+            now_online = _is_online()
+            if now_online and not self._was_online:
+                self.came_online.emit()
+            self._was_online = now_online
+            # Sleep in small chunks so interruption is noticed quickly
+            for _ in range(self._INTERVAL * 2):
+                if self.isInterruptionRequested():
+                    return
+                time.sleep(0.5)
+
+
 # ── Silent startup check (non-blocking) ────────────────────────────────────────
 class StartupUpdateChecker(QThread):
-    """Run in background on startup — emits update_available if found."""
+    """Run in background — emits update_available if a newer version is found."""
     update_available = pyqtSignal(dict)
 
     def run(self):
