@@ -1,5 +1,5 @@
 # School Management Information System
-**Primary School Edition — v2.0**
+**Primary School Edition — v2.1**
 
 ---
 
@@ -11,7 +11,7 @@
 2. Click **"New repository"** (top-right **+** button)
 3. Fill in:
    - Repository name: `school-mis`  *(or any name you prefer)*
-   - Visibility: **Private** (recommended) or Public
+   - Visibility: **Public** ← required for installs and auto-updates to work
    - Do NOT tick "Initialize with README"
 4. Click **Create repository**
 5. GitHub shows you a page with commands — keep it open
@@ -89,21 +89,43 @@ Installed apps will detect the new version on next startup and offer to update.
 ## For the school: Installing on a new PC
 
 ### Windows
-1. Download `SETUP_WINDOWS.bat` from the developer
-2. Double-click it
-3. Follow the on-screen instructions (installs Python if needed, downloads the app)
+
+1. Download the installer — click the link below and save the file:
+   ```
+   https://raw.githubusercontent.com/Justine-Msechu/school-mis/main/SETUP_WINDOWS.bat
+   ```
+   *(Right-click the page → Save as → SETUP_WINDOWS.bat)*
+2. Double-click `SETUP_WINDOWS.bat`
+3. Follow the on-screen instructions
 
 ### Linux
-1. Download `SETUP_LINUX.sh` from the developer
-2. Open a terminal and run:
+
+1. Download and run in one command:
    ```bash
+   curl -fsSL https://raw.githubusercontent.com/Justine-Msechu/school-mis/main/SETUP_LINUX.sh -o SETUP_LINUX.sh
    chmod +x SETUP_LINUX.sh
    ./SETUP_LINUX.sh
    ```
+   Or download `SETUP_LINUX.sh` from:
+   ```
+   https://raw.githubusercontent.com/Justine-Msechu/school-mis/main/SETUP_LINUX.sh
+   ```
 
-Both scripts:
+### Alternative — download the full ZIP
+
+If the scripts don't work, download the full app as a ZIP:
+```
+https://github.com/Justine-Msechu/school-mis/archive/refs/heads/main.zip
+```
+Extract it, open a terminal inside the folder, then run:
+```bash
+python install.py        # Linux / Mac
+python install.py        # Windows (in Command Prompt)
+```
+
+Both setup scripts:
 - Check and install Python automatically
-- Download the app directly from GitHub
+- Download the full app from GitHub
 - Set up the virtual environment
 - Create a desktop shortcut
 
