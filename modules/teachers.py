@@ -158,7 +158,7 @@ class TeachersWidget(QWidget):
 
         bar = QHBoxLayout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("🔍  Search by name…")
+        self.search.setPlaceholderText("Search by name…")
         self.search.setStyleSheet(INPUT_STYLE + "QLineEdit{min-width:240px;}")
         self.search.textChanged.connect(self.load_table)
         bar.addWidget(self.search); bar.addStretch()

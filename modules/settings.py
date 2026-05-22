@@ -131,11 +131,11 @@ class SettingsWidget(QWidget):
         lay.addWidget(title)
 
         tabs = QTabWidget()
-        tabs.addTab(self._tab_school(),      "🏫  School")
-        tabs.addTab(self._tab_users(),       "👤  Users & Access")
-        tabs.addTab(self._tab_years(),       "📅  Academic Years")
-        tabs.addTab(self._tab_appearance(),  "🎨  Appearance")
-        tabs.addTab(self._tab_update(),      "🔄  Updates")
+        tabs.addTab(self._tab_school(),      "School")
+        tabs.addTab(self._tab_users(),       "Users & Access")
+        tabs.addTab(self._tab_years(),       "Academic Years")
+        tabs.addTab(self._tab_appearance(),  "Appearance")
+        tabs.addTab(self._tab_update(),      "Updates")
         lay.addWidget(tabs)
 
     # ── School info tab ───────────────────────────────────────────
@@ -443,7 +443,7 @@ class SettingsWidget(QWidget):
         self._update_status.setWordWrap(True)
         lay.addWidget(self._update_status)
 
-        btn = QPushButton("🔄  Check for updates now"); btn.setStyleSheet(BTN_PRIMARY)
+        btn = QPushButton("Check for updates now"); btn.setStyleSheet(BTN_PRIMARY)
         btn.clicked.connect(self._check_update)
         lay.addWidget(btn, alignment=Qt.AlignmentFlag.AlignLeft)
 

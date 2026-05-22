@@ -1,12 +1,33 @@
 """Main window — role-aware sidebar navigation."""
 
+from pathlib import Path
+
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QStackedWidget, QFrame, QMessageBox
 )
-from PyQt6.QtCore import Qt, QMetaObject, Q_ARG
+from PyQt6.QtCore import Qt, QMetaObject, Q_ARG, QSize
+from PyQt6.QtGui import QColor, QIcon, QImage, QPixmap
 from auth.session import session
 from database.db import get_config
+
+_ICON_DIR = Path(__file__).parent.parent / "assets" / "Icons" / "PNG"
+
+
+def _load_nav_icon(n: int, rgb: tuple = (148, 163, 184), size: int = 20) -> QIcon:
+    src = QPixmap(str(_ICON_DIR / f"Icon {n}.png"))
+    if src.isNull():
+        return QIcon()
+    src = src.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                     Qt.TransformationMode.SmoothTransformation)
+    img = src.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    r, g, b = rgb
+    for y in range(img.height()):
+        for x in range(img.width()):
+            c = QColor(img.pixel(x, y))
+            lum = (c.red() + c.green() + c.blue()) // 3
+            img.setPixelColor(x, y, QColor(r, g, b, 255 - lum))
+    return QIcon(QPixmap.fromImage(img))
 
 # All module imports
 from modules.dashboard  import DashboardWidget
@@ -19,27 +40,31 @@ from modules.settings   import SettingsWidget
 
 SIDEBAR_W = 216
 
-# (icon, label, key, required_permission)
+# (icon_number, label, key, required_permission)
 ALL_NAV = [
-    ("🏠", "Dashboard",   "home",       None),
-    ("🎓", "Students",    "students",   "students.view"),
-    ("👩‍🏫","Teachers",   "teachers",   "teachers.view"),
-    ("🏫", "Classes",     "classes",    "classes.view"),
-    ("✅", "Attendance",  "attendance", "attendance.view"),
-    ("💰", "Fees",        "fees",       "fees.view"),
-    ("⚙",  "Settings",   "settings",   "settings.view"),
+    (9,  "Dashboard",   "home",       None),
+    (10, "Students",    "students",   "students.view"),
+    (41, "Teachers",    "teachers",   "teachers.view"),
+    (38, "Classes",     "classes",    "classes.view"),
+    (2,  "Attendance",  "attendance", "attendance.view"),
+    (3,  "Fees",        "fees",       "fees.view"),
+    (58, "Settings",    "settings",   "settings.view"),
 ]
 
 
 class NavButton(QPushButton):
-    def __init__(self, icon, label, key):
-        super().__init__(f"  {icon}  {label}")
+    def __init__(self, icon_num, label, key):
+        super().__init__(f"  {label}")
         self.key = key
         self.setCheckable(True)
         self.setFixedHeight(44)
+        self.setIconSize(QSize(20, 20))
+        ico = _load_nav_icon(icon_num)
+        if not ico.isNull():
+            self.setIcon(ico)
         self.setStyleSheet("""
             QPushButton {
-                text-align: left; padding-left: 18px;
+                text-align: left; padding-left: 14px;
                 font-size: 13px; border: none; border-radius: 8px;
                 color: #94A3B8; background: transparent; font-weight: 400;
             }
@@ -223,8 +248,10 @@ class MainWindow(QMainWindow):
         )
         dismiss_btn.clicked.connect(lambda: self._banner.setVisible(False))
 
-        icon = QLabel("🔄")
+        icon = QLabel()
         icon.setStyleSheet("background: transparent;")
+        _ico = _load_nav_icon(11, rgb=(30, 64, 175), size=18)
+        icon.setPixmap(_ico.pixmap(QSize(18, 18)))
         row.addWidget(icon)
         row.addSpacing(6)
         row.addWidget(self._banner_label)

@@ -234,7 +234,7 @@ class FeesWidget(QWidget):
             "WHERE strftime('%Y-%m',payment_date)=strftime('%Y-%m','now')"
         )
         t = month_total["t"] if month_total else 0
-        self.sum_lbl.setText(f"💰  Total collected this month: TZS {t:,.0f}   |   All-time (shown): TZS {total:,.0f}")
+        self.sum_lbl.setText(f"Total collected this month: TZS {t:,.0f}   |   All-time (shown): TZS {total:,.0f}")
 
     def _record_payment(self):
         if PaymentDialog(self).exec(): self.load_table()

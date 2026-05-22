@@ -234,7 +234,7 @@ class StudentsWidget(QWidget):
         # Search / filter bar
         bar = QHBoxLayout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("🔍  Search by name or admission number…")
+        self.search.setPlaceholderText("Search by name or admission number…")
         self.search.setStyleSheet(INPUT_STYLE + "QLineEdit { min-width: 260px; }")
         self.search.textChanged.connect(self.load_table)
 

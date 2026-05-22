@@ -67,7 +67,7 @@ class AttendanceWidget(QWidget):
         mark_all_present.setStyleSheet(BTN_OUTLINE)
         mark_all_present.clicked.connect(self._mark_all_present)
 
-        save_btn = QPushButton("💾  Save attendance")
+        save_btn = QPushButton("Save attendance")
         save_btn.setStyleSheet(BTN_PRIMARY)
         save_btn.clicked.connect(self._save)
 

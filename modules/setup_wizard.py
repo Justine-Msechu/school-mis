@@ -195,7 +195,7 @@ class SetupWizard(QDialog):
     def _page_done(self):
         w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(32,24,32,8)
         lay.addStretch()
-        icon = QLabel("🎉"); icon.setStyleSheet("font-size:52px;background:transparent;")
+        icon = QLabel("✓"); icon.setStyleSheet("font-size:52px;font-weight:700;color:#059669;background:transparent;")
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(icon)
         lay.addWidget(_label("Setup Complete!", 22, True, "#111827"))
@@ -301,11 +301,11 @@ class SetupWizard(QDialog):
         sn = get_config("school_name", "—")
         self._done_lbl.setText(f"Your school '{sn}' is ready.")
         infos = [
-            f"🏫  School: {sn}",
-            f"👤  Admin: {self.f_admin_name.text().strip()} ({self.f_admin_username.text().strip()})",
-            f"👩‍🏫  Head teacher: {self.f_ht_first.text().strip() or '(not set)'}",
-            "📋  You can add more teachers and classes from the main app.",
-            "⚙   Settings are under the Settings menu.",
+            f"School: {sn}",
+            f"Admin: {self.f_admin_name.text().strip()} ({self.f_admin_username.text().strip()})",
+            f"Head teacher: {self.f_ht_first.text().strip() or '(not set)'}",
+            "You can add more teachers and classes from the main app.",
+            "Settings are under the Settings menu.",
         ]
         for i, lbl in enumerate(self._summary_labels):
             lbl.setText(infos[i] if i < len(infos) else "")
