@@ -33,18 +33,17 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 # ── Read GitHub URL from github_config.py ────────────────────────────────────
 def _get_raw_url() -> str:
     try:
-        import importlib.util, sys
-        cfg_path = Path(__file__).parent.parent / "github_config.py"
-        spec = importlib.util.spec_from_file_location("github_config", cfg_path)
-        gc   = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(gc)
+        import sys, importlib
+        root = str(Path(__file__).parent.parent)
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        import github_config as gc
+        importlib.reload(gc)          # always read the current file, not a cached copy
         if gc.is_configured():
             return gc.GITHUB_RAW_BASE
     except Exception:
         pass
     return "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main"
-
-GITHUB_RAW_URL = _get_raw_url()
 # ─────────────────────────────────────────────────────────────────────────────
 
 BASE_DIR         = Path(__file__).parent.parent.resolve()
@@ -91,12 +90,13 @@ def check_for_update() -> dict:
         "release_notes": "…", "files_to_update": ["path/file.py", …] }
     Raises ConnectionError if GitHub is unreachable.
     """
-    if GITHUB_RAW_URL.startswith("https://raw.githubusercontent.com/YOUR_USERNAME"):
+    github_raw_url = _get_raw_url()
+    if github_raw_url.startswith("https://raw.githubusercontent.com/YOUR_USERNAME"):
         return {"available": False, "local": "dev", "remote": "dev",
                 "note": "GitHub URL not configured."}
 
     local  = _load_local_version()
-    remote = _fetch_json(f"{GITHUB_RAW_URL}/version.json")
+    remote = _fetch_json(f"{github_raw_url}/version.json")
 
     local_v  = tuple(int(x) for x in local.get("version","0.0.0").split("."))
     remote_v = tuple(int(x) for x in remote.get("version","0.0.0").split("."))
@@ -141,11 +141,12 @@ class _DownloadThread(QThread):
     def run(self):
         total = len(self._files)
         BACKUP_DIR.mkdir(exist_ok=True)
+        github_raw_url = _get_raw_url()
 
         for i, rel_path in enumerate(self._files):
             try:
                 self.progress.emit(i, total, rel_path)
-                url  = f"{GITHUB_RAW_URL}/{rel_path.replace(os.sep, '/')}"
+                url  = f"{github_raw_url}/{rel_path.replace(os.sep, '/')}"
                 dest = BASE_DIR / rel_path
 
                 # Back up existing file
