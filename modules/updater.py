@@ -18,19 +18,21 @@ Developer instructions:
 """
 
 import os
+import sys
 import json
 import hashlib
 import shutil
 import socket
+import subprocess
 import time
 import urllib.request
 import urllib.error
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QProgressBar, QTextEdit, QMessageBox, QFrame
+    QProgressBar, QTextEdit, QMessageBox, QFrame, QApplication
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 
 # ── Read GitHub URL from github_config.py ────────────────────────────────────
 def _get_raw_url() -> str:
@@ -185,6 +187,16 @@ class _DownloadThread(QThread):
         self.all_done.emit()
 
 
+# ── Auto-restart after update ──────────────────────────────────────────────────
+def _restart_app():
+    """Spawn a fresh process using the same Python interpreter, then quit this one."""
+    subprocess.Popen(
+        [sys.executable, str(BASE_DIR / "main.py")],
+        cwd=str(BASE_DIR),
+    )
+    QApplication.instance().quit()
+
+
 # ── Update dialog UI ───────────────────────────────────────────────────────────
 class UpdateDialog(QDialog):
     def __init__(self, update_info: dict, parent=None):
@@ -281,12 +293,9 @@ class UpdateDialog(QDialog):
 
     def _on_done(self):
         self._prog.setValue(self._prog.maximum())
-        self._status.setText("✓ Update complete!")
-        QMessageBox.information(
-            self, "Update installed",
-            "The update was installed successfully.\n\nPlease close and reopen the app to use the new version."
-        )
-        self.accept()
+        self._status.setText("✓ Update complete! Restarting in 3 seconds…")
+        self._btn_later.setEnabled(False)
+        QTimer.singleShot(3000, _restart_app)
 
     def _on_error(self, msg):
         self._btn_later.setEnabled(True)
