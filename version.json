@@ -1,7 +1,7 @@
 {
-  "version": "3.4.0",
+  "version": "3.5.0",
   "release_date": "2026-05-24",
-  "release_notes": "Strict RBAC: granular per-action permissions, orphan waiver immutability, storekeeper data isolation",
+  "release_notes": "Add Grades & Examinations module: teacher grade entry, academic approval workflow, result reports with PDF export",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -46,11 +46,17 @@
     "modules/reports/finance_report.py": "0e21feb327cf7782e1c8f47bffeb02c999ad6023afa5e11a6d48aaf733ed018e",
     "modules/reports/welfare_report.py": "981dc9398ae1251c6c1e81a5e54f59a7abb5e584b8700a75ce80769c0fece99b",
     "modules/reports/inventory_report.py": "2c246f5b4401513cc11bfe31d8ac3c85e3d6e0dd0f87f63827b4f4f09e215508",
+    "modules/grades/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "modules/grades/entry.py": "b11e64a5d5f3d9faf59cece014fcb2ec5fb7cac37778685d12566737a520005d",
+    "modules/grades/approval.py": "50189c216cfb8db1c10b7b90abef58b5717c464950ee5f0600aada5f320a45ad",
+    "modules/grades/results.py": "440b42c5180c86e335ea708fb46e122bfe5b1bcc11fef7c5c8c9f0a270c8425c",
+    "modules/grades/exams.py": "e0111d0ccdb9f138cce6492eb7a4059634584c1cd075a6975cd83102d6928260",
+    "modules/grades/main.py": "5748005db4f6fe228fbcf6c0aea77747819bbd570c71aab9c314984258d2e741",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "database/db.py": "6ae1da9033a7c5dbbf7b35f26f117af0e35d411b67800e3960c3ae5eb4d6257a",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
-    "ui/main_window.py": "e53c2e5c1255e19f858dc3061eb79aff78bf14ef50951907060830de3e232b26",
+    "ui/main_window.py": "deb267e7c3d83ac92b3b2b1c50efd41f00cf0a0323e3821e57405025ef8bc540",
     "auth/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "auth/session.py": "fb9ba31d9310e19a0f668d4aaf9f92cb820e0b16dae15cab4b720486647ddab0",
     "auth/rbac.py": "bfbad6155e5ee983867758b712a4f7e7233571676fecf86ae56eca3c5e84eb84",
@@ -67,6 +73,7 @@
     "services/accounting_service.py": "4ce24eee932c522c59053357d201a7133ce6567201ad4b1490de23ddb36e4c0b",
     "services/student_service.py": "c6b0d8b32a6cc7dfc90717363b635e6ab4d88fa0f28cc374cc72986b26659771",
     "services/auth_service.py": "ce4c3f1bf459ad212c9ccb13aa3000450a65c24426b3e5ce7a78b47db7fae1cd",
-    "services/welfare_service.py": "8cb2377f9f4f48c8fe2e12c00b7dc99abd77b7d46823ee37c5b7cc2a32afd427"
+    "services/welfare_service.py": "8cb2377f9f4f48c8fe2e12c00b7dc99abd77b7d46823ee37c5b7cc2a32afd427",
+    "services/grades_service.py": "57ae74e7ee6635cc0cea73d008457ce4d24394af48b6accd4638191f399f0db7"
   }
 }
