@@ -311,3 +311,30 @@ def require_expense_category(ctx: PolicyContext) -> PolicyResult:
             rule_name="require_expense_category",
         )
     return PolicyResult.allow()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WELFARE — immutability of orphan exemptions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@policy_engine.register("welfare.edit")
+def deny_orphan_waiver_downgrade(ctx: PolicyContext) -> PolicyResult:
+    """
+    Once a student is classified as orphan/half_orphan with full_fees support,
+    that exemption is immutable — no one may reduce or remove it.
+    This prevents circumventing the orphan fee exemption policy.
+    """
+    original = ctx.extra.get("original_record", {})
+    orig_category = original.get("category", "")
+    orig_support  = original.get("support_type", "")
+
+    if orig_category in ("orphan", "half_orphan") and orig_support == "full_fees":
+        new_category = ctx.data.get("category", "")
+        new_support  = ctx.data.get("support_type", "")
+        if new_support != "full_fees" or new_category not in ("orphan", "half_orphan"):
+            return PolicyResult.deny(
+                "Orphan/half-orphan fee exemptions are immutable and cannot be "
+                "reduced or reclassified. Contact an administrator to review this record.",
+                rule_name="deny_orphan_waiver_downgrade",
+            )
+    return PolicyResult.allow()

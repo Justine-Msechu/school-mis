@@ -57,7 +57,7 @@ class FinanceService(BaseService):
 
         Returns dict with receipt_no, new_status, balance_remaining.
         """
-        self._require_permission("finance.*")
+        self._require_permission("finance.payment.record")
 
         bill = self.get_bill_by_control(control_number)
 
@@ -129,7 +129,7 @@ class FinanceService(BaseService):
         class_id: int | None = None,
         due_date: str | None = None,
     ) -> int:
-        self._require_permission("finance.*")
+        self._require_permission("finance.structure.manage")
         if amount <= 0:
             raise ServiceError("Fee amount must be greater than zero.")
         fs_id = execute(
@@ -152,7 +152,7 @@ class FinanceService(BaseService):
         class_id: int | None = None,
         due_date: str | None = None,
     ) -> None:
-        self._require_permission("finance.*")
+        self._require_permission("finance.structure.manage")
         fs = fetch_one("SELECT * FROM fee_structures WHERE id=?", (fs_id,))
         if not fs:
             raise ServiceError("Fee structure not found.")
@@ -178,7 +178,7 @@ class FinanceService(BaseService):
                     after={"amount": amount, "term": term})
 
     def delete_fee_structure(self, fs_id: int):
-        self._require_permission("finance.*")
+        self._require_permission("finance.structure.manage")
         fs = fetch_one("SELECT * FROM fee_structures WHERE id=?", (fs_id,))
         if not fs:
             raise ServiceError("Fee structure not found.")
@@ -204,7 +204,7 @@ class FinanceService(BaseService):
 
         Returns: {"billed": n, "waived": n, "skipped": n}
         """
-        self._require_permission("finance.*")
+        self._require_permission("finance.billing.generate")
 
         if term is not None:
             structures = fetch_all(
@@ -296,7 +296,7 @@ class FinanceService(BaseService):
         discount_percent: float,
         reason: str = "",
     ) -> None:
-        self._require_permission("finance.*")
+        self._require_permission("finance.waiver.create")
         bill = fetch_one("SELECT * FROM student_bills WHERE id=?", (bill_id,))
         if not bill:
             raise ServiceError("Bill not found.")
@@ -331,7 +331,7 @@ class FinanceService(BaseService):
         reason: str = "",
     ) -> int:
         """Apply a waiver to all outstanding bills for a student. Returns count of bills updated."""
-        self._require_permission("finance.*")
+        self._require_permission("finance.waiver.create")
         if discount_percent <= 0 or discount_percent > 100:
             raise ServiceError("Discount percent must be between 1 and 100.")
 

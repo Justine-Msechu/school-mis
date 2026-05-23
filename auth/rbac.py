@@ -25,10 +25,12 @@ def require(permission: str):
     return decorator
 
 
-# Roles that have global (unrestricted) access to all classes
+# Roles with unrestricted (school-wide) class access.
+# storekeeper is excluded — they access students only through inventory.issue
+# and receive a filtered eligibility-only response (no class scope needed).
 _GLOBAL_ROLES = frozenset({
     "admin", "head_teacher", "academic",
-    "accountant", "welfare_officer", "storekeeper",
+    "accountant", "welfare_officer",
 })
 
 

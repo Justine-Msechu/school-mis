@@ -8,45 +8,105 @@ import sqlite3, os, hashlib, secrets
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "school_mis.db")
 
 ROLES = {
+    # ── Administrator: unrestricted ────────────────────────────────────────────
     "admin": {
         "label": "Administrator", "color": "#7C3AED",
         "permissions": ["*"],
     },
+    # ── Head Teacher: view-all + academic/welfare management, NO finance writes ─
     "head_teacher": {
         "label": "Head Teacher", "color": "#059669",
-        "permissions": ["students.*","teachers.*","classes.*",
-                        "attendance.*","grades.*","grades.approve",
-                        "finance.*","welfare.*","reports.*","settings.view"],
+        "permissions": [
+            "student.view", "student.promote",
+            "teachers.view", "teachers.manage",
+            "classes.view", "classes.manage",
+            "attendance.view",
+            "grades.view", "grades.approve", "grades.publish",
+            # Finance: VIEW + billing + waiver approval only — cannot record payments
+            # or create/edit fee structures
+            "finance.view", "finance.structure.view", "finance.billing.generate",
+            "finance.waiver.approve", "finance.report",
+            "welfare.view", "welfare.classify", "welfare.edit",
+            "welfare.verify", "welfare.sponsor.manage",
+            "accounting.view", "accounting.report",
+            "reports.view", "reports.academic", "reports.finance",
+            "reports.welfare", "reports.inventory",
+            "settings.view", "settings.school.manage",
+            "settings.years.manage", "settings.users.manage",
+        ],
     },
-    "accountant": {
-        "label": "Accountant", "color": "#DC2626",
-        "permissions": ["finance.*","accounting.*","students.view",
-                        "reports.finance","reports.welfare","inventory.view"],
-    },
-    "welfare_officer": {
-        "label": "Welfare Officer", "color": "#9333EA",
-        "permissions": ["welfare.*","students.view","finance.view",
-                        "reports.welfare","reports.finance"],
-    },
-    "storekeeper": {
-        "label": "Store Keeper", "color": "#D97706",
-        "permissions": ["inventory.*","students.view","finance.view",
-                        "reports.inventory"],
-    },
+    # ── Academic Officer: student + academic records, no finance or inventory ──
     "academic": {
         "label": "Academic Officer", "color": "#0891B2",
-        "permissions": ["students.view","classes.view","teachers.view",
-                        "grades.*","grades.approve","grades.publish",
-                        "attendance.view","reports.*"],
+        "permissions": [
+            "student.view", "student.create", "student.edit",
+            "teachers.view",
+            "classes.view", "classes.manage",
+            "attendance.view", "attendance.mark",
+            "grades.view", "grades.approve", "grades.publish",
+            "welfare.view",
+            "reports.view", "reports.academic", "reports.welfare",
+            "settings.view",
+        ],
     },
+    # ── Accountant: record payments and expenses, view finance — NOT fee setup ─
+    "accountant": {
+        "label": "Accountant", "color": "#DC2626",
+        "permissions": [
+            "student.view",
+            # Finance: payment recording and reports only
+            # CANNOT: create/edit fee structures (finance.structure.manage)
+            "finance.view", "finance.structure.view",
+            "finance.payment.record", "finance.payment.void",
+            "finance.billing.generate",
+            "finance.waiver.create",
+            "finance.report",
+            "accounting.view", "accounting.expense.record", "accounting.report",
+            "reports.view", "reports.finance",
+        ],
+    },
+    # ── Welfare Officer: welfare + waiver creation, no finance data ────────────
+    "welfare_officer": {
+        "label": "Welfare Officer", "color": "#9333EA",
+        "permissions": [
+            "student.view",
+            "welfare.view", "welfare.classify", "welfare.edit",
+            "welfare.verify", "welfare.sponsor.manage",
+            "finance.waiver.create",
+            "reports.view", "reports.welfare",
+        ],
+    },
+    # ── Store Keeper: inventory only — eligibility flag for students, no finance
+    "storekeeper": {
+        "label": "Store Keeper", "color": "#D97706",
+        "permissions": [
+            # STRICTLY limited student data: name + class + eligible YES/NO only
+            "student.view.eligibility",
+            "inventory.view", "inventory.stock.add", "inventory.stock.adjust",
+            "inventory.stock.manage", "inventory.issue", "inventory.return",
+            "inventory.report",
+            "reports.view", "reports.inventory",
+        ],
+    },
+    # ── Class Teacher: own class only (scoped at service layer) ───────────────
     "class_teacher": {
         "label": "Class Teacher", "color": "#2563EB",
-        "permissions": ["students.view","classes.view",
-                        "attendance.*","grades.view","grades.enter","reports.view"],
+        "permissions": [
+            "student.view",       # data scoped to own class in service layer
+            "attendance.view", "attendance.mark",  # scoped to own class
+            "grades.view",        # scoped to own class
+            "classes.view",
+        ],
     },
+    # ── Subject Teacher: own subjects/class only ───────────────────────────────
     "subject_teacher": {
         "label": "Subject Teacher", "color": "#0891B2",
-        "permissions": ["students.view","grades.enter","grades.view","attendance.view"],
+        "permissions": [
+            "student.view",       # data scoped to own class in service layer
+            "grades.view", "grades.enter",
+            "attendance.view",
+            "classes.view",
+        ],
     },
 }
 
@@ -369,92 +429,111 @@ def initialize_database():
             ("Physical Education","PE"),("Arts & Craft","ART"),
         ])
 
-    # ── Seed RBAC roles + permissions (idempotent) ────────────────────────────
-    cur.execute("SELECT COUNT(*) FROM roles")
-    if cur.fetchone()[0] == 0:
-        for role_name, info in ROLES.items():
-            cur.execute(
-                "INSERT OR IGNORE INTO roles(name,label,color) VALUES(?,?,?)",
-                (role_name, info["label"], info["color"])
-            )
-
-    # All permission codes used across roles
+    # ── RBAC seed — idempotent, runs on every startup ────────────────────────
+    # Granular permission registry (INSERT OR IGNORE — never removes existing codes)
     _ALL_PERMISSIONS = [
-        # code,                 domain,       action,     description,              scope
-        ("*",                  "system",     "*",        "Full system access",     "GLOBAL"),
-        ("students.view",      "students",   "view",     "View students",          "GLOBAL"),
-        ("students.add",       "students",   "add",      "Add students",           "GLOBAL"),
-        ("students.edit",      "students",   "edit",     "Edit students",          "GLOBAL"),
-        ("students.delete",    "students",   "delete",   "Delete students",        "GLOBAL"),
-        ("students.*",         "students",   "*",        "Full student access",    "GLOBAL"),
-        ("teachers.view",      "teachers",   "view",     "View teachers",          "GLOBAL"),
-        ("teachers.add",       "teachers",   "add",      "Add teachers",           "GLOBAL"),
-        ("teachers.edit",      "teachers",   "edit",     "Edit teachers",          "GLOBAL"),
-        ("teachers.*",         "teachers",   "*",        "Full teacher access",    "GLOBAL"),
-        ("classes.view",       "classes",    "view",     "View classes",           "CLASS"),
-        ("classes.add",        "classes",    "add",      "Add classes",            "GLOBAL"),
-        ("classes.edit",       "classes",    "edit",     "Edit classes",           "GLOBAL"),
-        ("classes.*",          "classes",    "*",        "Full class access",      "GLOBAL"),
-        ("attendance.view",    "attendance", "view",     "View attendance",        "CLASS"),
-        ("attendance.mark",    "attendance", "mark",     "Mark attendance",        "CLASS"),
-        ("attendance.*",       "attendance", "*",        "Full attendance access", "CLASS"),
-        ("grades.view",        "grades",     "view",     "View grades",            "CLASS"),
-        ("grades.enter",       "grades",     "enter",    "Enter grades",           "CLASS"),
-        ("grades.approve",     "grades",     "approve",  "Approve grades",         "GLOBAL"),
-        ("grades.publish",     "grades",     "publish",  "Publish grades",         "GLOBAL"),
-        ("grades.*",           "grades",     "*",        "Full grades access",     "GLOBAL"),
-        ("finance.view",       "finance",    "view",     "View finance",           "GLOBAL"),
-        ("finance.*",          "finance",    "*",        "Full finance access",    "GLOBAL"),
-        ("payment.view",       "payment",    "view",     "View payments",          "GLOBAL"),
-        ("payment.record",     "payment",    "record",   "Record payments",        "GLOBAL"),
-        ("welfare.view",       "welfare",    "view",     "View welfare records",   "GLOBAL"),
-        ("welfare.add",        "welfare",    "add",      "Add welfare records",    "GLOBAL"),
-        ("welfare.edit",       "welfare",    "edit",     "Edit welfare records",   "GLOBAL"),
-        ("welfare.verify",     "welfare",    "verify",   "Verify welfare records", "GLOBAL"),
-        ("welfare.*",          "welfare",    "*",        "Full welfare access",    "GLOBAL"),
-        ("inventory.view",     "inventory",  "view",     "View inventory",         "GLOBAL"),
-        ("inventory.add",      "inventory",  "add",      "Add inventory items",    "GLOBAL"),
-        ("inventory.edit",     "inventory",  "edit",     "Edit inventory items",   "GLOBAL"),
-        ("inventory.issue",    "inventory",  "issue",    "Issue items",            "GLOBAL"),
-        ("inventory.*",        "inventory",  "*",        "Full inventory access",  "GLOBAL"),
-        ("accounting.view",    "accounting", "view",     "View accounting",        "GLOBAL"),
-        ("accounting.add",     "accounting", "add",      "Record expenses",        "GLOBAL"),
-        ("accounting.*",       "accounting", "*",        "Full accounting access", "GLOBAL"),
-        ("reports.view",       "reports",    "view",     "View reports",           "GLOBAL"),
-        ("reports.finance",    "reports",    "finance",  "Finance reports",        "GLOBAL"),
-        ("reports.welfare",    "reports",    "welfare",  "Welfare reports",        "GLOBAL"),
-        ("reports.inventory",  "reports",    "inventory","Inventory reports",      "GLOBAL"),
-        ("reports.*",          "reports",    "*",        "All reports",            "GLOBAL"),
-        ("settings.view",      "settings",   "view",     "View settings",          "GLOBAL"),
-        ("settings.users",     "settings",   "users",    "Manage users",           "GLOBAL"),
-        ("settings.roles",     "settings",   "roles",    "Manage roles",           "GLOBAL"),
-        ("settings.*",         "settings",   "*",        "Full settings access",   "GLOBAL"),
+        # code,                         domain,       action,          description,                         scope
+        ("*",                           "system",     "*",             "Full system access",                "GLOBAL"),
+        # Student
+        ("student.view",                "student",    "view",          "View student records",              "GLOBAL"),
+        ("student.view.eligibility",    "student",    "eligibility",   "Eligibility check only (no PII)",   "GLOBAL"),
+        ("student.create",              "student",    "create",        "Create student records",            "GLOBAL"),
+        ("student.edit",                "student",    "edit",          "Edit student records",              "GLOBAL"),
+        ("student.delete",              "student",    "delete",        "Delete/deactivate students",        "GLOBAL"),
+        ("student.promote",             "student",    "promote",       "Promote students",                  "GLOBAL"),
+        # Teachers
+        ("teachers.view",               "teachers",   "view",          "View teacher records",              "GLOBAL"),
+        ("teachers.manage",             "teachers",   "manage",        "Create and edit teachers",          "GLOBAL"),
+        # Classes
+        ("classes.view",                "classes",    "view",          "View class information",            "GLOBAL"),
+        ("classes.manage",              "classes",    "manage",        "Create and edit classes",           "GLOBAL"),
+        # Attendance
+        ("attendance.view",             "attendance", "view",          "View attendance records",           "CLASS"),
+        ("attendance.mark",             "attendance", "mark",          "Mark student attendance",           "CLASS"),
+        ("attendance.edit",             "attendance", "edit",          "Edit past attendance",              "CLASS"),
+        ("attendance.report",           "attendance", "report",        "Attendance reports",                "GLOBAL"),
+        # Grades
+        ("grades.view",                 "grades",     "view",          "View grades",                       "CLASS"),
+        ("grades.enter",                "grades",     "enter",         "Enter and submit grades",           "CLASS"),
+        ("grades.approve",              "grades",     "approve",       "Approve submitted grades",          "GLOBAL"),
+        ("grades.publish",              "grades",     "publish",       "Publish approved grades",           "GLOBAL"),
+        # Finance — granular, no wildcard for non-admin
+        ("finance.view",                "finance",    "view",          "View billing and payment status",   "GLOBAL"),
+        ("finance.structure.view",      "finance",    "struct.view",   "View fee structures",               "GLOBAL"),
+        ("finance.structure.manage",    "finance",    "struct.manage", "Create/edit/delete fee structures", "GLOBAL"),
+        ("finance.billing.generate",    "finance",    "billing",       "Run billing engine",                "GLOBAL"),
+        ("finance.payment.record",      "finance",    "pay.record",    "Record fee payments",               "GLOBAL"),
+        ("finance.payment.void",        "finance",    "pay.void",      "Void payments",                     "GLOBAL"),
+        ("finance.waiver.create",       "finance",    "waiver.create", "Create fee waivers",                "GLOBAL"),
+        ("finance.waiver.approve",      "finance",    "waiver.approve","Approve fee waivers",               "GLOBAL"),
+        ("finance.report",              "finance",    "report",        "View financial reports",            "GLOBAL"),
+        # Inventory — store keeper has these, but NOT student.view
+        ("inventory.view",              "inventory",  "view",          "View inventory stock",              "GLOBAL"),
+        ("inventory.stock.add",         "inventory",  "stock.add",     "Record incoming stock",             "GLOBAL"),
+        ("inventory.stock.adjust",      "inventory",  "stock.adjust",  "Adjust stock levels",               "GLOBAL"),
+        ("inventory.stock.manage",      "inventory",  "stock.manage",  "Manage inventory items",            "GLOBAL"),
+        ("inventory.issue",             "inventory",  "issue",         "Issue items to students",           "GLOBAL"),
+        ("inventory.return",            "inventory",  "return",        "Record item returns",               "GLOBAL"),
+        ("inventory.report",            "inventory",  "report",        "View inventory reports",            "GLOBAL"),
+        # Welfare
+        ("welfare.view",                "welfare",    "view",          "View welfare records",              "GLOBAL"),
+        ("welfare.classify",            "welfare",    "classify",      "Classify students",                 "GLOBAL"),
+        ("welfare.edit",                "welfare",    "edit",          "Edit welfare records",              "GLOBAL"),
+        ("welfare.verify",              "welfare",    "verify",        "Verify welfare status",             "GLOBAL"),
+        ("welfare.sponsor.manage",      "welfare",    "sponsor",       "Manage sponsorships",               "GLOBAL"),
+        # Accounting
+        ("accounting.view",             "accounting", "view",          "View accounting records",           "GLOBAL"),
+        ("accounting.expense.record",   "accounting", "expense",       "Record school expenses",            "GLOBAL"),
+        ("accounting.report",           "accounting", "report",        "View accounting reports",           "GLOBAL"),
+        # Reports
+        ("reports.view",                "reports",    "view",          "Access reports module",             "GLOBAL"),
+        ("reports.academic",            "reports",    "academic",      "Academic reports",                  "GLOBAL"),
+        ("reports.finance",             "reports",    "finance",       "Finance reports",                   "GLOBAL"),
+        ("reports.welfare",             "reports",    "welfare",       "Welfare reports",                   "GLOBAL"),
+        ("reports.inventory",           "reports",    "inventory",     "Inventory reports",                 "GLOBAL"),
+        # Settings
+        ("settings.view",               "settings",   "view",          "View settings",                     "GLOBAL"),
+        ("settings.school.manage",      "settings",   "school",        "Manage school info",                "GLOBAL"),
+        ("settings.years.manage",       "settings",   "years",         "Manage academic years",             "GLOBAL"),
+        ("settings.users.manage",       "settings",   "users",         "Manage user accounts",              "GLOBAL"),
+        ("settings.roles.manage",       "settings",   "roles",         "Manage roles and permissions",      "GLOBAL"),
     ]
-    cur.execute("SELECT COUNT(*) FROM permissions")
-    if cur.fetchone()[0] == 0:
-        cur.executemany(
-            "INSERT OR IGNORE INTO permissions(code,domain,action,description,scope_type)"
-            " VALUES(?,?,?,?,?)",
-            _ALL_PERMISSIONS
+    cur.executemany(
+        "INSERT OR IGNORE INTO permissions(code,domain,action,description,scope_type)"
+        " VALUES(?,?,?,?,?)",
+        _ALL_PERMISSIONS
+    )
+
+    # Upsert roles (update label/color if they change)
+    for role_name, info in ROLES.items():
+        cur.execute(
+            "INSERT OR IGNORE INTO roles(name,label,color) VALUES(?,?,?)",
+            (role_name, info["label"], info["color"])
         )
-        # Link role_permissions from ROLES dict
-        for role_name, info in ROLES.items():
-            role_row = cur.execute(
-                "SELECT id FROM roles WHERE name=?", (role_name,)
+        cur.execute(
+            "UPDATE roles SET label=?,color=? WHERE name=?",
+            (info["label"], info["color"], role_name)
+        )
+
+    # Always rebuild role_permissions from ROLES dict (ensures strict enforcement)
+    cur.execute("DELETE FROM role_permissions")
+    for role_name, info in ROLES.items():
+        role_row = cur.execute(
+            "SELECT id FROM roles WHERE name=?", (role_name,)
+        ).fetchone()
+        if not role_row:
+            continue
+        role_id = role_row[0]
+        for perm_code in info.get("permissions", []):
+            perm_row = cur.execute(
+                "SELECT id FROM permissions WHERE code=?", (perm_code,)
             ).fetchone()
-            if not role_row:
-                continue
-            role_id = role_row[0]
-            for perm_code in info.get("permissions", []):
-                perm_row = cur.execute(
-                    "SELECT id FROM permissions WHERE code=?", (perm_code,)
-                ).fetchone()
-                if perm_row:
-                    cur.execute(
-                        "INSERT OR IGNORE INTO role_permissions(role_id,permission_id)"
-                        " VALUES(?,?)",
-                        (role_id, perm_row[0])
-                    )
+            if perm_row:
+                cur.execute(
+                    "INSERT OR IGNORE INTO role_permissions(role_id,permission_id)"
+                    " VALUES(?,?)",
+                    (role_id, perm_row[0])
+                )
 
     conn.commit()
     conn.close()

@@ -13,13 +13,14 @@ class InventoryService(BaseService):
 
     def get_student_issuance_status(self, admission_or_ctrl: str) -> dict:
         """
-        Look up a student and return their fee/welfare status for issuance gating.
+        Look up a student for issuance gating.
 
-        Returns dict with keys:
-          student, unpaid_bills, has_full_waiver, welfare, may_receive
+        Store keepers receive only: name, class, eligible (YES/NO).
+        All other roles receive the full breakdown for display.
         """
-        ref = admission_or_ctrl.strip()
+        self._require_permission("inventory.issue")
 
+        ref = admission_or_ctrl.strip()
         student = fetch_one(
             "SELECT * FROM students WHERE admission_no=? AND is_active=1", (ref,)
         )
@@ -36,9 +37,7 @@ class InventoryService(BaseService):
         welfare = fetch_one(
             "SELECT * FROM welfare_records WHERE student_id=?", (student["id"],)
         )
-        has_full_waiver = bool(
-            welfare and welfare["support_type"] == "full_fees"
-        )
+        has_full_waiver = bool(welfare and welfare["support_type"] == "full_fees")
         unpaid = fetch_one(
             "SELECT COUNT(*) AS n FROM student_bills "
             "WHERE student_id=? AND status IN ('unpaid','partial')",
@@ -46,7 +45,6 @@ class InventoryService(BaseService):
         )
         unpaid_count = unpaid["n"] if unpaid else 0
 
-        # Pre-evaluate policy (for UI preview — doesn't block yet)
         result = self._evaluate(
             "inventory.issue",
             subject=dict(student),
@@ -55,13 +53,30 @@ class InventoryService(BaseService):
             data={"qty": 1},
         )
 
+        # ── Store keeper: return ONLY eligibility — no financial or welfare data ──
+        if self._session.role == "storekeeper":
+            return {
+                "student": {
+                    "id":           student["id"],
+                    "first_name":   student["first_name"],
+                    "last_name":    student["last_name"],
+                    "admission_no": student["admission_no"],
+                    "class_id":     student["class_id"],
+                },
+                "may_receive":      result.allowed,
+                "block_reason":     "Student has outstanding fees." if not result.allowed else "",
+                "eligibility_only": True,   # signal to UI: suppress financial detail
+                # Deliberately omitted: unpaid_bills, has_full_waiver, welfare
+            }
+
         return {
-            "student":        dict(student),
-            "unpaid_bills":   unpaid_count,
-            "has_full_waiver": has_full_waiver,
-            "welfare":        dict(welfare) if welfare else None,
-            "may_receive":    result.allowed,
-            "block_reason":   result.reason if not result.allowed else "",
+            "student":          dict(student),
+            "unpaid_bills":     unpaid_count,
+            "has_full_waiver":  has_full_waiver,
+            "welfare":          dict(welfare) if welfare else None,
+            "may_receive":      result.allowed,
+            "block_reason":     result.reason if not result.allowed else "",
+            "eligibility_only": False,
         }
 
     # ── Issue an item ─────────────────────────────────────────────────────────
@@ -83,7 +98,7 @@ class InventoryService(BaseService):
           4. Write transaction + deduct stock
           5. Audit
         """
-        self._require_permission("inventory.*")
+        self._require_permission("inventory.issue")
 
         student = fetch_one("SELECT * FROM students WHERE id=? AND is_active=1", (student_id,))
         if not student:
@@ -144,7 +159,7 @@ class InventoryService(BaseService):
 
     def add_stock(self, item_id: int, qty: int, reference: str = "",
                   notes: str = "") -> None:
-        self._require_permission("inventory.*")
+        self._require_permission("inventory.stock.add")
         item = fetch_one("SELECT * FROM inventory_items WHERE id=?", (item_id,))
         if not item:
             raise ServiceError("Item not found.")
@@ -170,7 +185,7 @@ class InventoryService(BaseService):
 
     def return_item(self, item_id: int, qty: int, student_id: int | None = None,
                     notes: str = "") -> None:
-        self._require_permission("inventory.*")
+        self._require_permission("inventory.return")
         item = fetch_one("SELECT * FROM inventory_items WHERE id=?", (item_id,))
         if not item:
             raise ServiceError("Item not found.")
@@ -193,7 +208,7 @@ class InventoryService(BaseService):
 
     def create_item(self, name: str, category: str, unit: str,
                     unit_price: float, reorder_qty: int = 5) -> int:
-        self._require_permission("inventory.*")
+        self._require_permission("inventory.stock.manage")
         if not name.strip():
             raise ServiceError("Item name is required.")
         item_id = execute(

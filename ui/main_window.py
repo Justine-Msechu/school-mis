@@ -47,7 +47,7 @@ SIDEBAR_W = 220
 # (icon_number, label, key, required_permission)
 ALL_NAV = [
     (9,  "Dashboard",   "home",        None),
-    (10, "Students",    "students",    "students.view"),
+    (10, "Students",    "students",    "student.view"),
     (41, "Teachers",    "teachers",    "teachers.view"),
     (38, "Classes",     "classes",     "classes.view"),
     (2,  "Attendance",  "attendance",  "attendance.view"),

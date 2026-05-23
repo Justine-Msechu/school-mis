@@ -14,7 +14,7 @@ class StudentService(BaseService):
     # ── Student management ────────────────────────────────────────────────────
 
     def create_student(self, data: dict) -> int:
-        self._require_permission("students.*")
+        self._require_permission("student.create")
         required = ("first_name", "last_name", "admission_no")
         for f in required:
             if not data.get(f, "").strip():
@@ -90,7 +90,7 @@ class StudentService(BaseService):
 
         Policy: no future dates; class teachers can only mark their own class.
         """
-        self._require_permission("attendance.*")
+        self._require_permission("attendance.mark")
 
         from auth.rbac import check_class_access
         if not check_class_access(class_id):

@@ -80,7 +80,7 @@ class AuthService(BaseService):
         must_change: bool = True,
     ) -> int:
         """Create a new user account. Caller must have settings.users permission."""
-        self._require_permission("settings.users")
+        self._require_permission("settings.users.manage")
 
         # Head teachers can only create class_teacher / subject_teacher
         if self._session.is_head_teacher and role not in ("class_teacher", "subject_teacher"):
@@ -106,7 +106,7 @@ class AuthService(BaseService):
         return uid
 
     def deactivate_user(self, user_id: int) -> None:
-        self._require_permission("settings.users")
+        self._require_permission("settings.users.manage")
 
         target = fetch_one("SELECT * FROM users WHERE id=?", (user_id,))
         if not target:

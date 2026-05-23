@@ -108,15 +108,20 @@ class IssueDialog(QDialog):
 
         student = status["student"]
         self._student = student
+        eligibility_only = status.get("eligibility_only", False)
 
         self.status_student.setText(
             f"Student: {student['first_name']} {student['last_name']} ({student['admission_no']})"
         )
 
         if status["may_receive"]:
-            label = ("Fee status: EXEMPT (orphan/welfare waiver)"
-                     if (student.get("student_category") == "orphan" or status["has_full_waiver"])
-                     else "Fee status: All bills paid")
+            if eligibility_only:
+                label = "Eligible: YES"
+            else:
+                label = ("Fee status: EXEMPT (orphan/welfare waiver)"
+                         if (student.get("student_category") == "orphan"
+                             or status.get("has_full_waiver"))
+                         else "Fee status: All bills paid")
             self.status_balance.setText(label)
             self.status_balance.setStyleSheet("font-size:12px;color:#059669;font-weight:600;")
             self.status_card.setStyleSheet(
@@ -124,21 +129,26 @@ class IssueDialog(QDialog):
             )
             self.issue_btn.setEnabled(True)
         else:
-            self.status_balance.setText(
-                f"Fee status: {status['unpaid_bills']} unpaid/partial bill(s) — BLOCKED"
-            )
+            if eligibility_only:
+                reason = status.get("block_reason", "Student has outstanding fees.")
+            else:
+                reason = f"{status.get('unpaid_bills', '?')} unpaid/partial bill(s) — BLOCKED"
+            self.status_balance.setText(f"Eligible: NO — {reason}")
             self.status_balance.setStyleSheet("font-size:12px;color:#991B1B;font-weight:600;")
             self.status_card.setStyleSheet(
                 "QFrame{border:1px solid #FECACA;border-radius:8px;background:#FEF2F2;}"
             )
             self.issue_btn.setEnabled(False)
 
-        welfare = status["welfare"]
-        if welfare:
-            self.status_welfare.setText(
-                f"Welfare: {welfare['category'].replace('_',' ').title()} — "
-                f"{welfare['support_type'].replace('_',' ').title()}"
-            )
+        if not eligibility_only:
+            welfare = status.get("welfare")
+            if welfare:
+                self.status_welfare.setText(
+                    f"Welfare: {welfare['category'].replace('_',' ').title()} — "
+                    f"{welfare['support_type'].replace('_',' ').title()}"
+                )
+            else:
+                self.status_welfare.setText("")
         else:
             self.status_welfare.setText("")
 

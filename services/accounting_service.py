@@ -25,7 +25,7 @@ class AccountingService(BaseService):
           2. Policy: amount > 0, category required
           3. Write to expenses table + audit
         """
-        self._require_permission("accounting.*")
+        self._require_permission("accounting.expense.record")
 
         self._enforce(
             "accounting.expense.record",

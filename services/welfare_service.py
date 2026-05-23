@@ -27,7 +27,7 @@ class WelfareService(BaseService):
         Policy: no duplicate records; full_fees only for orphan/half_orphan.
         Side-effect: sets students.student_category = category if orphan.
         """
-        self._require_permission("welfare.*")
+        self._require_permission("welfare.classify")
 
         student = fetch_one("SELECT * FROM students WHERE id=?", (student_id,))
         if not student:
@@ -84,7 +84,7 @@ class WelfareService(BaseService):
         notes: str = "",
         verified: bool | None = None,
     ) -> None:
-        self._require_permission("welfare.*")
+        self._require_permission("welfare.edit")
 
         wr = fetch_one("SELECT * FROM welfare_records WHERE id=?", (wr_id,))
         if not wr:
@@ -96,6 +96,7 @@ class WelfareService(BaseService):
             "welfare.edit",
             subject=dict(student) if student else {},
             data={"category": category, "support_type": support_type},
+            extra={"original_record": dict(wr)},
         )
 
         execute(
@@ -132,7 +133,7 @@ class WelfareService(BaseService):
 
     def verify(self, wr_id: int) -> None:
         """Mark a welfare record as verified. Restricted to welfare_officer / head_teacher / admin."""
-        self._require_permission("welfare.*")
+        self._require_permission("welfare.verify")
 
         wr = fetch_one("SELECT * FROM welfare_records WHERE id=?", (wr_id,))
         if not wr:
