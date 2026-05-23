@@ -344,6 +344,19 @@ def initialize_database():
         permission_code TEXT,
         created_at TEXT DEFAULT (datetime('now')))""")
 
+    # ── Policy override table ─────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS policy_overrides (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        policy_rule  TEXT NOT NULL,
+        entity_type  TEXT NOT NULL,
+        entity_id    INTEGER NOT NULL,
+        decision     TEXT NOT NULL CHECK(decision IN ('allow','deny')),
+        reason       TEXT,
+        granted_by   INTEGER REFERENCES users(id),
+        expires_at   TEXT,
+        created_at   TEXT DEFAULT (datetime('now')),
+        UNIQUE(policy_rule, entity_type, entity_id))""")
+
     # Seed defaults on first run
     cur.execute("SELECT COUNT(*) FROM academic_years")
     if cur.fetchone()[0] == 0:
@@ -531,6 +544,23 @@ def db_write(sql, params=(), action="", table="", record_id=None, detail="",
     conn.commit()
     conn.close()
     return rid
+
+
+def db_write_audit(user_id, action, table_name=None, record_id=None,
+                   detail="", before_state=None, after_state=None):
+    """Write an audit entry without an accompanying data write."""
+    import json
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO audit_log
+           (user_id, action, table_name, record_id, detail, before_state, after_state)
+           VALUES(?,?,?,?,?,?,?)""",
+        (user_id, action, table_name, record_id, detail,
+         json.dumps(before_state) if before_state is not None else None,
+         json.dumps(after_state)  if after_state  is not None else None)
+    )
+    conn.commit()
+    conn.close()
 
 
 def get_user_permissions(user_id: int) -> set[str]:

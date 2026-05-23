@@ -8,8 +8,10 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
-from database.db import fetch_all, fetch_one, execute, db_write
+from database.db import fetch_all
 from auth.session import session
+from services.inventory_service import inventory_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """QPushButton{background:#D97706;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#B45309;}"""
@@ -99,53 +101,23 @@ class IssueDialog(QDialog):
         if not ref:
             QMessageBox.warning(self, "Required", "Enter an admission number or control number."); return
 
-        # Try by admission number first, then control number
-        student = fetch_one(
-            "SELECT * FROM students WHERE admission_no=? AND is_active=1", (ref,)
-        )
-        if not student:
-            bill = fetch_one(
-                "SELECT sb.*, s.* FROM student_bills sb "
-                "JOIN students s ON s.id=sb.student_id WHERE sb.control_number=?", (ref,)
-            )
-            if bill:
-                student = fetch_one("SELECT * FROM students WHERE id=?", (bill["student_id"],))
+        try:
+            status = inventory_service.get_student_issuance_status(ref)
+        except ServiceError as e:
+            QMessageBox.warning(self, "Not Found", str(e)); return
 
-        if not student:
-            QMessageBox.warning(self, "Not Found",
-                f"No student found for: {ref}"); return
-
-        self._student = dict(student)
-
-        # Check welfare status
-        welfare = fetch_one(
-            "SELECT * FROM welfare_records WHERE student_id=?", (student["id"],)
-        )
-        is_exempt = (
-            student["student_category"] == "orphan" or
-            (welfare and welfare["support_type"] == "full_fees")
-        )
-
-        # Check payment status
-        unpaid_bills = fetch_all(
-            "SELECT COUNT(*) AS n FROM student_bills "
-            "WHERE student_id=? AND status IN ('unpaid','partial')", (student["id"],)
-        )
-        unpaid_count = unpaid_bills[0]["n"] if unpaid_bills else 0
+        student = status["student"]
+        self._student = student
 
         self.status_student.setText(
             f"Student: {student['first_name']} {student['last_name']} ({student['admission_no']})"
         )
 
-        if is_exempt:
-            self.status_balance.setText("Fee status: EXEMPT (orphan/welfare waiver)")
-            self.status_balance.setStyleSheet("font-size:12px;color:#059669;font-weight:600;")
-            self.status_card.setStyleSheet(
-                "QFrame{border:1px solid #A7F3D0;border-radius:8px;background:#ECFDF5;}"
-            )
-            self.issue_btn.setEnabled(True)
-        elif unpaid_count == 0:
-            self.status_balance.setText("Fee status: All bills paid")
+        if status["may_receive"]:
+            label = ("Fee status: EXEMPT (orphan/welfare waiver)"
+                     if (student.get("student_category") == "orphan" or status["has_full_waiver"])
+                     else "Fee status: All bills paid")
+            self.status_balance.setText(label)
             self.status_balance.setStyleSheet("font-size:12px;color:#059669;font-weight:600;")
             self.status_card.setStyleSheet(
                 "QFrame{border:1px solid #A7F3D0;border-radius:8px;background:#ECFDF5;}"
@@ -153,7 +125,7 @@ class IssueDialog(QDialog):
             self.issue_btn.setEnabled(True)
         else:
             self.status_balance.setText(
-                f"Fee status: {unpaid_count} unpaid/partial bill(s) outstanding — issuance BLOCKED"
+                f"Fee status: {status['unpaid_bills']} unpaid/partial bill(s) — BLOCKED"
             )
             self.status_balance.setStyleSheet("font-size:12px;color:#991B1B;font-weight:600;")
             self.status_card.setStyleSheet(
@@ -161,6 +133,7 @@ class IssueDialog(QDialog):
             )
             self.issue_btn.setEnabled(False)
 
+        welfare = status["welfare"]
         if welfare:
             self.status_welfare.setText(
                 f"Welfare: {welfare['category'].replace('_',' ').title()} — "
@@ -178,26 +151,17 @@ class IssueDialog(QDialog):
         item_id = self.item_cb.currentData()
         if not item_id:
             QMessageBox.warning(self, "Required", "Select an item."); return
-        qty = self.qty.value()
 
-        it = fetch_one("SELECT name, stock_qty FROM inventory_items WHERE id=?", (item_id,))
-        if it["stock_qty"] < qty:
-            QMessageBox.warning(self, "Insufficient Stock",
-                f"Only {it['stock_qty']} in stock. Cannot issue {qty}."); return
+        try:
+            inventory_service.issue_item(
+                student_id=self._student["id"],
+                item_id=item_id,
+                qty=self.qty.value(),
+                notes=self.notes.text().strip(),
+            )
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Cannot Issue Item", str(e)); return
 
-        db_write(
-            "INSERT INTO inventory_transactions(item_id,type,qty,student_id,notes,recorded_by)"
-            " VALUES(?,?,?,?,?,?)",
-            (item_id, "issued", qty, self._student["id"],
-             self.notes.text().strip(), session.user_id),
-            action="item_issued", table="inventory_transactions",
-            detail=f"Issued {qty}x {it['name']} to student {self._student['admission_no']}",
-            user_id=session.user_id
-        )
-        execute(
-            "UPDATE inventory_items SET stock_qty=stock_qty-? WHERE id=?",
-            (qty, item_id)
-        )
         self.accept()
 
 

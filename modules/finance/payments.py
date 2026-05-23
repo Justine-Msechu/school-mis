@@ -8,9 +8,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QColor
-from database.db import fetch_all, fetch_one, execute, db_write, gen_receipt_number
+from database.db import fetch_all, fetch_one, gen_receipt_number
 from auth.session import session
 from utils.pdf_export import print_receipt
+from services.finance_service import finance_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """QPushButton{background:#DC2626;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#B91C1C;}"""
@@ -111,35 +113,29 @@ class PaymentDialog(QDialog):
         if not ctrl:
             QMessageBox.warning(self, "Required", "Enter a control number."); return
 
-        bill = fetch_one("""
-            SELECT sb.*, s.first_name||' '||s.last_name AS student,
-                   s.admission_no, ft.name AS fee_name
-            FROM student_bills sb
-            JOIN students s ON s.id=sb.student_id
-            JOIN fee_structures fs ON fs.id=sb.fee_structure_id
-            JOIN fee_types ft ON ft.id=fs.fee_type_id
-            WHERE sb.control_number=?
-        """, (ctrl,))
-
-        if not bill:
-            QMessageBox.warning(self, "Not Found",
-                f"No bill found for control number:\n{ctrl}"); return
+        try:
+            bill = finance_service.get_bill_by_control(ctrl)
+        except ServiceError as e:
+            QMessageBox.warning(self, "Not Found", str(e)); return
 
         if bill["status"] == "paid":
             QMessageBox.information(self, "Already Paid",
-                f"This bill is already fully paid.\nReceipt already issued."); return
-
+                "This bill is already fully paid."); return
         if bill["status"] == "waived":
             QMessageBox.information(self, "Waived",
-                "This bill has been waived (student is exempt from this fee)."); return
+                "This bill has been waived — student is exempt."); return
 
-        self._bill = dict(bill)
+        self._bill = bill
         balance = bill["amount_due"] - bill["amount_paid"] - bill["discount_amount"]
-        self.info_student.setText(f"Student: {bill['student']} ({bill['admission_no']})")
-        self.info_fee.setText(f"Fee: {bill['fee_name']}   |   Total due: TZS {bill['amount_due']:,.0f}")
+        self.info_student.setText(
+            f"Student: {bill['student_name']} ({bill['admission_no']})"
+        )
+        self.info_fee.setText(
+            f"Fee: {bill['fee_name']}   |   Total due: TZS {bill['amount_due']:,.0f}"
+        )
         self.info_balance.setText(
             f"Paid so far: TZS {bill['amount_paid']:,.0f}   |   "
-            f"Balance: TZS {max(balance,0):,.0f}"
+            f"Balance: TZS {max(balance, 0):,.0f}"
         )
         self.info_card.setVisible(True)
         self.amount.setValue(max(balance, 0))
@@ -147,62 +143,38 @@ class PaymentDialog(QDialog):
     def _save(self, print_after=False):
         if not self._bill:
             QMessageBox.warning(self, "No Bill", "Look up a control number first."); return
-        if self.amount.value() <= 0:
-            QMessageBox.warning(self, "Validation", "Amount must be greater than zero."); return
 
-        bill = self._bill
-        new_paid   = bill["amount_paid"] + self.amount.value()
-        new_status = "paid" if new_paid >= (bill["amount_due"] - bill["discount_amount"]) else "partial"
-        receipt_no = self.receipt.text().strip()
-        pay_date   = self.date_pick.date().toString("yyyy-MM-dd")
-
-        db_write(
-            """INSERT INTO fee_payments
-                (bill_id, student_id, academic_year_id, amount_paid,
-                 payment_date, control_number, receipt_no,
-                 payment_method, reference_no, notes, recorded_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-            (bill["id"], bill["student_id"], bill["academic_year_id"],
-             self.amount.value(), pay_date, bill["control_number"],
-             receipt_no, self.method.currentText(),
-             self.ref_no.text().strip(), self.notes.text().strip(),
-             session.user_id),
-            action="payment_recorded", table="fee_payments",
-            detail=f"Receipt {receipt_no} TZS {self.amount.value():,.0f}",
-            user_id=session.user_id,
-            after_state={
-                "receipt_no": receipt_no, "amount": self.amount.value(),
-                "method": self.method.currentText(), "status": new_status,
-            }
-        )
-
-        execute("UPDATE student_bills SET amount_paid=?, status=? WHERE id=?",
-                (new_paid, new_status, bill["id"]))
+        try:
+            result = finance_service.record_payment(
+                control_number=self._bill["control_number"],
+                amount=self.amount.value(),
+                method=self.method.currentText(),
+                payment_date=self.date_pick.date().toString("yyyy-MM-dd"),
+                ref_no=self.ref_no.text().strip(),
+                notes=self.notes.text().strip(),
+                receipt_no=self.receipt.text().strip() or None,
+            )
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Cannot Record Payment", str(e)); return
 
         if print_after:
-            # Fetch class name for receipt
-            cls_row = fetch_one(
-                "SELECT c.name FROM students s LEFT JOIN classes c ON c.id=s.class_id"
-                " WHERE s.id=?", (bill["student_id"],)
-            )
             self._saved_receipt = {
-                "receipt_no":    receipt_no,
-                "control_number": bill["control_number"],
-                "student":       self.info_student.text().replace("Student: ", "").split(" (")[0],
-                "admission_no":  bill.get("admission_no", ""),
-                "class_name":    cls_row["name"] if cls_row else "—",
-                "fee_name":      bill.get("fee_name", ""),
-                "amount_paid":   self.amount.value(),
-                "amount_due":    bill["amount_due"],
-                "discount_amount": bill["discount_amount"],
-                "payment_method": self.method.currentText(),
-                "reference_no":  self.ref_no.text().strip(),
-                "payment_date":  pay_date,
-                "recorded_by":   session.full_name,
-                "balance":       max(bill["amount_due"] - new_paid - bill["discount_amount"], 0),
-                "status":        new_status,
+                "receipt_no":     result["receipt_no"],
+                "control_number": self._bill["control_number"],
+                "student":        result["student_name"],
+                "admission_no":   result["admission_no"],
+                "class_name":     result["class_name"],
+                "fee_name":       result["fee_name"],
+                "amount_paid":    result["amount_paid"],
+                "amount_due":     self._bill["amount_due"],
+                "discount_amount": self._bill["discount_amount"],
+                "payment_method": result["method"],
+                "reference_no":   result["ref_no"],
+                "payment_date":   result["payment_date"],
+                "recorded_by":    session.full_name,
+                "balance":        result["balance_remaining"],
+                "status":         result["new_status"],
             }
-
         self.accept()
 
 

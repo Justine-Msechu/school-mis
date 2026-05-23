@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QApplication, QDialog
 from PyQt6.QtGui import QFont
 from database.db import initialize_database, is_setup_complete
 from ui.theme import GLOBAL_STYLE
+import policy.rules   # activates all policy rules via @policy_engine.register decorators
 
 
 def run_app():
@@ -34,6 +35,9 @@ def run_app():
 
 def main():
     initialize_database()
+
+    from policy.engine import policy_engine
+    policy_engine.load_overrides_from_db()
 
     app = QApplication(sys.argv)
     app.setApplicationName("School MIS")
