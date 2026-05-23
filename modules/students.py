@@ -104,7 +104,11 @@ class StudentDialog(QDialog):
         self.parent_phone = QLineEdit(); self.parent_phone.setPlaceholderText("e.g. +255 712 345 678")
         self.parent_email = QLineEdit(); self.parent_email.setPlaceholderText("parent@email.com")
         self.address      = QLineEdit(); self.address.setPlaceholderText("Home address")
-        self.notes        = QTextEdit(); self.notes.setFixedHeight(60)
+
+        self.category = QComboBox()
+        self.category.addItems(["regular", "orphan", "sponsored"])
+
+        self.notes = QTextEdit(); self.notes.setFixedHeight(60)
         self.notes.setPlaceholderText("Any additional notes…")
 
         for lbl, wgt in [
@@ -114,6 +118,7 @@ class StudentDialog(QDialog):
             ("Gender", self.gender),
             ("Date of birth", self.dob),
             ("Class", self.cls),
+            ("Category", self.category),
             ("Parent name", self.parent_name),
             ("Parent phone", self.parent_phone),
             ("Parent email", self.parent_email),
@@ -158,6 +163,8 @@ class StudentDialog(QDialog):
         for i in range(self.cls.count()):
             if self.cls.itemData(i) == s["class_id"]:
                 self.cls.setCurrentIndex(i); break
+        cat_idx = self.category.findText(s["student_category"] or "regular")
+        if cat_idx >= 0: self.category.setCurrentIndex(cat_idx)
         self.parent_name.setText(s["parent_name"] or "")
         self.parent_phone.setText(s["parent_phone"] or "")
         self.parent_email.setText(s["parent_email"] or "")
@@ -179,6 +186,7 @@ class StudentDialog(QDialog):
             self.gender.currentText(),
             self.dob.date().toString("yyyy-MM-dd"),
             self.cls.currentData(),
+            self.category.currentText(),
             self.parent_name.text().strip(),
             self.parent_phone.text().strip(),
             self.parent_email.text().strip(),
@@ -190,7 +198,8 @@ class StudentDialog(QDialog):
             execute("""
                 UPDATE students SET
                     admission_no=?, first_name=?, last_name=?, gender=?,
-                    date_of_birth=?, class_id=?, parent_name=?, parent_phone=?,
+                    date_of_birth=?, class_id=?, student_category=?,
+                    parent_name=?, parent_phone=?,
                     parent_email=?, address=?, notes=?
                 WHERE id=?
             """, data + (self.student_id,))
@@ -198,8 +207,9 @@ class StudentDialog(QDialog):
             execute("""
                 INSERT INTO students
                     (admission_no, first_name, last_name, gender, date_of_birth,
-                     class_id, parent_name, parent_phone, parent_email, address, notes)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                     class_id, student_category, parent_name, parent_phone,
+                     parent_email, address, notes)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, data)
 
         self.accept()

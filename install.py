@@ -183,7 +183,7 @@ def init_db(base: Path, python_exe: str):
     header("Database initialisation")
     db = base / "school_mis.db"
     if db.exists():
-        warn("Database already exists — skipping (your data is safe).")
+        warn("Database already exists skipping (your data is safe).")
         return
     result = subprocess.run(
         [python_exe, "-c",
@@ -285,7 +285,7 @@ if __name__ == "__main__":
 
     print()
     print(c("╔══════════════════════════════════════════════════════╗", CYAN+BOLD))
-    print(c("║   School Management Information System  — Installer ║", CYAN+BOLD))
+    print(c("║   School Management Information System  Installer ║", CYAN+BOLD))
     print(c("╚══════════════════════════════════════════════════════╝", CYAN+BOLD))
     print(c(f"  Platform: {OS} {platform.release()}", BLUE))
 

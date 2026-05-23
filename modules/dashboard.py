@@ -94,16 +94,20 @@ class DashboardWidget(QWidget):
         grid = QGridLayout()
         grid.setSpacing(14)
 
-        self.card_students  = StatCard("Total students",  "—", "#2563EB", 10)
-        self.card_teachers  = StatCard("Teachers & staff","—", "#059669", 41)
-        self.card_classes   = StatCard("Active classes",  "—", "#7C3AED", 38)
-        self.card_present   = StatCard("Present today",   "—", "#D97706",  2)
-        self.card_fees      = StatCard("Fees this month (TZS)", "—", "#DC2626", 3)
-        self.card_absent    = StatCard("Absent today",    "—", "#6B7280",  2)
+        self.card_students  = StatCard("Total students",       "—", "#2563EB", 10)
+        self.card_teachers  = StatCard("Teachers & staff",     "—", "#059669", 41)
+        self.card_classes   = StatCard("Active classes",       "—", "#7C3AED", 38)
+        self.card_present   = StatCard("Present today",        "—", "#D97706",  2)
+        self.card_fees      = StatCard("Fees this month (TZS)","—", "#DC2626",  3)
+        self.card_absent    = StatCard("Absent today",         "—", "#6B7280",  2)
+        self.card_welfare   = StatCard("Welfare students",     "—", "#9333EA",  5)
+        self.card_unpaid    = StatCard("Unpaid bills",         "—", "#B91C1C",  3)
+        self.card_low_stock = StatCard("Low stock items",      "—", "#B45309",  6)
 
         for i, card in enumerate([
             self.card_students, self.card_teachers, self.card_classes,
-            self.card_present, self.card_fees, self.card_absent,
+            self.card_present,  self.card_fees,     self.card_absent,
+            self.card_welfare,  self.card_unpaid,   self.card_low_stock,
         ]):
             grid.addWidget(card, i // 3, i % 3)
 
@@ -151,3 +155,17 @@ class DashboardWidget(QWidget):
         )
         total = r["total"] if r else 0
         self.card_fees.set_value(f"{total:,.0f}")
+
+        r = fetch_one("SELECT COUNT(*) AS n FROM welfare_records")
+        self.card_welfare.set_value(r["n"] if r else 0)
+
+        r = fetch_one(
+            "SELECT COUNT(*) AS n FROM student_bills WHERE status IN ('unpaid','partial')"
+        )
+        self.card_unpaid.set_value(r["n"] if r else 0)
+
+        r = fetch_one(
+            "SELECT COUNT(*) AS n FROM inventory_items "
+            "WHERE is_active=1 AND stock_qty <= reorder_qty"
+        )
+        self.card_low_stock.set_value(r["n"] if r else 0)

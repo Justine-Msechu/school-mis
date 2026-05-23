@@ -30,25 +30,33 @@ def _load_nav_icon(n: int, rgb: tuple = (148, 163, 184), size: int = 20) -> QIco
     return QIcon(QPixmap.fromImage(img))
 
 # All module imports
-from modules.dashboard  import DashboardWidget
-from modules.students   import StudentsWidget
-from modules.teachers   import TeachersWidget
-from modules.classes    import ClassesWidget
-from modules.attendance import AttendanceWidget
-from modules.fees       import FeesWidget
-from modules.settings   import SettingsWidget
+from modules.dashboard            import DashboardWidget
+from modules.students             import StudentsWidget
+from modules.teachers             import TeachersWidget
+from modules.classes              import ClassesWidget
+from modules.attendance           import AttendanceWidget
+from modules.finance.main         import FinanceWidget
+from modules.welfare.main         import WelfareWidget
+from modules.inventory.main       import InventoryWidget
+from modules.accounting.main      import AccountingWidget
+from modules.reports.main         import ReportsWidget
+from modules.settings             import SettingsWidget
 
-SIDEBAR_W = 216
+SIDEBAR_W = 220
 
 # (icon_number, label, key, required_permission)
 ALL_NAV = [
-    (9,  "Dashboard",   "home",       None),
-    (10, "Students",    "students",   "students.view"),
-    (41, "Teachers",    "teachers",   "teachers.view"),
-    (38, "Classes",     "classes",    "classes.view"),
-    (2,  "Attendance",  "attendance", "attendance.view"),
-    (3,  "Fees",        "fees",       "fees.view"),
-    (58, "Settings",    "settings",   "settings.view"),
+    (9,  "Dashboard",   "home",        None),
+    (10, "Students",    "students",    "students.view"),
+    (41, "Teachers",    "teachers",    "teachers.view"),
+    (38, "Classes",     "classes",     "classes.view"),
+    (2,  "Attendance",  "attendance",  "attendance.view"),
+    (3,  "Finance",     "finance",     "finance.view"),
+    (5,  "Welfare",     "welfare",     "welfare.view"),
+    (6,  "Inventory",   "inventory",   "inventory.view"),
+    (7,  "Accounting",  "accounting",  "accounting.view"),
+    (8,  "Reports",     "reports",     "reports.view"),
+    (58, "Settings",    "settings",    "settings.view"),
 ]
 
 
@@ -125,7 +133,11 @@ class MainWindow(QMainWindow):
             "teachers":   TeachersWidget,
             "classes":    ClassesWidget,
             "attendance": AttendanceWidget,
-            "fees":       FeesWidget,
+            "finance":    FinanceWidget,
+            "welfare":    WelfareWidget,
+            "inventory":  InventoryWidget,
+            "accounting": AccountingWidget,
+            "reports":    ReportsWidget,
             "settings":   SettingsWidget,
         }
 

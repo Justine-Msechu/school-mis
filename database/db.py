@@ -1,6 +1,6 @@
 """
-School MIS — Database Layer  (v2)
-Added: users, roles, permissions, school_config, audit_log
+School MIS — Database Layer  (v3)
+Added: finance, welfare, inventory, accounting, reporting domains.
 """
 
 import sqlite3, os, hashlib, secrets
@@ -16,10 +16,25 @@ ROLES = {
         "label": "Head Teacher", "color": "#059669",
         "permissions": ["students.*","teachers.*","classes.*",
                         "attendance.*","grades.*","grades.approve",
-                        "fees.*","reports.*","settings.view"],
+                        "finance.*","welfare.*","reports.*","settings.view"],
+    },
+    "accountant": {
+        "label": "Accountant", "color": "#DC2626",
+        "permissions": ["finance.*","accounting.*","students.view",
+                        "reports.finance","reports.welfare","inventory.view"],
+    },
+    "welfare_officer": {
+        "label": "Welfare Officer", "color": "#9333EA",
+        "permissions": ["welfare.*","students.view","finance.view",
+                        "reports.welfare","reports.finance"],
+    },
+    "storekeeper": {
+        "label": "Store Keeper", "color": "#D97706",
+        "permissions": ["inventory.*","students.view","finance.view",
+                        "reports.inventory"],
     },
     "academic": {
-        "label": "Academic Officer", "color": "#D97706",
+        "label": "Academic Officer", "color": "#0891B2",
         "permissions": ["students.view","classes.view","teachers.view",
                         "grades.*","grades.approve","grades.publish",
                         "attendance.view","reports.*"],
@@ -152,17 +167,128 @@ def initialize_database():
         name TEXT NOT NULL, amount REAL NOT NULL,
         term INTEGER, description TEXT)""")
 
+    # ── Finance domain ──────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS fee_structures (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        academic_year_id INTEGER NOT NULL REFERENCES academic_years(id),
+        class_id         INTEGER REFERENCES classes(id),
+        fee_type_id      INTEGER NOT NULL REFERENCES fee_types(id),
+        amount           REAL NOT NULL,
+        term             INTEGER CHECK(term IN (1,2,3)),
+        due_date         TEXT)""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS student_bills (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id       INTEGER NOT NULL REFERENCES students(id),
+        fee_structure_id INTEGER NOT NULL REFERENCES fee_structures(id),
+        academic_year_id INTEGER NOT NULL REFERENCES academic_years(id),
+        control_number   TEXT NOT NULL UNIQUE,
+        amount_due       REAL NOT NULL,
+        amount_paid      REAL NOT NULL DEFAULT 0,
+        discount_amount  REAL NOT NULL DEFAULT 0,
+        status           TEXT NOT NULL DEFAULT 'unpaid'
+                         CHECK(status IN ('unpaid','partial','paid','waived')),
+        due_date         TEXT,
+        created_at       TEXT DEFAULT (datetime('now')),
+        UNIQUE(student_id, fee_structure_id))""")
+
     cur.execute("""CREATE TABLE IF NOT EXISTS fee_payments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL REFERENCES students(id),
-        fee_type_id INTEGER NOT NULL REFERENCES fee_types(id),
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        bill_id          INTEGER REFERENCES student_bills(id),
+        student_id       INTEGER NOT NULL REFERENCES students(id),
+        fee_type_id      INTEGER REFERENCES fee_types(id),
         academic_year_id INTEGER REFERENCES academic_years(id),
-        amount_paid REAL NOT NULL,
-        payment_date TEXT DEFAULT (date('now')),
-        receipt_no TEXT UNIQUE,
-        payment_method TEXT DEFAULT 'Cash',
-        notes TEXT,
-        recorded_by INTEGER REFERENCES users(id))""")
+        amount_paid      REAL NOT NULL,
+        payment_date     TEXT NOT NULL DEFAULT (date('now')),
+        control_number   TEXT,
+        receipt_no       TEXT UNIQUE,
+        payment_method   TEXT DEFAULT 'Cash'
+                         CHECK(payment_method IN
+                              ('Cash','Mobile Money','Bank Transfer','Cheque')),
+        reference_no     TEXT,
+        notes            TEXT,
+        recorded_by      INTEGER REFERENCES users(id),
+        created_at       TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS fee_waivers (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id       INTEGER NOT NULL REFERENCES students(id),
+        bill_id          INTEGER REFERENCES student_bills(id),
+        academic_year_id INTEGER REFERENCES academic_years(id),
+        waiver_type      TEXT NOT NULL
+                         CHECK(waiver_type IN ('orphan_exemption','scholarship',
+                                               'partial_discount','staff_child','other')),
+        discount_percent REAL NOT NULL DEFAULT 100,
+        approved_by      INTEGER REFERENCES users(id),
+        reason           TEXT,
+        created_at       TEXT DEFAULT (datetime('now')))""")
+
+    # ── Welfare domain ──────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS welfare_records (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id      INTEGER NOT NULL UNIQUE REFERENCES students(id),
+        category        TEXT NOT NULL
+                        CHECK(category IN ('orphan','half_orphan','sponsored','vulnerable')),
+        verified        INTEGER DEFAULT 0,
+        verified_by     INTEGER REFERENCES users(id),
+        verified_date   TEXT,
+        sponsor_name    TEXT,
+        sponsor_org     TEXT,
+        support_type    TEXT
+                        CHECK(support_type IN ('full_fees','partial','non_financial')),
+        notes           TEXT,
+        created_at      TEXT DEFAULT (datetime('now')))""")
+
+    # ── Inventory domain ────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS inventory_items (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        category    TEXT CHECK(category IN
+                        ('uniform','book','stationery','equipment','other')),
+        unit        TEXT DEFAULT 'pcs',
+        unit_price  REAL NOT NULL DEFAULT 0,
+        stock_qty   INTEGER NOT NULL DEFAULT 0,
+        reorder_qty INTEGER DEFAULT 5,
+        is_active   INTEGER DEFAULT 1)""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS inventory_transactions (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id     INTEGER NOT NULL REFERENCES inventory_items(id),
+        type        TEXT NOT NULL
+                    CHECK(type IN ('stock_in','issued','adjusted','returned')),
+        qty         INTEGER NOT NULL,
+        student_id  INTEGER REFERENCES students(id),
+        bill_id     INTEGER REFERENCES student_bills(id),
+        reference   TEXT,
+        notes       TEXT,
+        recorded_by INTEGER REFERENCES users(id),
+        created_at  TEXT DEFAULT (datetime('now')))""")
+
+    # ── Accounting domain ───────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS expenses (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        category     TEXT NOT NULL
+                     CHECK(category IN
+                          ('salaries','utilities','supplies','maintenance',
+                           'transport','welfare','other')),
+        description  TEXT NOT NULL,
+        amount       REAL NOT NULL,
+        expense_date TEXT NOT NULL DEFAULT (date('now')),
+        receipt_ref  TEXT,
+        approved_by  INTEGER REFERENCES users(id),
+        recorded_by  INTEGER REFERENCES users(id),
+        created_at   TEXT DEFAULT (datetime('now')))""")
+
+    # ── Migrate existing students table ────────────────────────────────────────
+    for col_def in [
+        ("student_category", "TEXT DEFAULT 'regular' CHECK(student_category IN ('regular','orphan','sponsored'))"),
+        ("sponsor_name",     "TEXT"),
+        ("sponsor_org",      "TEXT"),
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE students ADD COLUMN {col_def[0]} {col_def[1]}")
+        except Exception:
+            pass  # column already exists
 
     cur.execute("""CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,3 +375,31 @@ def execute_many(sql, data):
     conn.executemany(sql, data)
     conn.commit()
     conn.close()
+
+
+def db_write(sql, params=(), action="", table="", record_id=None, detail="", user_id=None):
+    """Write + audit in a single transaction."""
+    conn = get_connection()
+    cur  = conn.execute(sql, params)
+    rid  = cur.lastrowid
+    if action:
+        conn.execute(
+            "INSERT INTO audit_log(user_id,action,table_name,record_id,detail) VALUES(?,?,?,?,?)",
+            (user_id, action, table, record_id or rid, detail)
+        )
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def gen_control_number(student_admission: str, year_label: str, term: int, seq: int) -> str:
+    yr = year_label.split("/")[0]
+    adm = student_admission.replace(" ", "")
+    return f"SCH-{yr}-{adm}-T{term}-{seq:03d}"
+
+
+def gen_receipt_number() -> str:
+    import datetime, random
+    d = datetime.date.today().strftime("%Y%m%d")
+    seq = random.randint(1, 9999)
+    return f"RCP-{d}-{seq:04d}"

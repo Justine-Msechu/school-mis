@@ -25,7 +25,7 @@ BTN_OUTLINE = """QPushButton{background:#fff;color:#374151;border:1px solid #D1D
 # ── Add/Edit User dialog ───────────────────────────────────────────────────────
 
 # Roles a head teacher is allowed to create/assign
-_HEAD_TEACHER_ALLOWED_ROLES = {"class_teacher", "subject_teacher"}
+_HEAD_TEACHER_ALLOWED_ROLES = {"class_teacher", "subject_teacher", "academic"}
 
 
 class UserDialog(QDialog):
