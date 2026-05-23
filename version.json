@@ -1,7 +1,7 @@
 {
-  "version": "2.3.1",
+  "version": "2.3.2",
   "release_date": "2026-05-23",
-  "release_notes": "Remove all emoji and Unicode symbol characters from UI",
+  "release_notes": "Auto-popup update dialog when a new version is detected",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -27,7 +27,7 @@
     "database/db.py": "b0f89ac6b326f3f5c9b5e5b367f30e05390ac5bc0467af6d5256ed2ea00a62c6",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
-    "ui/main_window.py": "a5b089eba5634ddf337d89674b201f00fd5f1b7def49b9fa503bdfca4e09d12b",
+    "ui/main_window.py": "f03c8f20e2e7f0d1b2d0490f1ebf87dd50bf67620e00c816da426cee0c33596d",
     "auth/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "auth/session.py": "dbd5570194089e7a3f9340b407cb70605fadaaa306f3b0b7bc6c76e26bfadadd"
   }

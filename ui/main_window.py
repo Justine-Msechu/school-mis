@@ -295,6 +295,8 @@ class MainWindow(QMainWindow):
             f"Update available: v{info['local']} -> v{info['remote']}"
         )
         self._banner.setVisible(True)
+        # Auto-open the update dialog so the user sees it immediately
+        self._open_update_dialog()
 
     def _open_update_dialog(self):
         if not self._update_info:
@@ -302,6 +304,8 @@ class MainWindow(QMainWindow):
         from modules.updater import UpdateDialog
         dlg = UpdateDialog(self._update_info, self)
         dlg.exec()
+        # Hide banner after dialog — if they chose "Remind me later" the next
+        # connectivity check will surface the banner again.
         self._banner.setVisible(False)
 
     def closeEvent(self, event):
