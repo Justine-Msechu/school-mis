@@ -279,14 +279,19 @@ def initialize_database():
         recorded_by  INTEGER REFERENCES users(id),
         created_at   TEXT DEFAULT (datetime('now')))""")
 
-    # ── Migrate existing students table ────────────────────────────────────────
-    for col_def in [
-        ("student_category", "TEXT DEFAULT 'regular' CHECK(student_category IN ('regular','orphan','sponsored'))"),
-        ("sponsor_name",     "TEXT"),
-        ("sponsor_org",      "TEXT"),
-    ]:
+    # ── Migrate existing tables (safe — skips if column already exists) ────────
+    _migrations = [
+        ("students",     "student_category", "TEXT DEFAULT 'regular'"),
+        ("students",     "sponsor_name",     "TEXT"),
+        ("students",     "sponsor_org",      "TEXT"),
+        ("fee_payments", "bill_id",          "INTEGER"),
+        ("fee_payments", "control_number",   "TEXT"),
+        ("fee_payments", "reference_no",     "TEXT"),
+        ("fee_payments", "created_at",       "TEXT DEFAULT (datetime('now'))"),
+    ]
+    for table, col, col_type in _migrations:
         try:
-            cur.execute(f"ALTER TABLE students ADD COLUMN {col_def[0]} {col_def[1]}")
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
         except Exception:
             pass  # column already exists
 

@@ -1,7 +1,7 @@
 {
-  "version": "3.0.0",
+  "version": "3.0.1",
   "release_date": "2026-05-23",
-  "release_notes": "Full Finance, Welfare, Inventory, Accounting and Reports system",
+  "release_notes": "Fix migration for fee_payments new columns",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -47,7 +47,7 @@
     "modules/reports/welfare_report.py": "455a27c6b1471e39bccfae135ceca19022ab05784f1b3fe5cc34b81e796feeb2",
     "modules/reports/inventory_report.py": "604923df1b8485912919e5f6decdfcf1089ccf80c46f1705a539bde7bbfa647a",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-    "database/db.py": "43ecf3d0e1c183331a0d0c60a227f43e94c9f72d4e86837a936405aec62fa9a8",
+    "database/db.py": "3689a0d4436c94e52797b9f61c477857b03ba286735febfa95a6a1e2dce82213",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
     "ui/main_window.py": "f9be4cf35b6862c891e285faac09e72bfbad0a5c3cbf7068a430eaf7254ff852",
