@@ -63,7 +63,7 @@ class AttendanceWidget(QWidget):
             self.cls_cb.addItem(row["name"], row["id"])
         self.cls_cb.currentIndexChanged.connect(self._load_attendance)
 
-        mark_all_present = QPushButton("✓ Mark all present")
+        mark_all_present = QPushButton("Mark all present")
         mark_all_present.setStyleSheet(BTN_OUTLINE)
         mark_all_present.clicked.connect(self._mark_all_present)
 

@@ -240,7 +240,7 @@ class MainWindow(QMainWindow):
         )
         install_btn.clicked.connect(self._open_update_dialog)
 
-        dismiss_btn = QPushButton("✕")
+        dismiss_btn = QPushButton("X")
         dismiss_btn.setFixedSize(26, 26)
         dismiss_btn.setStyleSheet(
             "QPushButton { background: transparent; color: #60A5FA; border: none; font-size: 14px; }"
@@ -292,7 +292,7 @@ class MainWindow(QMainWindow):
     def _show_update_banner(self, info: dict):
         self._update_info = info
         self._banner_label.setText(
-            f"Update available — v{info['local']}  →  v{info['remote']}"
+            f"Update available: v{info['local']} -> v{info['remote']}"
         )
         self._banner.setVisible(True)
 

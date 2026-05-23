@@ -175,7 +175,7 @@ class SettingsWidget(QWidget):
         w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20,16,20,16); lay.setSpacing(10)
 
         if not session.is_admin and not session.is_head_teacher:
-            lay.addWidget(QLabel("⚠  Only administrators and the head teacher can manage users."))
+            lay.addWidget(QLabel("Only administrators and the head teacher can manage users."))
             return w
 
         row0 = QHBoxLayout()
@@ -282,7 +282,7 @@ class SettingsWidget(QWidget):
             tbl.setRowCount(len(rows))
             for r, row in enumerate(rows):
                 for c, v in enumerate([row["label"], row["start_date"],
-                                        row["end_date"], "✓" if row["is_current"] else ""]):
+                                        row["end_date"], "Current" if row["is_current"] else ""]):
                     tbl.setItem(r, c, QTableWidgetItem(v))
 
         act = QHBoxLayout()
@@ -386,7 +386,7 @@ class SettingsWidget(QWidget):
         cl.addWidget(name_lbl)
 
         if active:
-            active_lbl = QLabel("✓ Active")
+            active_lbl = QLabel("Active")
             active_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             active_lbl.setObjectName("active_lbl")
             active_lbl.setStyleSheet(f"font-size:10px;color:{accent};background:transparent;")
@@ -466,8 +466,8 @@ class SettingsWidget(QWidget):
                 self._update_status.setText(f"Update available: v{info['remote']}")
                 UpdateDialog(info, self).exec()
             elif info.get("note"):
-                self._update_status.setText(f"ℹ  {info['note']}")
+                self._update_status.setText(f"Note: {info['note']}")
             else:
-                self._update_status.setText(f"✓  You are on the latest version (v{info['local']}).")
+                self._update_status.setText(f"You are on the latest version (v{info['local']}).")
         except Exception as e:
-            self._update_status.setText(f"⚠  Could not check for updates: {e}")
+            self._update_status.setText(f"Could not check for updates: {e}")

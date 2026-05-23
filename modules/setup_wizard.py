@@ -80,8 +80,8 @@ class SetupWizard(QDialog):
         # Navigation buttons
         nav = QHBoxLayout()
         nav.setContentsMargins(32, 16, 32, 24)
-        self._btn_back = QPushButton("← Back"); self._btn_back.setStyleSheet(BTN_BACK)
-        self._btn_next = QPushButton("Next →");  self._btn_next.setStyleSheet(BTN_NEXT)
+        self._btn_back = QPushButton("Back"); self._btn_back.setStyleSheet(BTN_BACK)
+        self._btn_next = QPushButton("Next");  self._btn_next.setStyleSheet(BTN_NEXT)
         self._btn_back.clicked.connect(self._go_back)
         self._btn_next.clicked.connect(self._go_next)
         nav.addWidget(self._btn_back)
@@ -154,7 +154,7 @@ class SetupWizard(QDialog):
         ]:
             form.addRow(_label(lbl), wgt)
 
-        info = QLabel("ℹ  You can create more user accounts from Settings → Users after setup.")
+        info = QLabel("You can create more user accounts from Settings > Users after setup.")
         info.setStyleSheet("color:#2563EB;font-size:12px;background:#EFF6FF;border-radius:6px;padding:8px 12px;")
         info.setWordWrap(True)
 
@@ -195,7 +195,7 @@ class SetupWizard(QDialog):
     def _page_done(self):
         w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(32,24,32,8)
         lay.addStretch()
-        icon = QLabel("✓"); icon.setStyleSheet("font-size:52px;font-weight:700;color:#059669;background:transparent;")
+        icon = QLabel("OK"); icon.setStyleSheet("font-size:36px;font-weight:700;color:#059669;background:transparent;")
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(icon)
         lay.addWidget(_label("Setup Complete!", 22, True, "#111827"))
@@ -220,11 +220,11 @@ class SetupWizard(QDialog):
         self._stack.setCurrentIndex(step)
         self._btn_back.setVisible(step > 0)
         if step == 3:
-            self._btn_next.setText("Open School MIS →")
+            self._btn_next.setText("Open School MIS")
         elif step == 2:
-            self._btn_next.setText("Finish setup →")
+            self._btn_next.setText("Finish setup")
         else:
-            self._btn_next.setText("Next →")
+            self._btn_next.setText("Next")
         self._current_step = step
 
     def _go_back(self):
@@ -333,12 +333,12 @@ class _StepBar(QWidget):
         lay.setContentsMargins(32, 0, 32, 0)
         self._labels = []
         for i, s in enumerate(steps):
-            lbl = QLabel(f"{'✓' if i==0 else str(i+1)}  {s}")
+            lbl = QLabel(f"{'>' if i==0 else str(i+1)}  {s}")
             lbl.setStyleSheet("font-size:13px;color:#9CA3AF;background:transparent;")
             lay.addWidget(lbl)
             self._labels.append(lbl)
             if i < len(steps) - 1:
-                sep = QLabel("──")
+                sep = QLabel("-")
                 sep.setStyleSheet("color:#E5E7EB;background:transparent;")
                 lay.addWidget(sep)
         lay.addStretch()
@@ -348,10 +348,10 @@ class _StepBar(QWidget):
         for i, lbl in enumerate(self._labels):
             if i < step:
                 lbl.setStyleSheet("font-size:13px;color:#059669;font-weight:600;background:transparent;")
-                lbl.setText(f"✓  {self._steps[i]}")
+                lbl.setText(f"ok  {self._steps[i]}")
             elif i == step:
                 lbl.setStyleSheet("font-size:13px;color:#2563EB;font-weight:700;background:transparent;")
-                lbl.setText(f"● {self._steps[i]}")
+                lbl.setText(f"> {self._steps[i]}")
             else:
                 lbl.setStyleSheet("font-size:13px;color:#9CA3AF;background:transparent;")
                 lbl.setText(f"{i+1}  {self._steps[i]}")

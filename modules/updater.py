@@ -226,7 +226,7 @@ class UpdateDialog(QDialog):
 
         ver_row = QHBoxLayout()
         ver_row.addWidget(self._badge(f"Current: v{self._info['local']}", "#F3F4F6", "#6B7280"))
-        ver_row.addWidget(QLabel("→"))
+        ver_row.addWidget(QLabel("->"))
         ver_row.addWidget(self._badge(f"New: v{self._info['remote']}", "#DBEAFE", "#1E40AF"))
         ver_row.addStretch()
         lay.addLayout(ver_row)
@@ -269,7 +269,7 @@ class UpdateDialog(QDialog):
         self._btn_later.setStyleSheet("QPushButton{background:#F3F4F6;color:#374151;border:1px solid #D1D5DB;border-radius:7px;padding:9px 20px;}")
         self._btn_later.clicked.connect(self.reject)
 
-        self._btn_update = QPushButton("⬇  Install update")
+        self._btn_update = QPushButton("Install update")
         self._btn_update.setStyleSheet("QPushButton{background:#2563EB;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-weight:600;}")
         self._btn_update.clicked.connect(self._start_update)
 
@@ -303,13 +303,13 @@ class UpdateDialog(QDialog):
 
     def _on_done(self):
         self._prog.setValue(self._prog.maximum())
-        self._status.setText("✓ Update complete! Restarting in 3 seconds…")
+        self._status.setText("Update complete! Restarting in 3 seconds...")
         self._btn_later.setEnabled(False)
         QTimer.singleShot(3000, _restart_app)
 
     def _on_error(self, msg):
         self._btn_later.setEnabled(True)
-        self._status.setText(f"✗ {msg}")
+        self._status.setText(f"Error: {msg}")
         QMessageBox.critical(self, "Update failed", msg)
 
 
