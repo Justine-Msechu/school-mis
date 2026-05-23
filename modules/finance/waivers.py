@@ -8,8 +8,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
-from database.db import fetch_all, fetch_one, execute, db_write
-from auth.session import session
+from database.db import fetch_all, fetch_one
+from services.finance_service import finance_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """QPushButton{background:#7C3AED;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#6D28D9;}"""
@@ -113,40 +114,18 @@ class WaiverDialog(QDialog):
 
         bill_id = self.bill_cb.currentData()
         pct = self.pct.value()
+        waiver_type = self.type_cb.currentText()
+        reason = self.reason.text().strip()
 
-        execute(
-            """INSERT INTO fee_waivers
-                (student_id, bill_id, academic_year_id, waiver_type,
-                 discount_percent, approved_by, reason)
-               VALUES (?,?,?,?,?,?,?)""",
-            (sid, bill_id, self.year_cb.currentData(),
-             self.type_cb.currentText(), pct,
-             session.user_id, self.reason.text().strip())
-        )
-
-        # Apply to specific bill or all outstanding bills
-        if bill_id:
-            bills_to_update = [bill_id]
-        else:
-            bills_to_update = [
-                b["id"] for b in fetch_all(
-                    "SELECT id, amount_due, amount_paid FROM student_bills "
-                    "WHERE student_id=? AND status IN ('unpaid','partial')", (sid,)
+        try:
+            if bill_id:
+                finance_service.apply_waiver(bill_id, waiver_type, pct, reason)
+            else:
+                finance_service.apply_blanket_waiver(
+                    sid, self.year_cb.currentData(), waiver_type, pct, reason
                 )
-            ]
-
-        for bid in bills_to_update:
-            b = fetch_one("SELECT amount_due, amount_paid FROM student_bills WHERE id=?", (bid,))
-            if not b: continue
-            discount = b["amount_due"] * (pct / 100)
-            new_status = "waived" if pct == 100 else (
-                "paid" if (b["amount_paid"] + discount) >= b["amount_due"] else "partial"
-            )
-            execute(
-                "UPDATE student_bills SET discount_amount=?, status=? WHERE id=?",
-                (discount, new_status, bid)
-            )
-
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Cannot Apply Waiver", str(e)); return
         self.accept()
 
 

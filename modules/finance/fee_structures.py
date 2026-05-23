@@ -7,7 +7,9 @@ from PyQt6.QtWidgets import (
     QAbstractItemView
 )
 from PyQt6.QtCore import Qt, QDate
-from database.db import fetch_all, fetch_one, execute
+from database.db import fetch_all, fetch_one
+from services.finance_service import finance_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """QPushButton{background:#DC2626;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#B91C1C;}"""
@@ -110,21 +112,31 @@ class FeeStructureDialog(QDialog):
             QMessageBox.warning(self, "Validation", "Please select a fee type."); return
         if self.amount.value() <= 0:
             QMessageBox.warning(self, "Validation", "Amount must be greater than zero."); return
+
         term_map = {0: None, 1: 1, 2: 2, 3: 3}
         term = term_map[self.term_cb.currentIndex()]
-        data = (
-            self.year_cb.currentData(), self.class_cb.currentData(),
-            self.fee_type_cb.currentData(), self.amount.value(),
-            term, self.due_date.date().toString("yyyy-MM-dd"),
-        )
-        if self.struct_id:
-            execute("""UPDATE fee_structures SET academic_year_id=?,class_id=?,
-                fee_type_id=?,amount=?,term=?,due_date=? WHERE id=?""",
-                data + (self.struct_id,))
-        else:
-            execute("""INSERT INTO fee_structures
-                (academic_year_id,class_id,fee_type_id,amount,term,due_date)
-                VALUES (?,?,?,?,?,?)""", data)
+        try:
+            if self.struct_id:
+                finance_service.update_fee_structure(
+                    self.struct_id,
+                    academic_year_id=self.year_cb.currentData(),
+                    fee_type_id=self.fee_type_cb.currentData(),
+                    amount=self.amount.value(),
+                    term=term,
+                    class_id=self.class_cb.currentData(),
+                    due_date=self.due_date.date().toString("yyyy-MM-dd"),
+                )
+            else:
+                finance_service.create_fee_structure(
+                    academic_year_id=self.year_cb.currentData(),
+                    fee_type_id=self.fee_type_cb.currentData(),
+                    amount=self.amount.value(),
+                    term=term,
+                    class_id=self.class_cb.currentData(),
+                    due_date=self.due_date.date().toString("yyyy-MM-dd"),
+                )
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Cannot Save", str(e)); return
         self.accept()
 
 
@@ -223,7 +235,10 @@ class FeeStructuresWidget(QWidget):
         r = QMessageBox.question(self, "Confirm", "Delete this fee structure?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if r == QMessageBox.StandardButton.Yes:
-            execute("DELETE FROM fee_structures WHERE id=?", (sid,))
+            try:
+                finance_service.delete_fee_structure(sid)
+            except (ServiceError, PolicyViolation) as e:
+                QMessageBox.warning(self, "Cannot Delete", str(e)); return
             self.load_table()
 
     def _add_fee_type(self):

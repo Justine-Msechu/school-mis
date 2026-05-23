@@ -7,8 +7,9 @@ from PyQt6.QtWidgets import (
     QMessageBox, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, QDate
-from database.db import fetch_all, fetch_one, execute, db_write
-from auth.session import session
+from database.db import fetch_all, fetch_one
+from services.accounting_service import accounting_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """QPushButton{background:#059669;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#047857;}"""
@@ -69,16 +70,16 @@ class ExpenseDialog(QDialog):
         if self.amount.value() <= 0:
             QMessageBox.warning(self, "Required", "Amount must be greater than zero."); return
 
-        db_write(
-            """INSERT INTO expenses(category,description,amount,expense_date,receipt_ref,recorded_by)
-               VALUES(?,?,?,?,?,?)""",
-            (self.cat_cb.currentText(), self.desc.text().strip(),
-             self.amount.value(), self.date_pick.date().toString("yyyy-MM-dd"),
-             self.receipt_ref.text().strip(), session.user_id),
-            action="expense_recorded", table="expenses",
-            detail=f"{self.cat_cb.currentText()} TZS {self.amount.value():,.0f}",
-            user_id=session.user_id
-        )
+        try:
+            accounting_service.record_expense(
+                category=self.cat_cb.currentText(),
+                description=self.desc.text().strip(),
+                amount=self.amount.value(),
+                expense_date=self.date_pick.date().toString("yyyy-MM-dd"),
+                receipt_ref=self.receipt_ref.text().strip(),
+            )
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Cannot Record Expense", str(e)); return
         self.accept()
 
 

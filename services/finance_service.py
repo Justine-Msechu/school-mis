@@ -142,6 +142,41 @@ class FinanceService(BaseService):
                     detail=f"Amount TZS {amount:,.0f} term={term}")
         return fs_id
 
+    def update_fee_structure(
+        self,
+        fs_id: int,
+        academic_year_id: int,
+        fee_type_id: int,
+        amount: float,
+        term: int | None,
+        class_id: int | None = None,
+        due_date: str | None = None,
+    ) -> None:
+        self._require_permission("finance.*")
+        fs = fetch_one("SELECT * FROM fee_structures WHERE id=?", (fs_id,))
+        if not fs:
+            raise ServiceError("Fee structure not found.")
+        has_payments = fetch_one(
+            "SELECT COUNT(*) AS n FROM student_bills sb "
+            "JOIN fee_payments fp ON fp.bill_id=sb.id "
+            "WHERE sb.fee_structure_id=?", (fs_id,)
+        )
+        self._enforce(
+            "fee.structure.edit",
+            subject={"id": fs_id, "has_payments": (has_payments and has_payments["n"] > 0)},
+        )
+        if amount <= 0:
+            raise ServiceError("Fee amount must be greater than zero.")
+        execute(
+            """UPDATE fee_structures
+               SET academic_year_id=?, class_id=?, fee_type_id=?,
+                   amount=?, term=?, due_date=? WHERE id=?""",
+            (academic_year_id, class_id, fee_type_id, amount, term, due_date, fs_id),
+        )
+        self._audit("fee_structure_updated", "fee_structures", fs_id,
+                    before=dict(fs),
+                    after={"amount": amount, "term": term})
+
     def delete_fee_structure(self, fs_id: int):
         self._require_permission("finance.*")
         fs = fetch_one("SELECT * FROM fee_structures WHERE id=?", (fs_id,))
@@ -162,7 +197,7 @@ class FinanceService(BaseService):
 
     # ── Billing engine ────────────────────────────────────────────────────────
 
-    def run_billing(self, academic_year_id: int, term: int) -> dict:
+    def run_billing(self, academic_year_id: int, term: int | None = None) -> dict:
         """
         Generate student_bills for all active students against fee structures
         for the given year and term. Orphan students get auto-waiver instead.
@@ -171,10 +206,16 @@ class FinanceService(BaseService):
         """
         self._require_permission("finance.*")
 
-        structures = fetch_all(
-            "SELECT * FROM fee_structures WHERE academic_year_id=? AND term=?",
-            (academic_year_id, term),
-        )
+        if term is not None:
+            structures = fetch_all(
+                "SELECT * FROM fee_structures WHERE academic_year_id=? AND term=?",
+                (academic_year_id, term),
+            )
+        else:
+            structures = fetch_all(
+                "SELECT * FROM fee_structures WHERE academic_year_id=?",
+                (academic_year_id,),
+            )
         if not structures:
             raise ServiceError("No fee structures defined for this year/term.")
 
@@ -202,7 +243,7 @@ class FinanceService(BaseService):
                     "SELECT COUNT(*) AS n FROM student_bills WHERE fee_structure_id=?",
                     (fs["id"],)
                 )["n"] + 1
-                ctrl = gen_control_number(student["admission_no"], year_label, term, seq)
+                ctrl = gen_control_number(student["admission_no"], year_label, fs["term"] or 0, seq)
 
                 # Check if bill already exists
                 exists = fetch_one(
@@ -280,6 +321,49 @@ class FinanceService(BaseService):
         self._audit("waiver_applied", "fee_waivers",
                     detail=f"Bill {bill_id}: {discount_percent}% {waiver_type}",
                     after={"discount_percent": discount_percent, "waiver_type": waiver_type})
+
+    def apply_blanket_waiver(
+        self,
+        student_id: int,
+        academic_year_id: int,
+        waiver_type: str,
+        discount_percent: float,
+        reason: str = "",
+    ) -> int:
+        """Apply a waiver to all outstanding bills for a student. Returns count of bills updated."""
+        self._require_permission("finance.*")
+        if discount_percent <= 0 or discount_percent > 100:
+            raise ServiceError("Discount percent must be between 1 and 100.")
+
+        bills = fetch_all(
+            "SELECT id, amount_due, amount_paid FROM student_bills "
+            "WHERE student_id=? AND status IN ('unpaid','partial')",
+            (student_id,),
+        )
+
+        execute(
+            """INSERT INTO fee_waivers
+               (student_id, bill_id, academic_year_id, waiver_type,
+                discount_percent, reason, approved_by)
+               VALUES (?,?,?,?,?,?,?)""",
+            (student_id, None, academic_year_id,
+             waiver_type, discount_percent, reason, self._session.user_id),
+        )
+
+        for bill in bills:
+            discount = bill["amount_due"] * discount_percent / 100
+            new_status = "waived" if discount_percent >= 100 else (
+                "paid" if (bill["amount_paid"] + discount) >= bill["amount_due"] else "partial"
+            )
+            execute(
+                "UPDATE student_bills SET discount_amount=?, status=? WHERE id=?",
+                (discount, new_status, bill["id"]),
+            )
+
+        self._audit("blanket_waiver_applied", "fee_waivers",
+                    detail=f"Student {student_id}: {discount_percent}% {waiver_type} on {len(bills)} bill(s)",
+                    after={"discount_percent": discount_percent, "waiver_type": waiver_type})
+        return len(bills)
 
 
 # Singleton

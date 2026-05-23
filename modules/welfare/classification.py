@@ -8,8 +8,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
-from database.db import fetch_all, fetch_one, execute, db_write
-from auth.session import session
+from database.db import fetch_all, fetch_one
+from services.welfare_service import welfare_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """QPushButton{background:#7C3AED;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#6D28D9;}"""
@@ -107,45 +108,32 @@ class WelfareRecordDialog(QDialog):
 
         cat = self.cat_cb.currentText()
         support = self.support_cb.currentText()
-        verified = 1 if self.verified_cb.isChecked() else 0
-        verified_by = session.user_id if verified else None
-        from datetime import date
-        verified_date = date.today().isoformat() if verified else None
+        verified = self.verified_cb.isChecked()
 
         existing = fetch_one("SELECT id FROM welfare_records WHERE student_id=?", (sid,))
-        if existing:
-            execute(
-                """UPDATE welfare_records SET category=?,support_type=?,
-                   sponsor_name=?,sponsor_org=?,verified=?,verified_by=?,
-                   verified_date=?,notes=? WHERE student_id=?""",
-                (cat, support,
-                 self.sponsor_name.text().strip(), self.sponsor_org.text().strip(),
-                 verified, verified_by, verified_date,
-                 self.notes.toPlainText().strip(), sid)
-            )
-        else:
-            execute(
-                """INSERT INTO welfare_records
-                   (student_id,category,support_type,sponsor_name,sponsor_org,
-                    verified,verified_by,verified_date,notes)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
-                (sid, cat, support,
-                 self.sponsor_name.text().strip(), self.sponsor_org.text().strip(),
-                 verified, verified_by, verified_date,
-                 self.notes.toPlainText().strip())
-            )
-
-        # Sync student_category field
-        execute(
-            "UPDATE students SET student_category=? WHERE id=?",
-            (cat if cat in ["orphan", "sponsored"] else "regular", sid)
-        )
-
-        db_write(
-            "UPDATE audit_log SET detail=detail WHERE 1=0",  # no-op write for audit
-            action="welfare_classified", table="welfare_records",
-            detail=f"Student {sid} classified as {cat}", user_id=session.user_id
-        )
+        try:
+            if existing:
+                welfare_service.update(
+                    existing["id"],
+                    category=cat,
+                    support_type=support,
+                    sponsor_name=self.sponsor_name.text().strip(),
+                    sponsor_org=self.sponsor_org.text().strip(),
+                    notes=self.notes.toPlainText().strip(),
+                    verified=verified,
+                )
+            else:
+                welfare_service.register(
+                    sid,
+                    category=cat,
+                    support_type=support,
+                    sponsor_name=self.sponsor_name.text().strip(),
+                    sponsor_org=self.sponsor_org.text().strip(),
+                    notes=self.notes.toPlainText().strip(),
+                    verified=verified,
+                )
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Cannot Save Record", str(e)); return
         self.accept()
 
 

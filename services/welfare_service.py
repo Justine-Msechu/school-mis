@@ -19,6 +19,7 @@ class WelfareService(BaseService):
         sponsor_name: str = "",
         sponsor_org: str = "",
         notes: str = "",
+        verified: bool = False,
     ) -> int:
         """
         Create a welfare record for a student.
@@ -57,9 +58,18 @@ class WelfareService(BaseService):
                 (category, student_id),
             )
 
+        if verified:
+            import datetime
+            today = datetime.date.today().isoformat()
+            execute(
+                "UPDATE welfare_records SET verified=1, verified_by=?, verified_date=? WHERE id=?",
+                (self._session.user_id, today, wr_id),
+            )
+
         self._audit("welfare_registered", "welfare_records", wr_id,
                     detail=f"Student {student_id}: {category} / {support_type}",
-                    after={"category": category, "support_type": support_type})
+                    after={"category": category, "support_type": support_type,
+                           "verified": verified})
         return wr_id
 
     # ── Edit welfare record ───────────────────────────────────────────────────
@@ -72,6 +82,7 @@ class WelfareService(BaseService):
         sponsor_name: str = "",
         sponsor_org: str = "",
         notes: str = "",
+        verified: bool | None = None,
     ) -> None:
         self._require_permission("welfare.*")
 
@@ -101,9 +112,21 @@ class WelfareService(BaseService):
                 (category, student["id"]),
             )
 
+        if verified is not None:
+            import datetime
+            today = datetime.date.today().isoformat()
+            execute(
+                "UPDATE welfare_records SET verified=?, verified_by=?, verified_date=? WHERE id=?",
+                (1 if verified else 0,
+                 self._session.user_id if verified else None,
+                 today if verified else None,
+                 wr_id),
+            )
+
         self._audit("welfare_updated", "welfare_records", wr_id,
                     before=dict(wr),
-                    after={"category": category, "support_type": support_type})
+                    after={"category": category, "support_type": support_type,
+                           "verified": verified})
 
     # ── Verify welfare record ─────────────────────────────────────────────────
 

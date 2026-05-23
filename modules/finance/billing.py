@@ -6,8 +6,9 @@ from PyQt6.QtWidgets import (
     QMessageBox, QAbstractItemView
 )
 from PyQt6.QtGui import QColor
-from database.db import fetch_all, fetch_one, execute, db_write, gen_control_number
-from auth.session import session
+from database.db import fetch_all, fetch_one
+from services.finance_service import finance_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """QPushButton{background:#DC2626;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#B91C1C;}"""
@@ -149,10 +150,10 @@ class BillingWidget(QWidget):
         if not year:
             QMessageBox.warning(self, "No Year", "No current academic year set."); return
 
-        structures = fetch_all(
-            "SELECT * FROM fee_structures WHERE academic_year_id=?", (year["id"],)
+        count = fetch_one(
+            "SELECT COUNT(*) AS n FROM fee_structures WHERE academic_year_id=?", (year["id"],)
         )
-        if not structures:
+        if not count or count["n"] == 0:
             QMessageBox.information(self, "No Structures",
                 "No fee structures found for the current year.\n"
                 "Add fee structures first."); return
@@ -167,80 +168,15 @@ class BillingWidget(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        students = fetch_all(
-            "SELECT s.*, c.id AS cls_id FROM students s "
-            "LEFT JOIN classes c ON c.id=s.class_id WHERE s.is_active=1"
-        )
-
-        # Collect orphan-exempt student IDs
-        exempt_ids = set()
-        for wr in fetch_all(
-            "SELECT student_id FROM welfare_records WHERE support_type='full_fees'"
-        ):
-            exempt_ids.add(wr["student_id"])
-        # Also students directly marked as orphan in student_category
-        for st in fetch_all("SELECT id FROM students WHERE student_category='orphan'"):
-            exempt_ids.add(st["id"])
-
-        created = skipped = waived = 0
-        for fs in structures:
-            # Determine which students this structure applies to
-            if fs["class_id"]:
-                applicable = [s for s in students if s["cls_id"] == fs["class_id"]]
-            else:
-                applicable = students
-
-            # Next sequence number for this structure
-            max_seq = fetch_one(
-                "SELECT COUNT(*) AS n FROM student_bills WHERE fee_structure_id=?",
-                (fs["id"],)
-            )
-            seq_start = (max_seq["n"] if max_seq else 0) + 1
-
-            for seq_offset, st in enumerate(applicable):
-                # Check if bill already exists
-                existing = fetch_one(
-                    "SELECT id FROM student_bills WHERE student_id=? AND fee_structure_id=?",
-                    (st["id"], fs["id"])
-                )
-                if existing:
-                    skipped += 1
-                    continue
-
-                ctrl = gen_control_number(
-                    st["admission_no"], year["label"],
-                    fs["term"] or 0, seq_start + seq_offset
-                )
-                is_exempt = st["id"] in exempt_ids
-                status = "waived" if is_exempt else "unpaid"
-                discount = fs["amount"] if is_exempt else 0
-
-                bill_id = execute(
-                    """INSERT INTO student_bills
-                        (student_id, fee_structure_id, academic_year_id,
-                         control_number, amount_due, discount_amount, status, due_date)
-                       VALUES (?,?,?,?,?,?,?,?)""",
-                    (st["id"], fs["id"], year["id"],
-                     ctrl, fs["amount"], discount, status, fs["due_date"])
-                )
-
-                if is_exempt:
-                    execute(
-                        """INSERT INTO fee_waivers
-                            (student_id, bill_id, academic_year_id,
-                             waiver_type, discount_percent, approved_by, reason)
-                           VALUES (?,?,?,'orphan_exemption',100,?,
-                                   'Auto-applied: student classified as orphan/welfare exempt')""",
-                        (st["id"], bill_id, year["id"], session.user_id)
-                    )
-                    waived += 1
-                else:
-                    created += 1
+        try:
+            result = finance_service.run_billing(year["id"])
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Billing Error", str(e)); return
 
         self.load_table()
         QMessageBox.information(
             self, "Billing Complete",
-            f"Bills created: {created}\n"
-            f"Auto-waived (orphan/exempt): {waived}\n"
-            f"Already existed (skipped): {skipped}"
+            f"Bills created: {result['billed']}\n"
+            f"Auto-waived (orphan/exempt): {result['waived']}\n"
+            f"Already existed (skipped): {result['skipped']}"
         )

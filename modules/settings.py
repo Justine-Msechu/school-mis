@@ -9,10 +9,12 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from database.db import (
-    fetch_all, fetch_one, execute, create_user,
-    get_config, set_config, ROLES
+    fetch_all, fetch_one, execute,
+    get_config, set_config, ROLES, hash_password
 )
 from auth.session import session
+from services.auth_service import auth_service
+from services.base import ServiceError
 
 BTN_PRIMARY = """QPushButton{background:#374151;color:#fff;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#1F2937;}"""
@@ -104,16 +106,23 @@ class UserDialog(QDialog):
                     (self.f_name.text().strip(), self.f_user.text().strip(),
                      self.f_role.currentData(), self.f_teacher.currentData(), self.user_id))
             if self.f_pw.text():
-                from database.db import hash_password
                 h, salt = hash_password(self.f_pw.text())
                 execute("UPDATE users SET password_hash=?,salt=?,must_change_pw=0 WHERE id=?",
                         (h, salt, self.user_id))
         else:
             if not self.f_pw.text():
                 QMessageBox.warning(self, "Required", "Password is required for new users."); return
-            create_user(self.f_user.text().strip(), self.f_pw.text(),
-                        self.f_role.currentData(), self.f_name.text().strip(),
-                        self.f_teacher.currentData(), must_change=True)
+            try:
+                auth_service.create_user_account(
+                    username=self.f_user.text().strip(),
+                    password=self.f_pw.text(),
+                    role=self.f_role.currentData(),
+                    full_name=self.f_name.text().strip(),
+                    teacher_id=self.f_teacher.currentData(),
+                    must_change=True,
+                )
+            except ServiceError as e:
+                QMessageBox.warning(self, "Cannot Create User", str(e)); return
         self.accept()
 
 
@@ -250,17 +259,15 @@ class SettingsWidget(QWidget):
         row = tbl.currentRow()
         if row < 0: return
         uid = self._user_ids[row]
-        if uid == session.user_id:
-            QMessageBox.warning(self, "Cannot", "You cannot deactivate your own account."); return
         target = fetch_one("SELECT role, full_name FROM users WHERE id=?", (uid,))
-        if target and target["role"] == "admin" and not session.is_admin:
-            QMessageBox.warning(self, "Access denied",
-                                "Only an administrator can deactivate admin accounts."); return
         r = QMessageBox.question(self, "Confirm",
             f"Deactivate account for {target['full_name'] if target else 'this user'}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if r == QMessageBox.StandardButton.Yes:
-            execute("UPDATE users SET is_active=0 WHERE id=?", (uid,))
+            try:
+                auth_service.deactivate_user(uid)
+            except ServiceError as e:
+                QMessageBox.warning(self, "Cannot Deactivate", str(e)); return
             self._load_users(tbl)
 
     # ── Academic years tab ────────────────────────────────────────

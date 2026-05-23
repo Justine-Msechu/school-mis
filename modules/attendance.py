@@ -7,7 +7,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QColor, QBrush
-from database.db import fetch_all, fetch_one, execute, execute_many, get_connection
+from database.db import fetch_all, fetch_one
+from services.student_service import student_service
+from services.base import ServiceError, PolicyViolation
 
 BTN_PRIMARY = """
     QPushButton { background:#D97706;color:white;border:none;
@@ -200,22 +202,20 @@ class AttendanceWidget(QWidget):
             return
         date_str = self.date_pick.date().toString("yyyy-MM-dd")
 
-        conn = get_connection()
+        records = []
         for r, sid in enumerate(self._students):
             cb = self.table.cellWidget(r, 2)
             status = cb.currentText() if cb else "Present"
             notes_item = self.table.item(r, 3)
             notes = notes_item.text() if notes_item else ""
-            conn.execute("""
-                INSERT INTO attendance (student_id, class_id, date, status, notes)
-                VALUES (?,?,?,?,?)
-                ON CONFLICT(student_id, date) DO UPDATE SET
-                    status=excluded.status, notes=excluded.notes
-            """, (sid, cls_id, date_str, status, notes))
-        conn.commit()
-        conn.close()
+            records.append({"student_id": sid, "status": status, "notes": notes})
+
+        try:
+            saved = student_service.mark_attendance(cls_id, date_str, records)
+        except (ServiceError, PolicyViolation) as e:
+            QMessageBox.warning(self, "Cannot Save Attendance", str(e)); return
 
         QMessageBox.information(
             self, "Saved",
-            f"Attendance saved for {self.table.rowCount()} student(s) on {date_str}."
+            f"Attendance saved for {saved} student(s) on {date_str}."
         )
