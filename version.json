@@ -1,7 +1,7 @@
 {
-  "version": "3.0.1",
+  "version": "3.1.0",
   "release_date": "2026-05-23",
-  "release_notes": "Fix migration for fee_payments new columns",
+  "release_notes": "PDF/Print export for receipts and all reports; RBAC system with DB-driven roles, permissions, and user_scopes tables; audit log enhanced with before/after state; class-level scope for teachers",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -27,8 +27,8 @@
     "modules/finance/main.py": "97bc3c0d836b7afde907ab54daf52711e6ac6e66970a2c0f35ecde4099c4e525",
     "modules/finance/fee_structures.py": "62bb1d1cef63c8567bd1ddd2e0459732db2cc38e0805ce78a84adca391e068f1",
     "modules/finance/billing.py": "725fcaa2870e5358eeccc7dd3f06d9081bfa13342800953037df72285bae7d3d",
-    "modules/finance/payments.py": "56265468acd783d4e467f208762843052e78c3cd4025b2cdbbc76fc0a01fb82b",
     "modules/finance/waivers.py": "1a69a160b794e873c143273046b2c1bacd5cbab527f2be8d10a94d912d1f4a34",
+    "modules/finance/payments.py": "b4905499e7b6be9573ebd1c132dca989da81d69446da3794121612d8052eae6f",
     "modules/welfare/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/welfare/main.py": "a9dd597d4c5d2591e6ae357946105161dadda35a7c8f9e55a3e24c51000f9259",
     "modules/welfare/classification.py": "5fb389ff125ff6de1a61a1846b8a11ee14c3a8505331c497b39dd347a56c44ed",
@@ -43,15 +43,18 @@
     "modules/accounting/ledger.py": "2cf192e7968ba2c3b3b3c9516dd232d215513848a018a079f0d853f539231022",
     "modules/reports/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/reports/main.py": "e63060bc373365c15c0b50697df042920d2bb3ec2773095c964e2199fd3b4897",
-    "modules/reports/finance_report.py": "ba25793d2df4190dc2b264f62b82a18e8edc5ceb7e50cb0d8230a9eee0c4e677",
-    "modules/reports/welfare_report.py": "455a27c6b1471e39bccfae135ceca19022ab05784f1b3fe5cc34b81e796feeb2",
-    "modules/reports/inventory_report.py": "604923df1b8485912919e5f6decdfcf1089ccf80c46f1705a539bde7bbfa647a",
+    "modules/reports/finance_report.py": "0e21feb327cf7782e1c8f47bffeb02c999ad6023afa5e11a6d48aaf733ed018e",
+    "modules/reports/welfare_report.py": "981dc9398ae1251c6c1e81a5e54f59a7abb5e584b8700a75ce80769c0fece99b",
+    "modules/reports/inventory_report.py": "2c246f5b4401513cc11bfe31d8ac3c85e3d6e0dd0f87f63827b4f4f09e215508",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-    "database/db.py": "3689a0d4436c94e52797b9f61c477857b03ba286735febfa95a6a1e2dce82213",
+    "database/db.py": "5518f42c4343afd79e810f12d748b2536761cbdb866f6df055533628bdd768ce",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
     "ui/main_window.py": "f9be4cf35b6862c891e285faac09e72bfbad0a5c3cbf7068a430eaf7254ff852",
     "auth/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-    "auth/session.py": "dbd5570194089e7a3f9340b407cb70605fadaaa306f3b0b7bc6c76e26bfadadd"
+    "auth/rbac.py": "311388f945860776e8f09cf95512b6192f36f4cd7040a03208aa999834a64476",
+    "auth/session.py": "fb9ba31d9310e19a0f668d4aaf9f92cb820e0b16dae15cab4b720486647ddab0",
+    "utils/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "utils/pdf_export.py": "66a10747e52bd097b893871a6ae9c46611daa09b27113191df9c298350c6d8ef"
   }
 }

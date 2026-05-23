@@ -2,13 +2,16 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
+    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QPushButton,
     QAbstractItemView, QGridLayout, QSizePolicy
 )
 from PyQt6.QtGui import QColor
 from database.db import fetch_all, fetch_one
+from utils.pdf_export import print_finance_report
 
 INPUT = "QComboBox{border:1px solid #D1D5DB;border-radius:6px;padding:6px 10px;font-size:13px;background:white;}"
+BTN_OUTLINE = """QPushButton{background:white;color:#374151;border:1px solid #D1D5DB;
+    border-radius:7px;padding:7px 16px;font-size:13px;}QPushButton:hover{background:#F9FAFB;}"""
 
 
 def _stat(label, value, color):
@@ -30,6 +33,8 @@ class FinanceReportWidget(QWidget):
     def __init__(self):
         super().__init__()
         self._stats = {}
+        self._rows_cache = []
+        self._stats_cache = {}
         self._build()
         self.load_table()
 
@@ -47,6 +52,9 @@ class FinanceReportWidget(QWidget):
             self.year_cb.addItem(y["label"], y["id"])
         self.year_cb.currentIndexChanged.connect(self.load_table)
         row0.addWidget(QLabel("Year:")); row0.addWidget(self.year_cb)
+        pdf_btn = QPushButton("Export / Print"); pdf_btn.setStyleSheet(BTN_OUTLINE)
+        pdf_btn.clicked.connect(self._export_pdf)
+        row0.addWidget(pdf_btn)
         layout.addLayout(row0)
 
         # Summary cards
@@ -90,15 +98,15 @@ class FinanceReportWidget(QWidget):
         year_cond = "AND sb.academic_year_id=?" if year_id else ""
         params = (year_id,) if year_id else ()
 
-        # Overall summary
         totals = fetch_one(f"""
-            SELECT COALESCE(SUM(sb.amount_due),0)     AS billed,
-                   COALESCE(SUM(sb.amount_paid),0)    AS collected,
+            SELECT COALESCE(SUM(sb.amount_due),0)      AS billed,
+                   COALESCE(SUM(sb.amount_paid),0)     AS collected,
                    COALESCE(SUM(sb.discount_amount),0) AS waived,
                    COUNT(DISTINCT CASE WHEN sb.status='waived' THEN sb.student_id END) AS exempt_count
             FROM student_bills sb WHERE 1=1 {year_cond}
         """, params)
 
+        billed = collected = waived = 0
         if totals:
             billed     = totals["billed"]
             collected  = totals["collected"]
@@ -111,14 +119,18 @@ class FinanceReportWidget(QWidget):
             self._stats["waived"].setText(f"TZS {waived:,.0f}")
             self._stats["rate"].setText(rate)
             self._stats["orphans"].setText(str(totals["exempt_count"]))
+            self._stats_cache = {
+                "billed": billed, "collected": collected,
+                "waived": waived, "outstanding": outstanding,
+                "rate": rate, "orphans": totals["exempt_count"],
+            }
 
-        # By class
         rows = fetch_all(f"""
             SELECT c.name AS class_name,
-                   COUNT(DISTINCT sb.student_id)          AS students,
-                   COALESCE(SUM(sb.amount_due),0)         AS billed,
-                   COALESCE(SUM(sb.amount_paid),0)        AS collected,
-                   COALESCE(SUM(sb.discount_amount),0)    AS waived
+                   COUNT(DISTINCT sb.student_id)       AS students,
+                   COALESCE(SUM(sb.amount_due),0)      AS billed,
+                   COALESCE(SUM(sb.amount_paid),0)     AS collected,
+                   COALESCE(SUM(sb.discount_amount),0) AS waived
             FROM student_bills sb
             JOIN students s ON s.id=sb.student_id
             LEFT JOIN classes c ON c.id=s.class_id
@@ -126,25 +138,28 @@ class FinanceReportWidget(QWidget):
             GROUP BY c.id ORDER BY c.grade_level, c.name
         """, params)
 
+        self._rows_cache = []
         self.table.setRowCount(len(rows))
         for r, row in enumerate(rows):
-            billed = row["billed"]
-            collected = row["collected"]
-            waived = row["waived"]
-            outstanding = max(billed - collected - waived, 0)
-            rate = f"{(collected/billed*100):.1f}%" if billed > 0 else "N/A"
-            rate_ok = billed > 0 and (collected / billed) >= 0.8
-
+            b = row["billed"]; cl = row["collected"]; w = row["waived"]
+            out = max(b - cl - w, 0)
+            rt  = f"{(cl/b*100):.1f}%" if b > 0 else "N/A"
+            rate_ok = b > 0 and (cl / b) >= 0.8
+            self._rows_cache.append({
+                "class_name": row["class_name"] or "Unassigned",
+                "students": row["students"],
+                "billed": b, "collected": cl, "outstanding": out,
+                "waived": w, "rate": rt,
+            })
             for c, v in enumerate([
-                row["class_name"] or "Unassigned",
-                str(row["students"]),
-                f"{billed:,.0f}",
-                f"{collected:,.0f}",
-                f"{outstanding:,.0f}",
-                f"{waived:,.0f}",
-                rate,
+                row["class_name"] or "Unassigned", str(row["students"]),
+                f"{b:,.0f}", f"{cl:,.0f}", f"{out:,.0f}", f"{w:,.0f}", rt,
             ]):
                 item = QTableWidgetItem(v)
-                if c == 6:  # rate column
+                if c == 6:
                     item.setForeground(QColor("#065F46" if rate_ok else "#991B1B"))
                 self.table.setItem(r, c, item)
+
+    def _export_pdf(self):
+        year_label = self.year_cb.currentText()
+        print_finance_report(self, year_label, self._stats_cache, self._rows_cache)

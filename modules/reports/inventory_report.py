@@ -3,10 +3,14 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
-    QAbstractItemView, QSizePolicy
+    QAbstractItemView, QSizePolicy, QPushButton
 )
 from PyQt6.QtGui import QColor
 from database.db import fetch_all, fetch_one
+from utils.pdf_export import print_inventory_report
+
+BTN_OUTLINE = """QPushButton{background:white;color:#374151;border:1px solid #D1D5DB;
+    border-radius:7px;padding:7px 16px;font-size:13px;}QPushButton:hover{background:#F9FAFB;}"""
 
 
 def _stat(label, value, color):
@@ -28,6 +32,8 @@ class InventoryReportWidget(QWidget):
     def __init__(self):
         super().__init__()
         self._stats = {}
+        self._rows_cache = []
+        self._stats_cache = {}
         self._build()
         self.load_table()
 
@@ -35,9 +41,14 @@ class InventoryReportWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 20, 28, 20); layout.setSpacing(14)
 
+        row0 = QHBoxLayout()
         t = QLabel("Inventory Report")
         t.setStyleSheet("font-size:20px;font-weight:700;color:#111827;")
-        layout.addWidget(t)
+        row0.addWidget(t); row0.addStretch()
+        pdf_btn = QPushButton("Export / Print"); pdf_btn.setStyleSheet(BTN_OUTLINE)
+        pdf_btn.clicked.connect(self._export_pdf)
+        row0.addWidget(pdf_btn)
+        layout.addLayout(row0)
 
         grid = QGridLayout(); grid.setSpacing(12)
         for i, (key, lbl, color) in enumerate([
@@ -84,6 +95,7 @@ class InventoryReportWidget(QWidget):
         """)
 
         low_count = issued_total = total_value = 0
+        self._rows_cache = []
         self.table.setRowCount(len(items))
 
         for r, row in enumerate(items):
@@ -93,6 +105,7 @@ class InventoryReportWidget(QWidget):
             val = row["stock_qty"] * row["unit_price"]
             total_value += val
             status = "LOW STOCK" if low else "OK"
+            self._rows_cache.append(dict(row))
 
             for c, v in enumerate([
                 row["name"], row["category"].title(),
@@ -114,3 +127,10 @@ class InventoryReportWidget(QWidget):
         self._stats["low"].setText(str(low_count))
         self._stats["issued"].setText(str(issued_total))
         self._stats["value"].setText(f"TZS {total_value:,.0f}")
+        self._stats_cache = {
+            "items": len(items), "low": low_count,
+            "issued": issued_total, "value": total_value,
+        }
+
+    def _export_pdf(self):
+        print_inventory_report(self, self._stats_cache, self._rows_cache)

@@ -288,6 +288,8 @@ def initialize_database():
         ("fee_payments", "control_number",   "TEXT"),
         ("fee_payments", "reference_no",     "TEXT"),
         ("fee_payments", "created_at",       "TEXT DEFAULT (datetime('now'))"),
+        ("audit_log",    "before_state",     "TEXT"),
+        ("audit_log",    "after_state",      "TEXT"),
     ]
     for table, col, col_type in _migrations:
         try:
@@ -299,7 +301,48 @@ def initialize_database():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER REFERENCES users(id),
         action TEXT NOT NULL, table_name TEXT, record_id INTEGER,
-        detail TEXT, ts TEXT DEFAULT (datetime('now')))""")
+        detail TEXT,
+        before_state TEXT, after_state TEXT,
+        ts TEXT DEFAULT (datetime('now')))""")
+
+    # ── RBAC tables ──────────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        label TEXT NOT NULL,
+        color TEXT DEFAULT '#6B7280',
+        is_system INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS permissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        domain TEXT NOT NULL,
+        action TEXT NOT NULL,
+        description TEXT,
+        scope_type TEXT DEFAULT 'GLOBAL'
+            CHECK(scope_type IN ('GLOBAL','SCHOOL','CLASS','DEPARTMENT','OWN')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS role_permissions (
+        role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        permission_id INTEGER NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+        PRIMARY KEY (role_id, permission_id))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_roles (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        granted_by INTEGER REFERENCES users(id),
+        granted_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, role_id))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_scopes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        scope_type TEXT NOT NULL
+            CHECK(scope_type IN ('GLOBAL','SCHOOL','CLASS','DEPARTMENT','OWN')),
+        scope_value TEXT,
+        permission_code TEXT,
+        created_at TEXT DEFAULT (datetime('now')))""")
 
     # Seed defaults on first run
     cur.execute("SELECT COUNT(*) FROM academic_years")
@@ -312,6 +355,93 @@ def initialize_database():
             ("Social Studies","SST"),("Religious Education","RE"),
             ("Physical Education","PE"),("Arts & Craft","ART"),
         ])
+
+    # ── Seed RBAC roles + permissions (idempotent) ────────────────────────────
+    cur.execute("SELECT COUNT(*) FROM roles")
+    if cur.fetchone()[0] == 0:
+        for role_name, info in ROLES.items():
+            cur.execute(
+                "INSERT OR IGNORE INTO roles(name,label,color) VALUES(?,?,?)",
+                (role_name, info["label"], info["color"])
+            )
+
+    # All permission codes used across roles
+    _ALL_PERMISSIONS = [
+        # code,                 domain,       action,     description,              scope
+        ("*",                  "system",     "*",        "Full system access",     "GLOBAL"),
+        ("students.view",      "students",   "view",     "View students",          "GLOBAL"),
+        ("students.add",       "students",   "add",      "Add students",           "GLOBAL"),
+        ("students.edit",      "students",   "edit",     "Edit students",          "GLOBAL"),
+        ("students.delete",    "students",   "delete",   "Delete students",        "GLOBAL"),
+        ("students.*",         "students",   "*",        "Full student access",    "GLOBAL"),
+        ("teachers.view",      "teachers",   "view",     "View teachers",          "GLOBAL"),
+        ("teachers.add",       "teachers",   "add",      "Add teachers",           "GLOBAL"),
+        ("teachers.edit",      "teachers",   "edit",     "Edit teachers",          "GLOBAL"),
+        ("teachers.*",         "teachers",   "*",        "Full teacher access",    "GLOBAL"),
+        ("classes.view",       "classes",    "view",     "View classes",           "CLASS"),
+        ("classes.add",        "classes",    "add",      "Add classes",            "GLOBAL"),
+        ("classes.edit",       "classes",    "edit",     "Edit classes",           "GLOBAL"),
+        ("classes.*",          "classes",    "*",        "Full class access",      "GLOBAL"),
+        ("attendance.view",    "attendance", "view",     "View attendance",        "CLASS"),
+        ("attendance.mark",    "attendance", "mark",     "Mark attendance",        "CLASS"),
+        ("attendance.*",       "attendance", "*",        "Full attendance access", "CLASS"),
+        ("grades.view",        "grades",     "view",     "View grades",            "CLASS"),
+        ("grades.enter",       "grades",     "enter",    "Enter grades",           "CLASS"),
+        ("grades.approve",     "grades",     "approve",  "Approve grades",         "GLOBAL"),
+        ("grades.publish",     "grades",     "publish",  "Publish grades",         "GLOBAL"),
+        ("grades.*",           "grades",     "*",        "Full grades access",     "GLOBAL"),
+        ("finance.view",       "finance",    "view",     "View finance",           "GLOBAL"),
+        ("finance.*",          "finance",    "*",        "Full finance access",    "GLOBAL"),
+        ("payment.view",       "payment",    "view",     "View payments",          "GLOBAL"),
+        ("payment.record",     "payment",    "record",   "Record payments",        "GLOBAL"),
+        ("welfare.view",       "welfare",    "view",     "View welfare records",   "GLOBAL"),
+        ("welfare.add",        "welfare",    "add",      "Add welfare records",    "GLOBAL"),
+        ("welfare.edit",       "welfare",    "edit",     "Edit welfare records",   "GLOBAL"),
+        ("welfare.verify",     "welfare",    "verify",   "Verify welfare records", "GLOBAL"),
+        ("welfare.*",          "welfare",    "*",        "Full welfare access",    "GLOBAL"),
+        ("inventory.view",     "inventory",  "view",     "View inventory",         "GLOBAL"),
+        ("inventory.add",      "inventory",  "add",      "Add inventory items",    "GLOBAL"),
+        ("inventory.edit",     "inventory",  "edit",     "Edit inventory items",   "GLOBAL"),
+        ("inventory.issue",    "inventory",  "issue",    "Issue items",            "GLOBAL"),
+        ("inventory.*",        "inventory",  "*",        "Full inventory access",  "GLOBAL"),
+        ("accounting.view",    "accounting", "view",     "View accounting",        "GLOBAL"),
+        ("accounting.add",     "accounting", "add",      "Record expenses",        "GLOBAL"),
+        ("accounting.*",       "accounting", "*",        "Full accounting access", "GLOBAL"),
+        ("reports.view",       "reports",    "view",     "View reports",           "GLOBAL"),
+        ("reports.finance",    "reports",    "finance",  "Finance reports",        "GLOBAL"),
+        ("reports.welfare",    "reports",    "welfare",  "Welfare reports",        "GLOBAL"),
+        ("reports.inventory",  "reports",    "inventory","Inventory reports",      "GLOBAL"),
+        ("reports.*",          "reports",    "*",        "All reports",            "GLOBAL"),
+        ("settings.view",      "settings",   "view",     "View settings",          "GLOBAL"),
+        ("settings.users",     "settings",   "users",    "Manage users",           "GLOBAL"),
+        ("settings.roles",     "settings",   "roles",    "Manage roles",           "GLOBAL"),
+        ("settings.*",         "settings",   "*",        "Full settings access",   "GLOBAL"),
+    ]
+    cur.execute("SELECT COUNT(*) FROM permissions")
+    if cur.fetchone()[0] == 0:
+        cur.executemany(
+            "INSERT OR IGNORE INTO permissions(code,domain,action,description,scope_type)"
+            " VALUES(?,?,?,?,?)",
+            _ALL_PERMISSIONS
+        )
+        # Link role_permissions from ROLES dict
+        for role_name, info in ROLES.items():
+            role_row = cur.execute(
+                "SELECT id FROM roles WHERE name=?", (role_name,)
+            ).fetchone()
+            if not role_row:
+                continue
+            role_id = role_row[0]
+            for perm_code in info.get("permissions", []):
+                perm_row = cur.execute(
+                    "SELECT id FROM permissions WHERE code=?", (perm_code,)
+                ).fetchone()
+                if perm_row:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO role_permissions(role_id,permission_id)"
+                        " VALUES(?,?)",
+                        (role_id, perm_row[0])
+                    )
 
     conn.commit()
     conn.close()
@@ -382,19 +512,57 @@ def execute_many(sql, data):
     conn.close()
 
 
-def db_write(sql, params=(), action="", table="", record_id=None, detail="", user_id=None):
-    """Write + audit in a single transaction."""
+def db_write(sql, params=(), action="", table="", record_id=None, detail="",
+             user_id=None, before_state=None, after_state=None):
+    """Write + audit in a single transaction. before/after_state accept dicts (stored as JSON)."""
+    import json
     conn = get_connection()
     cur  = conn.execute(sql, params)
     rid  = cur.lastrowid
     if action:
         conn.execute(
-            "INSERT INTO audit_log(user_id,action,table_name,record_id,detail) VALUES(?,?,?,?,?)",
-            (user_id, action, table, record_id or rid, detail)
+            """INSERT INTO audit_log
+               (user_id, action, table_name, record_id, detail, before_state, after_state)
+               VALUES(?,?,?,?,?,?,?)""",
+            (user_id, action, table, record_id or rid, detail,
+             json.dumps(before_state) if before_state is not None else None,
+             json.dumps(after_state)  if after_state  is not None else None)
         )
     conn.commit()
     conn.close()
     return rid
+
+
+def get_user_permissions(user_id: int) -> set[str]:
+    """
+    Returns the full set of permission codes for a user, loaded from DB
+    (user_roles → role_permissions → permissions).
+    Falls back to empty set if tables not yet seeded.
+    """
+    try:
+        rows = fetch_all("""
+            SELECT DISTINCT p.code FROM user_roles ur
+            JOIN role_permissions rp ON rp.role_id=ur.role_id
+            JOIN permissions p ON p.id=rp.permission_id
+            WHERE ur.user_id=?
+        """, (user_id,))
+        return {r["code"] for r in rows}
+    except Exception:
+        return set()
+
+
+def sync_user_role(user_id: int, role_name: str):
+    """Ensure user_roles row matches the users.role string (called on login)."""
+    try:
+        role_row = fetch_one("SELECT id FROM roles WHERE name=?", (role_name,))
+        if not role_row:
+            return
+        execute(
+            "INSERT OR IGNORE INTO user_roles(user_id,role_id) VALUES(?,?)",
+            (user_id, role_row["id"])
+        )
+    except Exception:
+        pass
 
 
 def gen_control_number(student_admission: str, year_label: str, term: int, seq: int) -> str:

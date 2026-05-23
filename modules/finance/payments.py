@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QColor
 from database.db import fetch_all, fetch_one, execute, db_write, gen_receipt_number
 from auth.session import session
+from utils.pdf_export import print_receipt
 
 BTN_PRIMARY = """QPushButton{background:#DC2626;color:white;border:none;border-radius:7px;
     padding:8px 18px;font-size:13px;font-weight:600;}QPushButton:hover{background:#B91C1C;}"""
@@ -26,6 +27,7 @@ class PaymentDialog(QDialog):
         self.setMinimumWidth(480)
         self.setStyleSheet(INPUT + "QDialog{background:#F9FAFB;}")
         self._bill = None
+        self._saved_receipt = None   # populated after successful save
         self._build()
 
     def _build(self):
@@ -97,8 +99,11 @@ class PaymentDialog(QDialog):
         row = QHBoxLayout(); row.addStretch()
         c = QPushButton("Cancel"); c.setStyleSheet(BTN_OUTLINE)
         s = QPushButton("Save payment"); s.setStyleSheet(BTN_PRIMARY)
-        c.clicked.connect(self.reject); s.clicked.connect(self._save)
-        row.addWidget(c); row.addWidget(s)
+        self.print_btn = QPushButton("Save + Print Receipt"); self.print_btn.setStyleSheet(BTN_PRIMARY)
+        c.clicked.connect(self.reject)
+        s.clicked.connect(lambda: self._save(print_after=False))
+        self.print_btn.clicked.connect(lambda: self._save(print_after=True))
+        row.addWidget(c); row.addWidget(s); row.addWidget(self.print_btn)
         layout.addLayout(row)
 
     def _lookup(self):
@@ -139,15 +144,17 @@ class PaymentDialog(QDialog):
         self.info_card.setVisible(True)
         self.amount.setValue(max(balance, 0))
 
-    def _save(self):
+    def _save(self, print_after=False):
         if not self._bill:
             QMessageBox.warning(self, "No Bill", "Look up a control number first."); return
         if self.amount.value() <= 0:
             QMessageBox.warning(self, "Validation", "Amount must be greater than zero."); return
 
         bill = self._bill
-        new_paid = bill["amount_paid"] + self.amount.value()
+        new_paid   = bill["amount_paid"] + self.amount.value()
         new_status = "paid" if new_paid >= (bill["amount_due"] - bill["discount_amount"]) else "partial"
+        receipt_no = self.receipt.text().strip()
+        pay_date   = self.date_pick.date().toString("yyyy-MM-dd")
 
         db_write(
             """INSERT INTO fee_payments
@@ -156,23 +163,46 @@ class PaymentDialog(QDialog):
                  payment_method, reference_no, notes, recorded_by)
                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (bill["id"], bill["student_id"], bill["academic_year_id"],
-             self.amount.value(),
-             self.date_pick.date().toString("yyyy-MM-dd"),
-             bill["control_number"],
-             self.receipt.text().strip(),
-             self.method.currentText(),
-             self.ref_no.text().strip(),
-             self.notes.text().strip(),
+             self.amount.value(), pay_date, bill["control_number"],
+             receipt_no, self.method.currentText(),
+             self.ref_no.text().strip(), self.notes.text().strip(),
              session.user_id),
             action="payment_recorded", table="fee_payments",
-            detail=f"Receipt {self.receipt.text().strip()} TZS {self.amount.value():,.0f}",
-            user_id=session.user_id
+            detail=f"Receipt {receipt_no} TZS {self.amount.value():,.0f}",
+            user_id=session.user_id,
+            after_state={
+                "receipt_no": receipt_no, "amount": self.amount.value(),
+                "method": self.method.currentText(), "status": new_status,
+            }
         )
 
-        execute(
-            "UPDATE student_bills SET amount_paid=?, status=? WHERE id=?",
-            (new_paid, new_status, bill["id"])
-        )
+        execute("UPDATE student_bills SET amount_paid=?, status=? WHERE id=?",
+                (new_paid, new_status, bill["id"]))
+
+        if print_after:
+            # Fetch class name for receipt
+            cls_row = fetch_one(
+                "SELECT c.name FROM students s LEFT JOIN classes c ON c.id=s.class_id"
+                " WHERE s.id=?", (bill["student_id"],)
+            )
+            self._saved_receipt = {
+                "receipt_no":    receipt_no,
+                "control_number": bill["control_number"],
+                "student":       self.info_student.text().replace("Student: ", "").split(" (")[0],
+                "admission_no":  bill.get("admission_no", ""),
+                "class_name":    cls_row["name"] if cls_row else "—",
+                "fee_name":      bill.get("fee_name", ""),
+                "amount_paid":   self.amount.value(),
+                "amount_due":    bill["amount_due"],
+                "discount_amount": bill["discount_amount"],
+                "payment_method": self.method.currentText(),
+                "reference_no":  self.ref_no.text().strip(),
+                "payment_date":  pay_date,
+                "recorded_by":   session.full_name,
+                "balance":       max(bill["amount_due"] - new_paid - bill["discount_amount"], 0),
+                "status":        new_status,
+            }
+
         self.accept()
 
 
@@ -181,6 +211,7 @@ class PaymentsWidget(QWidget):
 
     def __init__(self):
         super().__init__()
+        self._rows_data = []
         self._build()
         self.load_table()
 
@@ -192,9 +223,11 @@ class PaymentsWidget(QWidget):
         t = QLabel("Fee Payments")
         t.setStyleSheet("font-size:20px;font-weight:700;color:#111827;")
         row0.addWidget(t); row0.addStretch()
+        reprint = QPushButton("Reprint Receipt"); reprint.setStyleSheet(BTN_OUTLINE)
+        reprint.clicked.connect(self._reprint)
         add = QPushButton("+ Record Payment"); add.setStyleSheet(BTN_PRIMARY)
         add.clicked.connect(self._record)
-        row0.addWidget(add)
+        row0.addWidget(reprint); row0.addWidget(add)
         layout.addLayout(row0)
 
         self.sum_lbl = QLabel("")
@@ -223,13 +256,22 @@ class PaymentsWidget(QWidget):
         rows = fetch_all("""
             SELECT fp.receipt_no, fp.control_number,
                    s.first_name||' '||s.last_name AS student,
+                   s.admission_no,
                    fp.amount_paid, fp.payment_method, fp.reference_no,
-                   fp.payment_date, u.full_name AS recorder
+                   fp.payment_date, u.full_name AS recorder,
+                   sb.amount_due, sb.discount_amount, sb.status AS bill_status,
+                   ft.name AS fee_name,
+                   c.name AS class_name
             FROM fee_payments fp
             JOIN students s ON s.id=fp.student_id
             LEFT JOIN users u ON u.id=fp.recorded_by
+            LEFT JOIN student_bills sb ON sb.id=fp.bill_id
+            LEFT JOIN fee_structures fs ON fs.id=sb.fee_structure_id
+            LEFT JOIN fee_types ft ON ft.id=fs.fee_type_id
+            LEFT JOIN classes c ON c.id=s.class_id
             ORDER BY fp.payment_date DESC LIMIT 500
         """)
+        self._rows_data = [dict(r) for r in rows]
         self.table.setRowCount(len(rows))
         total = 0
         for r, row in enumerate(rows):
@@ -255,6 +297,36 @@ class PaymentsWidget(QWidget):
             f"This month: TZS {mt:,.0f}   |   Shown total: TZS {total:,.0f}   |   Transactions: {len(rows)}"
         )
 
+    def _reprint(self):
+        idx = self.table.currentRow()
+        if idx < 0 or idx >= len(self._rows_data):
+            QMessageBox.information(self, "Select Row", "Select a payment row to reprint."); return
+        row = self._rows_data[idx]
+        amount_due = row.get("amount_due") or 0
+        amount_paid = row.get("amount_paid") or 0
+        discount = row.get("discount_amount") or 0
+        data = {
+            "receipt_no":      row["receipt_no"] or "—",
+            "control_number":  row["control_number"] or "—",
+            "student":         row["student"],
+            "admission_no":    row["admission_no"],
+            "class_name":      row.get("class_name") or "—",
+            "fee_name":        row.get("fee_name") or "—",
+            "amount_paid":     amount_paid,
+            "amount_due":      amount_due,
+            "discount_amount": discount,
+            "payment_method":  row["payment_method"],
+            "reference_no":    row["reference_no"] or "—",
+            "payment_date":    row["payment_date"],
+            "recorded_by":     row["recorder"] or "—",
+            "balance":         max(amount_due - amount_paid - discount, 0),
+            "status":          row.get("bill_status") or "—",
+        }
+        print_receipt(self, data)
+
     def _record(self):
         dlg = PaymentDialog(self)
-        if dlg.exec(): self.load_table()
+        if dlg.exec():
+            self.load_table()
+            if dlg._saved_receipt:
+                print_receipt(self, dlg._saved_receipt)

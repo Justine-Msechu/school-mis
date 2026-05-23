@@ -3,10 +3,14 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
-    QAbstractItemView, QSizePolicy
+    QAbstractItemView, QSizePolicy, QPushButton
 )
 from PyQt6.QtGui import QColor
 from database.db import fetch_all, fetch_one
+from utils.pdf_export import print_welfare_report
+
+BTN_OUTLINE = """QPushButton{background:white;color:#374151;border:1px solid #D1D5DB;
+    border-radius:7px;padding:7px 16px;font-size:13px;}QPushButton:hover{background:#F9FAFB;}"""
 
 CAT_COLORS = {
     "orphan":      "#991B1B",
@@ -35,6 +39,8 @@ class WelfareReportWidget(QWidget):
     def __init__(self):
         super().__init__()
         self._stats = {}
+        self._rows_cache = []
+        self._stats_cache = {}
         self._build()
         self.load_table()
 
@@ -42,9 +48,14 @@ class WelfareReportWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 20, 28, 20); layout.setSpacing(14)
 
+        row0 = QHBoxLayout()
         t = QLabel("Welfare Report")
         t.setStyleSheet("font-size:20px;font-weight:700;color:#111827;")
-        layout.addWidget(t)
+        row0.addWidget(t); row0.addStretch()
+        pdf_btn = QPushButton("Export / Print"); pdf_btn.setStyleSheet(BTN_OUTLINE)
+        pdf_btn.clicked.connect(self._export_pdf)
+        row0.addWidget(pdf_btn)
+        layout.addLayout(row0)
 
         grid = QGridLayout(); grid.setSpacing(12)
         for i, (key, lbl, color) in enumerate([
@@ -89,20 +100,27 @@ class WelfareReportWidget(QWidget):
                    SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) AS verified
             FROM welfare_records
         """)
+        waiv_val = 0
         if counts:
             self._stats["total"].setText(str(counts["total"] or 0))
             self._stats["orphans"].setText(str(counts["orphans"] or 0))
             self._stats["sponsored"].setText(str(counts["sponsored"] or 0))
             self._stats["full_exempt"].setText(str(counts["full_exempt"] or 0))
             self._stats["verified"].setText(str(counts["verified"] or 0))
+            self._stats_cache = {
+                "total": counts["total"] or 0, "orphans": counts["orphans"] or 0,
+                "sponsored": counts["sponsored"] or 0,
+                "full_exempt": counts["full_exempt"] or 0,
+                "verified": counts["verified"] or 0,
+            }
 
         waived = fetch_one("""
             SELECT COALESCE(SUM(sb.amount_due * fw.discount_percent/100),0) AS t
-            FROM fee_waivers fw
-            JOIN student_bills sb ON sb.id=fw.bill_id
+            FROM fee_waivers fw JOIN student_bills sb ON sb.id=fw.bill_id
         """)
         waiv_val = waived["t"] if waived else 0
         self._stats["waived_val"].setText(f"TZS {waiv_val:,.0f}")
+        self._stats_cache["waived_val"] = waiv_val
 
         rows = fetch_all("""
             SELECT s.first_name||' '||s.last_name AS student, s.admission_no,
@@ -116,19 +134,28 @@ class WelfareReportWidget(QWidget):
             LEFT JOIN student_bills sb ON sb.id=fw.bill_id
             GROUP BY s.id ORDER BY wr.category, s.last_name
         """)
+        self._rows_cache = []
         self.table.setRowCount(len(rows))
         for r, row in enumerate(rows):
             fg = CAT_COLORS.get(row["category"], "#374151")
             sponsor = row["sponsor_name"] or row["sponsor_org"] or "—"
+            cat  = row["category"].replace("_", " ").title()
+            supp = row["support_type"].replace("_", " ").title() if row["support_type"] else "—"
+            self._rows_cache.append({
+                "student": row["student"], "admission_no": row["admission_no"],
+                "class_name": row["class_name"] or "—", "category": cat,
+                "support_type": supp, "sponsor": sponsor,
+                "verified": row["verified"], "waived_total": row["waived_total"],
+            })
             for c, v in enumerate([
                 row["student"], row["admission_no"],
-                row["class_name"] or "—",
-                row["category"].replace("_", " ").title(),
-                row["support_type"].replace("_", " ").title(),
-                sponsor,
+                row["class_name"] or "—", cat, supp, sponsor,
                 "Yes" if row["verified"] else "No",
                 f"{row['waived_total']:,.0f}",
             ]):
                 item = QTableWidgetItem(v)
                 item.setForeground(QColor(fg))
                 self.table.setItem(r, c, item)
+
+    def _export_pdf(self):
+        print_welfare_report(self, self._stats_cache, self._rows_cache)

@@ -9,13 +9,23 @@ from database.db import ROLES
 class _Session:
     def __init__(self):
         self._user = None
+        self._db_perms: set[str] = set()   # cached DB permissions
 
     # ── Login / logout ────────────────────────────────────────────
     def login(self, user_dict: dict):
         self._user = user_dict
+        self._db_perms = set()
+        # Sync and cache DB permissions in background-safe way
+        try:
+            from database.db import sync_user_role, get_user_permissions
+            sync_user_role(user_dict["id"], user_dict["role"])
+            self._db_perms = get_user_permissions(user_dict["id"])
+        except Exception:
+            pass
 
     def logout(self):
         self._user = None
+        self._db_perms = set()
 
     # ── Current user accessors ────────────────────────────────────
     @property
@@ -60,20 +70,30 @@ class _Session:
     def can(self, permission: str) -> bool:
         """
         Check if the current user has a given permission.
-        Permission format:  "module.action"  or  "module.*"
-        Admin wildcard "*" grants everything.
+        Checks ROLES dict first (fast), then DB-cached permissions.
+        Supports wildcard '*' (admin) and 'module.*' patterns.
         """
         if not self._user:
             return False
+
+        # 1. ROLES dict check (covers built-in role permissions)
         perms = ROLES.get(self.role, {}).get("permissions", [])
         if "*" in perms:
             return True
         if permission in perms:
             return True
-        # wildcard module match: user has "grades.*" → can("grades.enter") = True
         module = permission.split(".")[0]
         if f"{module}.*" in perms:
             return True
+
+        # 2. DB-cached permissions (covers per-user grants and DB-defined roles)
+        if "*" in self._db_perms:
+            return True
+        if permission in self._db_perms:
+            return True
+        if f"{module}.*" in self._db_perms:
+            return True
+
         return False
 
     def require(self, permission: str):
