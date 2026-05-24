@@ -15,7 +15,7 @@ cd "$ROOT"
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765 --reload &
 BACKEND_PID=$!
 
-echo "Starting React frontend on http://localhost:1420 ..."
+echo "Starting React frontend on http://localhost:3000 ..."
 cd "$ROOT/school-mis-app"
 npm run dev &
 FRONTEND_PID=$!
