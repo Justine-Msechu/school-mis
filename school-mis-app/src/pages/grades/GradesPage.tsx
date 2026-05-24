@@ -3,15 +3,18 @@ import { clsx } from "clsx";
 import { useAuthStore } from "@/stores/authStore";
 import ResultsPage from "./ResultsPage";
 import GradeEntryPage from "./GradeEntryPage";
-import PlaceholderPage from "@/pages/PlaceholderPage";
+import ApprovalsTab from "./ApprovalsTab";
+import ExamManagementTab from "./ExamManagementTab";
+import ChangeRequestsTab from "./ChangeRequestsTab";
+import HomeworkTab from "./HomeworkTab";
 
 const tabs = [
-  { label: "Grade Entry",      path: "",          perm: "grades.enter"   },
-  { label: "Approvals",        path: "approvals", perm: "grades.approve" },
-  { label: "Results & Reports",path: "results",   perm: "grades.view"    },
-  { label: "Exam Management",  path: "exams",     perm: "grades.approve" },
-  { label: "Change Requests",  path: "changes",   perm: "grades.change_request" },
-  { label: "Homework",         path: "homework",  perm: "homework.view"  },
+  { label: "Grade Entry",       path: "",          perm: "grades.enter"          },
+  { label: "Approvals",         path: "approvals", perm: "grades.approve"        },
+  { label: "Results & Reports", path: "results",   perm: "grades.view"           },
+  { label: "Exam Management",   path: "exams",     perm: "grades.approve"        },
+  { label: "Change Requests",   path: "changes",   perm: "grades.change_request" },
+  { label: "Homework",          path: "homework",  perm: "homework.view"         },
 ];
 
 export default function GradesPage() {
@@ -46,12 +49,12 @@ export default function GradesPage() {
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
         <Routes>
-          <Route index           element={<GradeEntryPage />} />
-          <Route path="results"  element={<ResultsPage />} />
-          <Route path="approvals" element={<PlaceholderPage title="Approvals" />} />
-          <Route path="exams"    element={<PlaceholderPage title="Exam Management" />} />
-          <Route path="changes"  element={<PlaceholderPage title="Change Requests" />} />
-          <Route path="homework" element={<PlaceholderPage title="Homework" />} />
+          <Route index            element={<GradeEntryPage />} />
+          <Route path="results"   element={<ResultsPage />} />
+          <Route path="approvals" element={<ApprovalsTab />} />
+          <Route path="exams"     element={<ExamManagementTab />} />
+          <Route path="changes"   element={<ChangeRequestsTab />} />
+          <Route path="homework"  element={<HomeworkTab />} />
         </Routes>
       </div>
     </div>

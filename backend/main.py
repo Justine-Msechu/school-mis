@@ -12,7 +12,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import auth, grades, students, dashboard, classes
+from backend.routers import (
+    auth, grades, students, dashboard, classes,
+    teachers, attendance, finance, library, transport,
+    inventory, health, welfare, promotion, accounting,
+    reports, settings,
+)
 
 app = FastAPI(title="School MIS API", version="5.0.0")
 
@@ -24,11 +29,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router,      prefix="/api/auth")
-app.include_router(grades.router,    prefix="/api/grades")
-app.include_router(students.router,  prefix="/api/students")
-app.include_router(dashboard.router, prefix="/api/dashboard")
-app.include_router(classes.router,   prefix="/api/classes")
+app.include_router(auth.router,        prefix="/api/auth")
+app.include_router(grades.router,      prefix="/api/grades")
+app.include_router(students.router,    prefix="/api/students")
+app.include_router(dashboard.router,   prefix="/api/dashboard")
+app.include_router(classes.router,     prefix="/api/classes")
+app.include_router(teachers.router,    prefix="/api/teachers")
+app.include_router(attendance.router,  prefix="/api/attendance")
+app.include_router(finance.router,     prefix="/api/finance")
+app.include_router(library.router,     prefix="/api/library")
+app.include_router(transport.router,   prefix="/api/transport")
+app.include_router(inventory.router,   prefix="/api/inventory")
+app.include_router(health.router,      prefix="/api/health")
+app.include_router(welfare.router,     prefix="/api/welfare")
+app.include_router(promotion.router,   prefix="/api/promotion")
+app.include_router(accounting.router,  prefix="/api/accounting")
+app.include_router(reports.router,     prefix="/api/reports")
+app.include_router(settings.router,    prefix="/api/settings")
 
 
 @app.get("/api/health")

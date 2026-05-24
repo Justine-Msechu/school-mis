@@ -5,7 +5,19 @@ import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import GradesPage from "@/pages/grades/GradesPage";
 import StudentsPage from "@/pages/StudentsPage";
-import PlaceholderPage from "@/pages/PlaceholderPage";
+import TeachersPage from "@/pages/TeachersPage";
+import ClassesPage from "@/pages/ClassesPage";
+import AttendancePage from "@/pages/AttendancePage";
+import FinancePage from "@/pages/FinancePage";
+import LibraryPage from "@/pages/LibraryPage";
+import AccountingPage from "@/pages/AccountingPage";
+import TransportPage from "@/pages/TransportPage";
+import InventoryPage from "@/pages/InventoryPage";
+import HealthPage from "@/pages/HealthPage";
+import WelfarePage from "@/pages/WelfarePage";
+import PromotionPage from "@/pages/PromotionPage";
+import ReportsPage from "@/pages/ReportsPage";
+import SettingsPage from "@/pages/SettingsPage";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuthStore();
@@ -28,19 +40,19 @@ export default function App() {
                   <Route path="/"           element={<DashboardPage />} />
                   <Route path="/grades/*"   element={<GradesPage />} />
                   <Route path="/students"   element={<StudentsPage />} />
-                  <Route path="/teachers"   element={<PlaceholderPage title="Teachers" />} />
-                  <Route path="/classes"    element={<PlaceholderPage title="Classes" />} />
-                  <Route path="/attendance" element={<PlaceholderPage title="Attendance" />} />
-                  <Route path="/library"    element={<PlaceholderPage title="Library" />} />
-                  <Route path="/finance"    element={<PlaceholderPage title="Finance" />} />
-                  <Route path="/accounting" element={<PlaceholderPage title="Accounting" />} />
-                  <Route path="/transport"  element={<PlaceholderPage title="Transport" />} />
-                  <Route path="/inventory"  element={<PlaceholderPage title="Inventory" />} />
-                  <Route path="/health"     element={<PlaceholderPage title="Health" />} />
-                  <Route path="/welfare"    element={<PlaceholderPage title="Welfare" />} />
-                  <Route path="/promotion"  element={<PlaceholderPage title="Promotion" />} />
-                  <Route path="/reports"    element={<PlaceholderPage title="Reports" />} />
-                  <Route path="/settings"   element={<PlaceholderPage title="Settings" />} />
+                  <Route path="/teachers"   element={<TeachersPage />} />
+                  <Route path="/classes"    element={<ClassesPage />} />
+                  <Route path="/attendance" element={<AttendancePage />} />
+                  <Route path="/library"    element={<LibraryPage />} />
+                  <Route path="/finance"    element={<FinancePage />} />
+                  <Route path="/accounting" element={<AccountingPage />} />
+                  <Route path="/transport"  element={<TransportPage />} />
+                  <Route path="/inventory"  element={<InventoryPage />} />
+                  <Route path="/health"     element={<HealthPage />} />
+                  <Route path="/welfare"    element={<WelfarePage />} />
+                  <Route path="/promotion"  element={<PromotionPage />} />
+                  <Route path="/reports"    element={<ReportsPage />} />
+                  <Route path="/settings"   element={<SettingsPage />} />
                 </Routes>
               </AppShell>
             </PrivateRoute>
