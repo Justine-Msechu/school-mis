@@ -1,10 +1,12 @@
-"""Students module — enrol, view, edit, deactivate students."""
+"""Students module — enrol, view, edit, deactivate, bulk-import students."""
 
+import csv, io
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView,
     QDialog, QFormLayout, QComboBox, QTextEdit, QDateEdit,
-    QMessageBox, QFrame, QSizePolicy, QAbstractItemView
+    QMessageBox, QFrame, QSizePolicy, QAbstractItemView,
+    QFileDialog, QProgressBar, QScrollArea
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
@@ -216,6 +218,226 @@ class StudentDialog(QDialog):
 
 
 # ── Main Students Widget ───────────────────────────────────────────────────────
+CSV_TEMPLATE_HEADERS = [
+    "admission_no", "first_name", "last_name", "gender",
+    "date_of_birth", "class_name", "parent_name", "parent_phone",
+    "parent_email", "address", "notes"
+]
+
+
+class CSVImportDialog(QDialog):
+    """Bulk-import students from a CSV file.
+
+    CSV must have a header row with the field names listed in CSV_TEMPLATE_HEADERS.
+    admission_no and class_name are matched against existing records.
+    Existing students (matched by admission_no) are skipped.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Bulk Import Students from CSV")
+        self.setMinimumWidth(640)
+        self._class_map: dict[str, int] = {}   # class name (lower) → id
+        self._preview_rows: list[dict] = []
+        self._build()
+        self._load_classes()
+
+    def _load_classes(self):
+        rows = fetch_all("SELECT id, name FROM classes ORDER BY grade_level, name")
+        self._class_map = {r["name"].lower(): r["id"] for r in rows}
+
+    def _build(self):
+        lay = QVBoxLayout(self); lay.setSpacing(12)
+
+        # Instructions
+        info = QLabel(
+            f"CSV must have a header row with these columns (order doesn't matter):\n"
+            f"{', '.join(CSV_TEMPLATE_HEADERS)}\n\n"
+            f"Required: first_name, last_name  |  "
+            f"class_name must match exactly (case-insensitive)  |  "
+            f"Students with existing admission_no are skipped."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("background:#EFF6FF;color:#1E40AF;border-radius:6px;"
+                           "padding:10px;font-size:12px;")
+        lay.addWidget(info)
+
+        # File picker
+        frow = QHBoxLayout()
+        self.path_lbl = QLabel("No file selected")
+        self.path_lbl.setStyleSheet("color:#6B7280;font-size:12px;")
+        pick_btn = QPushButton("Browse…")
+        pick_btn.setStyleSheet(INPUT_STYLE)
+        pick_btn.clicked.connect(self._pick_file)
+        frow.addWidget(self.path_lbl, 1); frow.addWidget(pick_btn)
+        lay.addLayout(frow)
+
+        # Preview table
+        self.preview = QTableWidget()
+        self.preview.setColumnCount(5)
+        self.preview.setHorizontalHeaderLabels(["Adm No", "Name", "Class", "Gender", "Status"])
+        self.preview.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.preview.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.preview.setMaximumHeight(260)
+        self.preview.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.preview.verticalHeader().setVisible(False)
+        self.preview.setStyleSheet(
+            "QTableWidget{border:1px solid #E5E7EB;border-radius:6px;font-size:12px;}"
+            "QHeaderView::section{background:#F9FAFB;font-weight:600;padding:5px;border:none;"
+            "border-bottom:1px solid #E5E7EB;}"
+        )
+        lay.addWidget(self.preview)
+
+        # Progress bar (hidden until import starts)
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        self.progress.setStyleSheet(
+            "QProgressBar{border:1px solid #D1D5DB;border-radius:4px;height:16px;}"
+            "QProgressBar::chunk{background:#2563EB;border-radius:4px;}"
+        )
+        lay.addWidget(self.progress)
+
+        self.status_lbl = QLabel("")
+        self.status_lbl.setStyleSheet("font-size:12px;color:#374151;")
+        lay.addWidget(self.status_lbl)
+
+        from PyQt6.QtWidgets import QDialogButtonBox
+        self.bb = QDialogButtonBox()
+        self.import_btn = self.bb.addButton("Import", QDialogButtonBox.ButtonRole.AcceptRole)
+        self.bb.addButton("Close", QDialogButtonBox.ButtonRole.RejectRole)
+        self.import_btn.setEnabled(False)
+        self.import_btn.setStyleSheet(BTN_PRIMARY)
+        self.bb.accepted.connect(self._import)
+        self.bb.rejected.connect(self.reject)
+        lay.addWidget(self.bb)
+
+    def _pick_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open CSV file", "", "CSV files (*.csv);;All files (*)"
+        )
+        if not path:
+            return
+        self.path_lbl.setText(path)
+        self._parse_preview(path)
+
+    def _parse_preview(self, path: str):
+        try:
+            with open(path, newline="", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+        except Exception as e:
+            QMessageBox.warning(self, "Read Error", str(e)); return
+
+        existing = {r["admission_no"] for r in fetch_all(
+            "SELECT admission_no FROM students"
+        )}
+
+        self._preview_rows = []
+        for row in rows:
+            row = {k.strip().lower(): v.strip() for k, v in row.items()}
+            fn = row.get("first_name", "").strip()
+            ln = row.get("last_name", "").strip()
+            if not fn or not ln:
+                continue
+            adm    = row.get("admission_no", "").strip()
+            cls_nm = row.get("class_name", "").strip()
+            cls_id = self._class_map.get(cls_nm.lower()) if cls_nm else None
+            status = "skip (exists)" if adm and adm in existing else "ready"
+            if not adm:
+                status = "ready (auto adm)"
+            self._preview_rows.append({
+                "admission_no": adm,
+                "first_name":   fn,
+                "last_name":    ln,
+                "gender":       row.get("gender", "").strip(),
+                "date_of_birth": row.get("date_of_birth", "").strip() or None,
+                "class_id":     cls_id,
+                "class_name":   cls_nm,
+                "parent_name":  row.get("parent_name", "").strip() or None,
+                "parent_phone": row.get("parent_phone", "").strip() or None,
+                "parent_email": row.get("parent_email", "").strip() or None,
+                "address":      row.get("address", "").strip() or None,
+                "notes":        row.get("notes", "").strip() or None,
+                "_status":      status,
+            })
+
+        ready = sum(1 for r in self._preview_rows if not r["_status"].startswith("skip"))
+        self.status_lbl.setText(
+            f"{len(self._preview_rows)} rows found — {ready} to import, "
+            f"{len(self._preview_rows)-ready} will be skipped."
+        )
+        self.import_btn.setEnabled(ready > 0)
+
+        self.preview.setRowCount(len(self._preview_rows))
+        for i, r in enumerate(self._preview_rows):
+            skip = r["_status"].startswith("skip")
+            fg = QColor("#9CA3AF") if skip else None
+
+            def cell(v, align=Qt.AlignmentFlag.AlignLeft):
+                it = QTableWidgetItem(str(v) if v else "—")
+                it.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                it.setTextAlignment(align | Qt.AlignmentFlag.AlignVCenter)
+                if fg: it.setForeground(fg)
+                return it
+
+            self.preview.setItem(i, 0, cell(r["admission_no"] or "(auto)"))
+            self.preview.setItem(i, 1, cell(f"{r['first_name']} {r['last_name']}"))
+            self.preview.setItem(i, 2, cell(r["class_name"] or "—"))
+            self.preview.setItem(i, 3, cell(r["gender"] or "—"))
+            st_it = cell(r["_status"])
+            if not skip:
+                st_it.setForeground(QColor("#059669"))
+            self.preview.setItem(i, 4, st_it)
+
+    def _import(self):
+        to_import = [r for r in self._preview_rows if not r["_status"].startswith("skip")]
+        if not to_import:
+            return
+
+        self.progress.setMaximum(len(to_import))
+        self.progress.setValue(0)
+        self.progress.setVisible(True)
+        self.import_btn.setEnabled(False)
+
+        imported = 0
+        errors = 0
+        for i, r in enumerate(to_import):
+            try:
+                adm = r["admission_no"] or _next_adm()
+                execute(
+                    """INSERT OR IGNORE INTO students
+                       (admission_no, first_name, last_name, gender, date_of_birth,
+                        class_id, parent_name, parent_phone, parent_email, address, notes)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (adm, r["first_name"], r["last_name"],
+                     r["gender"] if r["gender"] in ("Male","Female","Other") else None,
+                     r["date_of_birth"], r["class_id"],
+                     r["parent_name"], r["parent_phone"], r["parent_email"],
+                     r["address"], r["notes"])
+                )
+                imported += 1
+            except Exception:
+                errors += 1
+            self.progress.setValue(i + 1)
+
+        self.status_lbl.setText(
+            f"Done — {imported} imported, {errors} errors."
+        )
+        self.status_lbl.setStyleSheet(
+            "font-size:12px;color:#059669;font-weight:600;" if errors == 0
+            else "font-size:12px;color:#DC2626;font-weight:600;"
+        )
+        if imported > 0:
+            QMessageBox.information(self, "Import Complete",
+                                    f"{imported} student(s) imported successfully.")
+
+
+def _next_adm() -> str:
+    row = fetch_one("SELECT MAX(CAST(SUBSTR(admission_no,3) AS INTEGER)) AS n FROM students")
+    n = (row["n"] or 0) + 1 if row and row["n"] else 1
+    return f"ST{n:04d}"
+
+
 class StudentsWidget(QWidget):
     COLS = ["Adm No", "Full Name", "Gender", "Class", "Parent", "Phone", "Status"]
 
@@ -235,6 +457,10 @@ class StudentsWidget(QWidget):
         title.setStyleSheet("font-size: 22px; font-weight: 700; color: #111827;")
         title_row.addWidget(title)
         title_row.addStretch()
+        import_btn = QPushButton("Import CSV")
+        import_btn.setStyleSheet(BTN_OUTLINE)
+        import_btn.clicked.connect(self._import_csv)
+        title_row.addWidget(import_btn)
         add_btn = QPushButton("+ Enrol student")
         add_btn.setStyleSheet(BTN_PRIMARY)
         add_btn.clicked.connect(self.add_student)
@@ -366,6 +592,11 @@ class StudentsWidget(QWidget):
             QMessageBox.information(self, "No selection", "Please select a student first.")
             return None
         return self._row_ids[row]
+
+    def _import_csv(self):
+        dlg = CSVImportDialog(self)
+        dlg.exec()
+        self.load_table()
 
     def add_student(self):
         dlg = StudentDialog(self)

@@ -43,6 +43,8 @@ from modules.reports.main         import ReportsWidget
 from modules.grades.main          import GradesWidget
 from modules.library.main         import LibraryWidget
 from modules.transport.main       import TransportWidget
+from modules.promotion.main       import PromotionWidget
+from modules.health.main          import HealthWidget
 from modules.settings             import SettingsWidget
 
 SIDEBAR_W = 220
@@ -62,6 +64,8 @@ ALL_NAV = [
     (8,  "Reports",     "reports",     "reports.view"),
     (12, "Library",     "library",     "library.view"),
     (13, "Transport",   "transport",   "transport.view"),
+    (14, "Health",      "health",      "health.view"),
+    (15, "Promotion",   "promotion",   "student.promote"),
     (58, "Settings",    "settings",    "settings.view"),
 ]
 
@@ -147,6 +151,8 @@ class MainWindow(QMainWindow):
             "reports":    ReportsWidget,
             "library":    LibraryWidget,
             "transport":  TransportWidget,
+            "health":     HealthWidget,
+            "promotion":  PromotionWidget,
             "settings":   SettingsWidget,
         }
 

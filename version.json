@@ -1,7 +1,7 @@
 {
-  "version": "3.7.0",
+  "version": "3.8.0",
   "release_date": "2026-05-24",
-  "release_notes": "Transport Management module: routes, driver info, per-term fares, student bus assignments",
+  "release_notes": "Student Promotion, Health/Infirmary module, Bulk CSV student import, nurse role",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -19,10 +19,10 @@
     "modules/teachers.py": "960ee03603e461657260e3123e6fe8dbe2108b7847f4e4622be52cdac1ffd704",
     "modules/updater.py": "49eb55fb368f99d1bee531fd7c6ab59caa9273e1332e7432f3c5b6fa228403c0",
     "modules/setup_wizard.py": "4675a3480a28c108c68d39637cf2ed857b6eeae8ded6100461fdd815c4296056",
-    "modules/students.py": "11de4fa3135abfb6dd8a0cde1d0aab6fcd194955083f4af43bd2493eb15a604e",
     "modules/attendance.py": "92a2992d30e467372bc2a419da91d523e7289d58676f3d7bb4e03f17c90f536e",
     "modules/settings.py": "b27b83b5033244940ecf14ea778d1bde0fd31ee0351731bb3607439b601ac96a",
     "modules/dashboard.py": "2fadf5667848edea40efd9ef810fa9e1c9fb326b3637856a7d2af505879cbb85",
+    "modules/students.py": "cc8c24c7da1b36910b71f79813e0d8da3ce1662d6ef4d991a2a9a35a8db4406d",
     "modules/finance/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/finance/main.py": "97bc3c0d836b7afde907ab54daf52711e6ac6e66970a2c0f35ecde4099c4e525",
     "modules/finance/payments.py": "00188d46274a36275a712fa8f360230d290447441159047400b0929db512ba05",
@@ -61,11 +61,15 @@
     "modules/transport/routes.py": "3cc3588addf72ddbb4c488feca4cd4e210f2eff876c4d5acc80429ca397cdd4f",
     "modules/transport/assignments.py": "7c33f4f7d239475582248547d21271742e1ae5abe51572284900b120ff58029f",
     "modules/transport/main.py": "2f01af4932561bc74d9133dd772772a94aa3887ca22ca7b98de3cb5573c8e9dc",
+    "modules/promotion/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "modules/promotion/main.py": "87206ba230a9d00cc036466bb9b5fb15bbb1aa848522e354c808ac0e93541b6d",
+    "modules/health/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "modules/health/main.py": "e2a9d5b18a09295fdf58eacaaffd0ff37cd1ffe0513857dd97338d9ea5b32f57",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-    "database/db.py": "5c217b7128023eb86f586e45492b79666b1bdd1ea15df01611b48f4afa15fcb1",
+    "database/db.py": "79b98adfbd21007b68889ab5a5cd463a72c973183cd3e5a5c31d1a807774371b",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
-    "ui/main_window.py": "3631ad8e76a625bf94ef4474c9951063fffc9177b7db7d38359bef4030251f73",
+    "ui/main_window.py": "a0a4771c59ff83772a530d9ead3de3aa123c0a94723142bb9f065dd8261e3e6a",
     "auth/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "auth/session.py": "fb9ba31d9310e19a0f668d4aaf9f92cb820e0b16dae15cab4b720486647ddab0",
     "auth/rbac.py": "bfbad6155e5ee983867758b712a4f7e7233571676fecf86ae56eca3c5e84eb84",
@@ -85,6 +89,8 @@
     "services/welfare_service.py": "8cb2377f9f4f48c8fe2e12c00b7dc99abd77b7d46823ee37c5b7cc2a32afd427",
     "services/grades_service.py": "024cff9ca41872291b8f504a1a14efc2d218d573c64a2721e5dc420d0a65acea",
     "services/library_service.py": "f80d934ac14db034f784a8117e148245a262efffbe8974fb36f92c57e97db0b7",
-    "services/transport_service.py": "c2f9d45b1320931259a44663aa85a9c4427fdedc96411c2b0f30828aec073b2a"
+    "services/transport_service.py": "c2f9d45b1320931259a44663aa85a9c4427fdedc96411c2b0f30828aec073b2a",
+    "services/promotion_service.py": "ef9a50bc29f7153cac1c8fd091de01f0c1cb2a597729115770d58c0cec70aa73",
+    "services/health_service.py": "eef9bfeb6047c4cb6b8b0995b674cdab01309798f7cff621473f28bc303cef17"
   }
 }

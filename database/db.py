@@ -35,6 +35,7 @@ ROLES = {
             "settings.years.manage", "settings.users.manage",
             "library.view",
             "transport.view", "transport.manage", "transport.assign",
+            "health.view", "health.record", "health.report",
         ],
     },
     # ── Academic Officer: student + academic records, no finance or inventory ──
@@ -77,6 +78,7 @@ ROLES = {
             "welfare.view", "welfare.classify", "welfare.edit",
             "welfare.verify", "welfare.sponsor.manage",
             "finance.waiver.create",
+            "health.view",
             "reports.view", "reports.welfare",
         ],
     },
@@ -118,6 +120,14 @@ ROLES = {
         "permissions": [
             "student.view",
             "library.view", "library.checkout", "library.manage",
+        ],
+    },
+    # ── Nurse / Health Worker ─────────────────────────────────────────────────
+    "nurse": {
+        "label": "Nurse", "color": "#EC4899",
+        "permissions": [
+            "student.view",
+            "health.view", "health.record", "health.report",
         ],
     },
 }
@@ -335,6 +345,37 @@ def initialize_database():
         notes       TEXT,
         recorded_by INTEGER REFERENCES users(id),
         created_at  TEXT DEFAULT (datetime('now')))""")
+
+    # ── Promotion domain ────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS student_promotions (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id       INTEGER NOT NULL REFERENCES students(id),
+        from_class_id    INTEGER REFERENCES classes(id),
+        to_class_id      INTEGER REFERENCES classes(id),
+        academic_year_id INTEGER REFERENCES academic_years(id),
+        action           TEXT NOT NULL CHECK(action IN ('promote','hold_back','graduate')),
+        notes            TEXT,
+        promoted_by      INTEGER REFERENCES users(id),
+        created_at       TEXT DEFAULT (datetime('now')))""")
+
+    # ── Health / Infirmary domain ────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS health_visits (
+        id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id               INTEGER NOT NULL REFERENCES students(id),
+        visit_date               TEXT NOT NULL DEFAULT (date('now')),
+        visit_time               TEXT,
+        symptoms                 TEXT,
+        diagnosis                TEXT,
+        treatment                TEXT,
+        action_taken             TEXT
+                                 CHECK(action_taken IN
+                                      ('treated','referred','sent_home','rest','other')),
+        referred_to              TEXT,
+        parent_notified          INTEGER DEFAULT 0,
+        parent_notification_note TEXT,
+        nurse_name               TEXT,
+        created_by               INTEGER REFERENCES users(id),
+        created_at               TEXT DEFAULT (datetime('now')))""")
 
     # ── Transport domain ────────────────────────────────────────────────────────
     cur.execute("""CREATE TABLE IF NOT EXISTS transport_routes (
@@ -579,6 +620,10 @@ def initialize_database():
         ("transport.view",              "transport",  "view",          "View routes and subscriptions",     "GLOBAL"),
         ("transport.manage",            "transport",  "manage",        "Add and edit transport routes",     "GLOBAL"),
         ("transport.assign",            "transport",  "assign",        "Assign students to routes",         "GLOBAL"),
+        # Health / Infirmary
+        ("health.view",                 "health",     "view",          "View health visit records",         "GLOBAL"),
+        ("health.record",               "health",     "record",        "Record health visits",              "GLOBAL"),
+        ("health.report",               "health",     "report",        "View health reports",               "GLOBAL"),
     ]
     cur.executemany(
         "INSERT OR IGNORE INTO permissions(code,domain,action,description,scope_type)"
