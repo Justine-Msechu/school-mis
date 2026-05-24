@@ -1,11 +1,12 @@
 from typing import Annotated
-from fastapi import APIRouter, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel
 from database.db import fetch_one, ROLES
 from auth.session import session as _session
 from backend.deps import create_token, require_auth, revoke_token, hydrate_session
 
 router = APIRouter(tags=["auth"])
+Usr = Annotated[dict, Depends(require_auth)]
 
 
 class LoginRequest(BaseModel):
@@ -23,10 +24,18 @@ def _user_to_dict(row) -> dict:
     user = dict(row)
     role = user.get("role", "")
     role_info = ROLES.get(role, {})
-    user["role_label"] = role_info.get("label", role)
-    user["role_color"]  = role_info.get("color", "#94A3B8")
-    user["permissions"] = role_info.get("permissions", [])
-    user["full_name"] = f"{user.get('first_name','')} {user.get('last_name','')}".strip() or user.get("username", "")
+    # ROLES values are tuples or dicts depending on db.py version — handle both
+    if isinstance(role_info, dict):
+        user["role_label"] = role_info.get("label", role)
+        user["role_color"]  = role_info.get("color", "#94A3B8")
+        user["permissions"] = role_info.get("permissions", [])
+    else:
+        user["role_label"] = str(role_info)
+        user["role_color"]  = "#94A3B8"
+        user["permissions"] = []
+    # full_name is a direct column; fall back to username if empty
+    if not user.get("full_name"):
+        user["full_name"] = user.get("username", "")
     return user
 
 
@@ -61,13 +70,12 @@ def login(body: LoginRequest):
 
 
 @router.post("/logout")
-def logout(user: Annotated[dict, require_auth]):
-    # We'd need the raw token here; client handles clearing it
+def logout(user: Usr):
     return {"ok": True}
 
 
 @router.get("/me")
-def me(user: Annotated[dict, require_auth]):
+def me(user: Usr):
     return {
         "id":          user["id"],
         "username":    user["username"],

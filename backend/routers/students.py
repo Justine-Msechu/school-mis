@@ -1,12 +1,12 @@
 from typing import Annotated
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from backend.deps import require_auth
 from database.db import fetch_all, fetch_one, execute
 
 router = APIRouter(tags=["students"])
 
-Usr = Annotated[dict, require_auth]
+Usr = Annotated[dict, Depends(require_auth)]
 
 
 @router.get("")
@@ -30,7 +30,7 @@ def list_students(
 
     where_clause = " AND ".join(where)
     total_row = fetch_one(f"SELECT COUNT(*) as n FROM students s WHERE {where_clause}", params)
-    total = (total_row or {}).get("n", 0)
+    total = dict(total_row).get("n", 0) if total_row else 0
 
     offset = (page - 1) * per_page
     rows = fetch_all(

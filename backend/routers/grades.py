@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from backend.deps import require_auth, hydrate_session
 from services.grades_service import grades_service
@@ -8,7 +8,7 @@ from database.db import fetch_all
 
 router = APIRouter(tags=["grades"])
 
-Usr = Annotated[dict, require_auth]
+Usr = Annotated[dict, Depends(require_auth)]
 
 
 def _hydrate(user: dict):

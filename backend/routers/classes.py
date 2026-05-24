@@ -1,11 +1,11 @@
 from typing import Annotated
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from backend.deps import require_auth
 from database.db import fetch_all
 
 router = APIRouter(tags=["classes"])
 
-Usr = Annotated[dict, require_auth]
+Usr = Annotated[dict, Depends(require_auth)]
 
 
 @router.get("")
