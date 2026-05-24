@@ -34,6 +34,7 @@ ROLES = {
             "settings.view", "settings.school.manage",
             "settings.years.manage", "settings.users.manage",
             "library.view",
+            "transport.view", "transport.manage", "transport.assign",
         ],
     },
     # ── Academic Officer: student + academic records, no finance or inventory ──
@@ -46,6 +47,7 @@ ROLES = {
             "attendance.view", "attendance.mark",
             "grades.view", "grades.approve", "grades.publish",
             "welfare.view",
+            "transport.view",
             "reports.view", "reports.academic", "reports.welfare",
             "settings.view",
         ],
@@ -63,6 +65,7 @@ ROLES = {
             "finance.waiver.create",
             "finance.report",
             "accounting.view", "accounting.expense.record", "accounting.report",
+            "transport.view",
             "reports.view", "reports.finance",
         ],
     },
@@ -333,6 +336,33 @@ def initialize_database():
         recorded_by INTEGER REFERENCES users(id),
         created_at  TEXT DEFAULT (datetime('now')))""")
 
+    # ── Transport domain ────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS transport_routes (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL,
+        description  TEXT,
+        vehicle_no   TEXT,
+        driver_name  TEXT,
+        driver_phone TEXT,
+        fare_term1   REAL DEFAULT 0,
+        fare_term2   REAL DEFAULT 0,
+        fare_term3   REAL DEFAULT 0,
+        is_active    INTEGER DEFAULT 1,
+        created_at   TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS transport_subscriptions (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id       INTEGER NOT NULL REFERENCES students(id),
+        route_id         INTEGER NOT NULL REFERENCES transport_routes(id),
+        academic_year_id INTEGER REFERENCES academic_years(id),
+        term             INTEGER CHECK(term IN (1,2,3)),
+        status           TEXT NOT NULL DEFAULT 'active'
+                         CHECK(status IN ('active','cancelled')),
+        notes            TEXT,
+        assigned_by      INTEGER REFERENCES users(id),
+        created_at       TEXT DEFAULT (datetime('now')),
+        UNIQUE(student_id, route_id, academic_year_id, term))""")
+
     # ── Library domain ──────────────────────────────────────────────────────────
     cur.execute("""CREATE TABLE IF NOT EXISTS library_books (
         id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -545,6 +575,10 @@ def initialize_database():
         ("library.view",                "library",    "view",          "View library catalogue and loans",  "GLOBAL"),
         ("library.checkout",            "library",    "checkout",      "Issue and return books",            "GLOBAL"),
         ("library.manage",              "library",    "manage",        "Add, edit and deactivate books",    "GLOBAL"),
+        # Transport
+        ("transport.view",              "transport",  "view",          "View routes and subscriptions",     "GLOBAL"),
+        ("transport.manage",            "transport",  "manage",        "Add and edit transport routes",     "GLOBAL"),
+        ("transport.assign",            "transport",  "assign",        "Assign students to routes",         "GLOBAL"),
     ]
     cur.executemany(
         "INSERT OR IGNORE INTO permissions(code,domain,action,description,scope_type)"
