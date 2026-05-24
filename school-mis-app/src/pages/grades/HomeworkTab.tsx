@@ -1,11 +1,23 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, BookOpen } from "lucide-react";
 import api from "@/api/client";
-import { getClasses, type ClassItem } from "@/api/grades";
+import { getClasses, getSubjectsForClass, type ClassItem, type Subject } from "@/api/grades";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
+
+const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
+const TEXTAREA = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      {children}
+    </div>
+  );
+}
 
 interface Assignment {
   id: number;
@@ -19,16 +31,106 @@ interface Assignment {
   subject_name: string;
 }
 
+function AssignmentDialog({ classes, onSave, onClose }: { classes: ClassItem[]; onSave: () => void; onClose: () => void }) {
+  const [form, setForm] = useState({
+    class_id:     null as number | null,
+    subject_id:   null as number | null,
+    title:        "",
+    instructions: "",
+    deadline:     (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })(),
+    max_points:   "100",
+  });
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
+
+  useEffect(() => {
+    if (form.class_id) {
+      getSubjectsForClass(form.class_id).then(setSubjects).catch(() => setSubjects([]));
+    } else {
+      setSubjects([]);
+    }
+    setForm((f) => ({ ...f, subject_id: null }));
+  }, [form.class_id]);
+
+  const set = (k: string, v: string | number | null) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.class_id)   { setError("Please select a class."); return; }
+    if (!form.subject_id) { setError("Please select a subject."); return; }
+    if (!form.title)      { setError("Title is required."); return; }
+    setSaving(true);
+    setError("");
+    try {
+      await api.post("/grades/homework", {
+        class_id:     form.class_id,
+        subject_id:   form.subject_id,
+        title:        form.title,
+        instructions: form.instructions || "",
+        deadline:     form.deadline,
+        max_points:   Number(form.max_points) || 100,
+      });
+      onSave();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? "Failed to create assignment.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const classOptions   = [{ value: null as null, label: "Select class…" }, ...classes.map((c) => ({ value: c.id, label: c.name }))];
+  const subjectOptions = [{ value: null as null, label: form.class_id ? "Select subject…" : "Select class first" }, ...subjects.map((s) => ({ value: s.id, label: s.name }))];
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-bold text-gray-900 mb-4">New Assignment</h2>
+        {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
+        <div className="space-y-3">
+          <Field label="Class *">
+            <Select value={form.class_id} onChange={(v) => set("class_id", v as number | null)} options={classOptions} />
+          </Field>
+          <Field label="Subject *">
+            <Select
+              value={form.subject_id}
+              onChange={(v) => set("subject_id", v as number | null)}
+              options={subjectOptions}
+            />
+          </Field>
+          <Field label="Title *">
+            <input className={INPUT} value={form.title} onChange={(e) => set("title", e.target.value)} />
+          </Field>
+          <Field label="Instructions">
+            <textarea className={TEXTAREA} rows={3} value={form.instructions} onChange={(e) => set("instructions", e.target.value)} />
+          </Field>
+          <Field label="Deadline *">
+            <input type="date" className={INPUT} value={form.deadline} onChange={(e) => set("deadline", e.target.value)} />
+          </Field>
+          <Field label="Max Points">
+            <input type="number" min="1" className={INPUT} value={form.max_points} onChange={(e) => set("max_points", e.target.value)} />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Create"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HomeworkTab() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [classes, setClasses]         = useState<ClassItem[]>([]);
   const [classId, setClassId]         = useState<number | null>(null);
   const [loading, setLoading]         = useState(true);
+  const [dialog, setDialog]           = useState(false);
+  const firstLoad = useRef(true);
 
   const load = useCallback(() => {
-    setLoading(true);
+    if (firstLoad.current) setLoading(true);
     api.get("/grades/homework", { params: { class_id: classId } })
-      .then((r) => setAssignments(r.data)).catch(() => {}).finally(() => setLoading(false));
+      .then((r) => { setAssignments(r.data); firstLoad.current = false; }).catch(() => {}).finally(() => setLoading(false));
   }, [classId]);
 
   useEffect(() => { getClasses().then(setClasses).catch(() => {}); }, []);
@@ -43,6 +145,7 @@ export default function HomeworkTab() {
           <h2 className="text-xl font-bold text-gray-900">Homework</h2>
           <p className="text-sm text-gray-500 mt-0.5">Assignments and deadlines</p>
         </div>
+        <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog(true)}>New Assignment</Button>
       </div>
 
       <div className="flex items-center gap-3 mb-5">
@@ -89,6 +192,14 @@ export default function HomeworkTab() {
           </tbody>
         </table>
       </div>
+
+      {dialog && (
+        <AssignmentDialog
+          classes={classes}
+          onSave={() => { setDialog(false); load(); }}
+          onClose={() => setDialog(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BarChart3, Users, BookOpen, DollarSign, Activity } from "lucide-react";
 import { getReportsOverview, getAttendanceSummaryReport, getGradeSummaryReport, type ReportsOverview, type AttendanceSummaryRow, type GradeSummaryRow } from "@/api/reports";
 import { getExams } from "@/api/grades";
@@ -19,6 +19,8 @@ export default function ReportsPage() {
   const [exams, setExams]         = useState<{ id: number; name: string }[]>([]);
   const [examId, setExamId]       = useState<number | null>(null);
   const [loading, setLoading]     = useState(true);
+  const attLoaded   = useRef(false);
+  const gradesLoaded = useRef(false);
 
   useEffect(() => {
     Promise.all([getReportsOverview(), getExams()])
@@ -28,11 +30,11 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (tab === "attendance") {
-      setLoading(true);
-      getAttendanceSummaryReport().then(setAttRows).catch(() => {}).finally(() => setLoading(false));
+      if (!attLoaded.current) setLoading(true);
+      getAttendanceSummaryReport().then((d) => { setAttRows(d); attLoaded.current = true; }).catch(() => {}).finally(() => setLoading(false));
     } else if (tab === "grades") {
-      setLoading(true);
-      getGradeSummaryReport(examId ?? undefined).then(setGradeRows).catch(() => {}).finally(() => setLoading(false));
+      if (!gradesLoaded.current) setLoading(true);
+      getGradeSummaryReport(examId ?? undefined).then((d) => { setGradeRows(d); gradesLoaded.current = true; }).catch(() => {}).finally(() => setLoading(false));
     }
   }, [tab, examId]);
 

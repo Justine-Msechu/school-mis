@@ -36,3 +36,49 @@ export const updateUser = (id: number, body: { full_name: string; role: string; 
 
 export const toggleUserActive = (id: number) =>
   api.post(`/settings/users/${id}/toggle-active`).then((r) => r.data);
+
+export interface AcademicYear {
+  id: number;
+  label: string;
+  start_date: string;
+  end_date: string;
+  is_current: number;
+}
+
+export const getAcademicYears = () =>
+  api.get<AcademicYear[]>("/settings/academic-years").then((r) => r.data);
+
+export const createAcademicYear = (body: { label: string; start_date: string; end_date: string; is_current?: boolean }) =>
+  api.post<AcademicYear>("/settings/academic-years", body).then((r) => r.data);
+
+export const setCurrentYear = (id: number) =>
+  api.put(`/settings/academic-years/${id}/set-current`).then((r) => r.data);
+
+export interface FeeType {
+  id: number;
+  name: string;
+  description: string;
+}
+
+export interface FeeStructure {
+  id: number;
+  fee_type_id: number;
+  fee_type_name: string;
+  academic_year_id: number;
+  year_label: string;
+  amount: number;
+  due_date: string;
+  term: number | null;
+}
+
+export const getFeeTypes = () =>
+  api.get<FeeType[]>("/settings/fee-types").then((r) => r.data);
+
+export const createFeeType = (body: { name: string; description?: string }) =>
+  api.post<FeeType>("/settings/fee-types", body).then((r) => r.data);
+
+export const getFeeStructures = () =>
+  api.get<FeeStructure[]>("/settings/fee-structures").then((r) => r.data);
+
+export const createFeeStructure = (body: { fee_type_id: number; academic_year_id: number; amount: number; due_date?: string; term?: number }) =>
+  api.post<FeeStructure>("/settings/fee-structures", body).then((r) => r.data);
