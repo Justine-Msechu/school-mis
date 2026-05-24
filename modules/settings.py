@@ -22,6 +22,8 @@ BTN_DANGER  = """QPushButton{background:#EF4444;color:#fff;border:none;border-ra
     padding:8px 14px;font-size:13px;}QPushButton:hover{background:#DC2626;}"""
 BTN_OUTLINE = """QPushButton{background:#fff;color:#374151;border:1px solid #D1D5DB;
     border-radius:7px;padding:8px 16px;font-size:13px;}QPushButton:hover{background:#F9FAFB;}"""
+COMBO = """QComboBox{border:1px solid #D1D5DB;border-radius:6px;padding:6px 10px;
+    font-size:13px;background:white;}"""
 
 
 # ── Add/Edit User dialog ───────────────────────────────────────────────────────
