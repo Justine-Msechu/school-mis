@@ -6,9 +6,9 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach token from sessionStorage on every request
+// Attach token on every request — check both stores (sessionStorage for current tab, localStorage for persisted)
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem("mis_token");
+  const token = sessionStorage.getItem("mis_token") || localStorage.getItem("mis_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -19,6 +19,7 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       sessionStorage.removeItem("mis_token");
+      localStorage.removeItem("mis_token");
       window.location.href = "/login";
     }
     return Promise.reject(err);

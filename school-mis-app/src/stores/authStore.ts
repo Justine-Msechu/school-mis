@@ -20,11 +20,13 @@ export const useAuthStore = create<AuthState>()(
 
       login(user, token) {
         sessionStorage.setItem("mis_token", token);
+        localStorage.setItem("mis_token", token);
         set({ isLoggedIn: true, user, token });
       },
 
       logout() {
         sessionStorage.removeItem("mis_token");
+        localStorage.removeItem("mis_token");
         set({ isLoggedIn: false, user: null, token: null });
       },
 
@@ -37,7 +39,14 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "mis-auth",
-      partialize: (s) => ({ isLoggedIn: s.isLoggedIn, user: s.user, token: s.token }),
+      partialize: (s) => ({ user: s.user, token: s.token }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.token) {
+          sessionStorage.setItem("mis_token", state.token);
+          localStorage.setItem("mis_token", state.token);
+          state.isLoggedIn = true;
+        }
+      },
     }
   )
 );
