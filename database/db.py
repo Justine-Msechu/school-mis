@@ -37,6 +37,8 @@ ROLES = {
             "library.view",
             "transport.view", "transport.manage", "transport.assign",
             "health.view", "health.record", "health.report",
+            "homework.view",
+            "leave.review",
         ],
     },
     # ── Academic Officer: student + academic records, no finance or inventory ──
@@ -51,6 +53,8 @@ ROLES = {
             "grades.change_request.review",
             "welfare.view",
             "transport.view",
+            "homework.view",
+            "leave.review",
             "reports.view", "reports.academic", "reports.welfare",
             "settings.view",
         ],
@@ -104,6 +108,8 @@ ROLES = {
             "attendance.view", "attendance.mark",  # scoped to own class
             "grades.view", "grades.change_request",
             "classes.view",
+            "homework.view", "homework.assign", "homework.grade",
+            "leave.review",
         ],
     },
     # ── Subject Teacher: own subjects/class only ───────────────────────────────
@@ -114,6 +120,7 @@ ROLES = {
             "grades.view", "grades.enter", "grades.change_request",
             "attendance.view",
             "classes.view",
+            "homework.view", "homework.assign", "homework.grade",
         ],
     },
     # ── Librarian: library catalogue, checkout/return ─────────────────────────
@@ -130,6 +137,23 @@ ROLES = {
         "permissions": [
             "student.view",
             "health.view", "health.record", "health.report",
+        ],
+    },
+    # ── Student Portal: strictly own record, read-only except homework submit ──
+    "student_portal": {
+        "label": "Student", "color": "#6366F1",
+        "permissions": [
+            "portal.student.grades",
+            "portal.student.homework",
+        ],
+    },
+    # ── Parent Portal: own children's records, read-only except leave requests
+    "parent_portal": {
+        "label": "Parent / Guardian", "color": "#10B981",
+        "permissions": [
+            "portal.parent.grades",
+            "portal.parent.fees",
+            "portal.parent.leave",
         ],
     },
 }
@@ -539,6 +563,61 @@ def initialize_database():
         except Exception:
             pass  # column already exists
 
+    # ── Portal account linkage tables ─────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS student_portal_accounts (
+        user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        student_id INTEGER NOT NULL UNIQUE REFERENCES students(id))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS parent_portal_accounts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        student_id INTEGER NOT NULL REFERENCES students(id),
+        relation   TEXT DEFAULT 'Parent',
+        UNIQUE(user_id, student_id))""")
+
+    # ── Homework tables ───────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS homework_assignments (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        class_id    INTEGER REFERENCES classes(id),
+        subject_id  INTEGER REFERENCES subjects(id),
+        teacher_id  INTEGER REFERENCES teachers(id),
+        title       TEXT NOT NULL,
+        description TEXT,
+        deadline    TEXT NOT NULL,
+        max_points  REAL DEFAULT 10,
+        created_by  INTEGER REFERENCES users(id),
+        created_at  TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS homework_submissions (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        assignment_id INTEGER NOT NULL REFERENCES homework_assignments(id),
+        student_id    INTEGER NOT NULL REFERENCES students(id),
+        file_path     TEXT,
+        notes         TEXT,
+        submitted_at  TEXT DEFAULT (datetime('now')),
+        status        TEXT DEFAULT 'submitted'
+                      CHECK(status IN ('submitted','late','graded')),
+        points_earned REAL,
+        feedback      TEXT,
+        graded_by     INTEGER REFERENCES users(id),
+        graded_at     TEXT,
+        UNIQUE(assignment_id, student_id))""")
+
+    # ── Leave requests ────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS leave_requests (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id   INTEGER NOT NULL REFERENCES students(id),
+        submitted_by INTEGER REFERENCES users(id),
+        date_from    TEXT NOT NULL,
+        date_to      TEXT NOT NULL,
+        reason       TEXT NOT NULL,
+        status       TEXT DEFAULT 'pending'
+                     CHECK(status IN ('pending','approved','rejected')),
+        reviewed_by  INTEGER REFERENCES users(id),
+        review_note  TEXT,
+        reviewed_at  TEXT,
+        created_at   TEXT DEFAULT (datetime('now')))""")
+
     cur.execute("""CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER REFERENCES users(id),
@@ -698,6 +777,19 @@ def initialize_database():
         ("health.view",                 "health",     "view",          "View health visit records",         "GLOBAL"),
         ("health.record",               "health",     "record",        "Record health visits",              "GLOBAL"),
         ("health.report",               "health",     "report",        "View health reports",               "GLOBAL"),
+        # Homework
+        ("homework.view",               "homework",   "view",          "View homework assignments",         "CLASS"),
+        ("homework.assign",             "homework",   "assign",        "Create homework assignments",       "CLASS"),
+        ("homework.grade",              "homework",   "grade",         "Grade homework submissions",        "CLASS"),
+        # Leave requests
+        ("leave.review",                "leave",      "review",        "Review student leave requests",     "GLOBAL"),
+        # Portal — student
+        ("portal.student.grades",       "portal",     "student.grades",   "Student: view own approved grades", "OWN"),
+        ("portal.student.homework",     "portal",     "student.homework", "Student: view and submit homework", "OWN"),
+        # Portal — parent
+        ("portal.parent.grades",        "portal",     "parent.grades",    "Parent: view children's grades",    "OWN"),
+        ("portal.parent.fees",          "portal",     "parent.fees",      "Parent: view fee balances",         "OWN"),
+        ("portal.parent.leave",         "portal",     "parent.leave",     "Parent: submit leave requests",     "OWN"),
     ]
     cur.executemany(
         "INSERT OR IGNORE INTO permissions(code,domain,action,description,scope_type)"

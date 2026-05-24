@@ -142,6 +142,7 @@ class SettingsWidget(QWidget):
         tabs = QTabWidget()
         tabs.addTab(self._tab_school(),      "School")
         tabs.addTab(self._tab_users(),       "Users & Access")
+        tabs.addTab(self._tab_portal_accounts(), "Portal Accounts")
         tabs.addTab(self._tab_years(),       "Academic Years")
         tabs.addTab(self._tab_appearance(),  "Appearance")
         tabs.addTab(self._tab_update(),      "Updates")
@@ -288,6 +289,228 @@ class SettingsWidget(QWidget):
             except ServiceError as e:
                 QMessageBox.warning(self, "Cannot Deactivate", str(e)); return
             self._load_users(tbl)
+
+    # ── Portal accounts tab ────────────────────────────────────────
+    def _tab_portal_accounts(self):
+        from PyQt6.QtWidgets import QScrollArea, QGroupBox, QRadioButton, QButtonGroup
+        w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20,16,20,16); lay.setSpacing(14)
+
+        if not (session.is_admin or session.is_head_teacher):
+            lay.addWidget(QLabel("Only administrators can manage portal accounts."))
+            return w
+
+        lay.addWidget(QLabel(
+            "Link student and parent user accounts to their records. "
+            "Portal accounts use the same login as staff, but have restricted access."
+        ).setWordWrap(True) or QLabel(""))
+
+        info = QLabel(
+            "To create a portal account:\n"
+            "1. Create the user in 'Users & Access' with role 'Student' or 'Parent / Guardian'.\n"
+            "2. Return here to link that user to the appropriate student record.\n"
+            "3. For parents, you can link one parent account to multiple children."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet(
+            "background:#F0F9FF;color:#0369A1;border-radius:6px;"
+            "padding:10px 14px;font-size:12px;"
+        )
+        lay.addWidget(info)
+
+        # ── Student accounts ──────────────────────────────────────
+        grp_s = QLabel("Student Portal Accounts"); grp_s.setStyleSheet(
+            "font-size:13px;font-weight:700;color:#374151;border-bottom:1px solid #E5E7EB;padding-bottom:4px;"
+        )
+        lay.addWidget(grp_s)
+
+        self._stbl = QTableWidget(); self._stbl.setColumnCount(4)
+        self._stbl.setHorizontalHeaderLabels(["Username", "Student Name", "Adm No", "Actions"])
+        self._stbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._stbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self._stbl.setAlternatingRowColors(True)
+        self._stbl.verticalHeader().setVisible(False)
+        self._stbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._stbl.setMaximumHeight(180)
+        lay.addWidget(self._stbl)
+
+        link_s_row = QHBoxLayout()
+        lbl_u = QLabel("User:")
+        self._s_user_cb = QComboBox(); self._s_user_cb.setStyleSheet(COMBO)
+        self._s_user_cb.setMinimumWidth(160)
+        lbl_st = QLabel("Student:")
+        self._s_student_cb = QComboBox(); self._s_student_cb.setStyleSheet(COMBO)
+        self._s_student_cb.setMinimumWidth(200)
+        link_s_btn = QPushButton("Link"); link_s_btn.setStyleSheet(BTN_PRIMARY)
+        link_s_btn.clicked.connect(self._link_student_portal)
+        unlink_s_btn = QPushButton("Unlink Selected"); unlink_s_btn.setStyleSheet(BTN_DANGER)
+        unlink_s_btn.clicked.connect(self._unlink_student_portal)
+        for w2 in [lbl_u, self._s_user_cb, lbl_st, self._s_student_cb, link_s_btn, unlink_s_btn]:
+            link_s_row.addWidget(w2)
+        link_s_row.addStretch()
+        lay.addLayout(link_s_row)
+
+        # ── Parent accounts ───────────────────────────────────────
+        grp_p = QLabel("Parent Portal Accounts"); grp_p.setStyleSheet(
+            "font-size:13px;font-weight:700;color:#374151;border-bottom:1px solid #E5E7EB;padding-bottom:4px;margin-top:8px;"
+        )
+        lay.addWidget(grp_p)
+
+        self._ptbl = QTableWidget(); self._ptbl.setColumnCount(4)
+        self._ptbl.setHorizontalHeaderLabels(["Username", "Student Name", "Relation", "Actions"])
+        self._ptbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._ptbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self._ptbl.setAlternatingRowColors(True)
+        self._ptbl.verticalHeader().setVisible(False)
+        self._ptbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._ptbl.setMaximumHeight(180)
+        lay.addWidget(self._ptbl)
+
+        link_p_row = QHBoxLayout()
+        lbl_pu = QLabel("Parent user:")
+        self._p_user_cb = QComboBox(); self._p_user_cb.setStyleSheet(COMBO)
+        self._p_user_cb.setMinimumWidth(160)
+        lbl_ps = QLabel("Student:")
+        self._p_student_cb = QComboBox(); self._p_student_cb.setStyleSheet(COMBO)
+        self._p_student_cb.setMinimumWidth(200)
+        lbl_rel = QLabel("Relation:")
+        self._p_rel_cb = QComboBox(); self._p_rel_cb.setStyleSheet(COMBO)
+        self._p_rel_cb.addItems(["Parent", "Mother", "Father", "Guardian", "Other"])
+        link_p_btn = QPushButton("Link"); link_p_btn.setStyleSheet(BTN_PRIMARY)
+        link_p_btn.clicked.connect(self._link_parent_portal)
+        unlink_p_btn = QPushButton("Unlink Selected"); unlink_p_btn.setStyleSheet(BTN_DANGER)
+        unlink_p_btn.clicked.connect(self._unlink_parent_portal)
+        for w2 in [lbl_pu, self._p_user_cb, lbl_ps, self._p_student_cb,
+                   lbl_rel, self._p_rel_cb, link_p_btn, unlink_p_btn]:
+            link_p_row.addWidget(w2)
+        link_p_row.addStretch()
+        lay.addLayout(link_p_row)
+
+        lay.addStretch()
+        self._load_portal_combos()
+        self._load_student_links()
+        self._load_parent_links()
+        return w
+
+    def _load_portal_combos(self):
+        students = fetch_all(
+            "SELECT id, first_name||' '||last_name AS name, admission_no "
+            "FROM students WHERE is_active=1 ORDER BY last_name, first_name"
+        )
+        for cb in [self._s_student_cb, self._p_student_cb]:
+            cb.clear()
+            cb.addItem("-- Select student --", None)
+            for s in students:
+                cb.addItem(f"{s['name']} ({s['admission_no']})", s["id"])
+
+        s_users = fetch_all(
+            "SELECT id, username, full_name FROM users WHERE role='student_portal' AND is_active=1"
+        )
+        self._s_user_cb.clear()
+        self._s_user_cb.addItem("-- Select user --", None)
+        for u in s_users:
+            self._s_user_cb.addItem(f"{u['username']} ({u['full_name']})", u["id"])
+
+        p_users = fetch_all(
+            "SELECT id, username, full_name FROM users WHERE role='parent_portal' AND is_active=1"
+        )
+        self._p_user_cb.clear()
+        self._p_user_cb.addItem("-- Select user --", None)
+        for u in p_users:
+            self._p_user_cb.addItem(f"{u['username']} ({u['full_name']})", u["id"])
+
+    def _load_student_links(self):
+        rows = fetch_all(
+            """SELECT u.username, s.first_name||' '||s.last_name AS sname,
+                      s.admission_no, spa.user_id, spa.student_id
+               FROM student_portal_accounts spa
+               JOIN users u ON u.id = spa.user_id
+               JOIN students s ON s.id = spa.student_id
+               ORDER BY u.username"""
+        )
+        self._stbl.setRowCount(len(rows))
+        self._student_link_ids = []
+        for r, row in enumerate(rows):
+            self._student_link_ids.append((row["user_id"], row["student_id"]))
+            for c, v in enumerate([row["username"], row["sname"], row["admission_no"]]):
+                it = QTableWidgetItem(str(v or "—"))
+                it.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                self._stbl.setItem(r, c, it)
+            unlink = QPushButton("Remove"); unlink.setStyleSheet(BTN_DANGER)
+            uid, sid = row["user_id"], row["student_id"]
+            unlink.clicked.connect(lambda _, u=uid, s=sid: self._remove_student_link(u, s))
+            self._stbl.setCellWidget(r, 3, unlink)
+
+    def _load_parent_links(self):
+        rows = fetch_all(
+            """SELECT u.username, s.first_name||' '||s.last_name AS sname,
+                      ppa.relation, ppa.id AS link_id
+               FROM parent_portal_accounts ppa
+               JOIN users u ON u.id = ppa.user_id
+               JOIN students s ON s.id = ppa.student_id
+               ORDER BY u.username"""
+        )
+        self._ptbl.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            for c, v in enumerate([row["username"], row["sname"], row["relation"] or "Parent"]):
+                it = QTableWidgetItem(str(v or "—"))
+                it.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                self._ptbl.setItem(r, c, it)
+            unlink = QPushButton("Remove"); unlink.setStyleSheet(BTN_DANGER)
+            lid = row["link_id"]
+            unlink.clicked.connect(lambda _, i=lid: self._remove_parent_link(i))
+            self._ptbl.setCellWidget(r, 3, unlink)
+
+    def _link_student_portal(self):
+        user_id    = self._s_user_cb.currentData()
+        student_id = self._s_student_cb.currentData()
+        if not user_id or not student_id:
+            QMessageBox.warning(self, "Required", "Select both a user and a student."); return
+        try:
+            execute(
+                "INSERT OR REPLACE INTO student_portal_accounts(user_id,student_id) VALUES(?,?)",
+                (user_id, student_id)
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e)); return
+        self._load_student_links()
+
+    def _unlink_student_portal(self):
+        row = self._stbl.currentRow()
+        if row < 0: return
+        uid, sid = self._student_link_ids[row]
+        self._remove_student_link(uid, sid)
+
+    def _remove_student_link(self, user_id, student_id):
+        execute(
+            "DELETE FROM student_portal_accounts WHERE user_id=? AND student_id=?",
+            (user_id, student_id)
+        )
+        self._load_student_links()
+
+    def _link_parent_portal(self):
+        user_id    = self._p_user_cb.currentData()
+        student_id = self._p_student_cb.currentData()
+        relation   = self._p_rel_cb.currentText()
+        if not user_id or not student_id:
+            QMessageBox.warning(self, "Required", "Select both a parent user and a student."); return
+        try:
+            execute(
+                """INSERT OR IGNORE INTO parent_portal_accounts(user_id,student_id,relation)
+                   VALUES(?,?,?)""",
+                (user_id, student_id, relation)
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e)); return
+        self._load_parent_links()
+
+    def _unlink_parent_portal(self):
+        row = self._ptbl.currentRow()
+        if row < 0: return
+        lid = self._ptbl.item(row, 0)  # placeholder — handled by per-row buttons
+
+    def _remove_parent_link(self, link_id: int):
+        execute("DELETE FROM parent_portal_accounts WHERE id=?", (link_id,))
+        self._load_parent_links()
 
     # ── Academic years tab ────────────────────────────────────────
     def _tab_years(self):

@@ -105,11 +105,18 @@ class _Session:
 
     # ── Convenience role checks ───────────────────────────────────
     @property
-    def is_admin(self):       return self.role == "admin"
+    def is_admin(self):          return self.role == "admin"
     @property
-    def is_head_teacher(self): return self.role == "head_teacher"
+    def is_head_teacher(self):   return self.role == "head_teacher"
     @property
-    def is_academic(self):    return self.role == "academic"
+    def is_academic(self):       return self.role == "academic"
+    @property
+    def is_student_portal(self): return self.role == "student_portal"
+    @property
+    def is_parent_portal(self):  return self.role == "parent_portal"
+    @property
+    def is_teacher(self):
+        return self.role in ("subject_teacher", "class_teacher")
 
 
 # Singleton — import this everywhere

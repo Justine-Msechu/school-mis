@@ -128,9 +128,14 @@ class GradesService(BaseService):
         """
         self._require_permission("grades.view")
 
-        from auth.rbac import check_class_access
+        from auth.rbac import check_class_access, check_subject_access
         if not check_class_access(class_id):
             raise ServiceError("You do not have access to this class.")
+        if not check_subject_access(class_id, subject_id):
+            raise ServiceError(
+                "You are not assigned to teach this subject in this class. "
+                "Only your assigned subjects are accessible."
+            )
 
         rows = fetch_all(
             """SELECT s.id AS student_id,
@@ -177,9 +182,13 @@ class GradesService(BaseService):
         """Bulk-upsert grades as 'draft'. Hard-blocked if any grade is locked/approved."""
         self._require_permission("grades.enter")
 
-        from auth.rbac import check_class_access
+        from auth.rbac import check_class_access, check_subject_access
         if not check_class_access(class_id):
             raise ServiceError("You do not have access to this class.")
+        if not check_subject_access(class_id, subject_id):
+            raise ServiceError(
+                "You are not assigned to teach this subject in this class."
+            )
 
         exam = fetch_one("SELECT * FROM exams WHERE id=?", (exam_id,))
         if not exam:
@@ -221,9 +230,11 @@ class GradesService(BaseService):
         """Finalize & submit: transitions grades from 'draft' → 'submitted_locked'."""
         self._require_permission("grades.enter")
 
-        from auth.rbac import check_class_access
+        from auth.rbac import check_class_access, check_subject_access
         if not check_class_access(class_id):
             raise ServiceError("You do not have access to this class.")
+        if not check_subject_access(class_id, subject_id):
+            raise ServiceError("You are not assigned to teach this subject in this class.")
 
         exam = fetch_one("SELECT * FROM exams WHERE id=?", (exam_id,))
         if not exam:

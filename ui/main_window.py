@@ -43,9 +43,11 @@ from modules.reports.main         import ReportsWidget
 from modules.grades.main          import GradesWidget
 from modules.library.main         import LibraryWidget
 from modules.transport.main       import TransportWidget
-from modules.promotion.main       import PromotionWidget
-from modules.health.main          import HealthWidget
-from modules.settings             import SettingsWidget
+from modules.promotion.main            import PromotionWidget
+from modules.health.main               import HealthWidget
+from modules.student_portal.main       import StudentPortalWidget
+from modules.parent_portal.main        import ParentPortalWidget
+from modules.settings                  import SettingsWidget
 
 SIDEBAR_W = 220
 
@@ -67,6 +69,8 @@ ALL_NAV = [
     (14, "Health",      "health",      "health.view"),
     (15, "Promotion",   "promotion",   "student.promote"),
     (58, "Settings",    "settings",    "settings.view"),
+    (9,  "My Portal",   "student_portal", "portal.student.grades"),
+    (9,  "Parent View", "parent_portal",  "portal.parent.grades"),
 ]
 
 
@@ -153,8 +157,10 @@ class MainWindow(QMainWindow):
             "library":    LibraryWidget,
             "transport":  TransportWidget,
             "health":     HealthWidget,
-            "promotion":  PromotionWidget,
-            "settings":   SettingsWidget,
+            "promotion":      PromotionWidget,
+            "settings":       SettingsWidget,
+            "student_portal": StudentPortalWidget,
+            "parent_portal":  ParentPortalWidget,
         }
 
         for icon, label, key, perm in ALL_NAV:
