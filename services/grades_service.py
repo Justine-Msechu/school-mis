@@ -485,7 +485,21 @@ class GradesService(BaseService):
         for gr in grades_rows:
             grade_map.setdefault(gr["student_id"], {})[gr["subject_id"]] = dict(gr)
 
-        subject_list = [dict(s) for s in subjects]
+        # Re-fetch subjects with credit_hours so GPA calculation has the data
+        subject_ids = [s["id"] for s in subjects]
+        if subject_ids:
+            ph = ",".join("?" * len(subject_ids))
+            subjects_full = fetch_all(
+                f"SELECT id, name, code, credit_hours FROM subjects WHERE id IN ({ph})",
+                subject_ids,
+            )
+            subject_list = [dict(s) for s in subjects_full]
+            # preserve the ordering from the original subjects query
+            order = {s["id"]: i for i, s in enumerate(subjects)}
+            subject_list.sort(key=lambda s: order.get(s["id"], 999))
+        else:
+            subject_list = []
+
         rows = []
         for st in students:
             sid = st["id"]
@@ -519,7 +533,7 @@ class GradesService(BaseService):
 
         # GPA calculation for secondary schools (A=4,B=3,C=2,D=1,F=0)
         _gpa_map = {"A": 4.0, "B": 3.0, "C": 2.0, "D": 1.0, "F": 0.0}
-        subj_credits = {s["id"]: (s.get("credit_hours") or 1) for s in subjects}
+        subj_credits = {s["id"]: (s.get("credit_hours") or 1) for s in subject_list}
         for row in rows:
             total_pts   = sum(
                 _gpa_map.get(row["grades"][sid].get("grade_letter", "F"), 0) * subj_credits.get(sid, 1)
