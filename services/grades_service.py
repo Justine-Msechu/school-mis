@@ -331,7 +331,7 @@ class GradesService(BaseService):
             (exam_id, class_id),
         )
         students = fetch_all(
-            "SELECT * FROM students WHERE class_id=? AND is_active=1 ORDER BY last_name",
+            "SELECT * FROM students WHERE class_id=? AND is_active=1 ORDER BY last_name, first_name",
             (class_id,),
         )
         grades_rows = fetch_all(

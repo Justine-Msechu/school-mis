@@ -1,7 +1,7 @@
 {
-  "version": "3.5.0",
+  "version": "3.5.1",
   "release_date": "2026-05-24",
-  "release_notes": "Add Grades & Examinations module: teacher grade entry, academic approval workflow, result reports with PDF export",
+  "release_notes": "Fix crash on startup: remove invalid is_active filter on classes table",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -47,11 +47,11 @@
     "modules/reports/welfare_report.py": "981dc9398ae1251c6c1e81a5e54f59a7abb5e584b8700a75ce80769c0fece99b",
     "modules/reports/inventory_report.py": "2c246f5b4401513cc11bfe31d8ac3c85e3d6e0dd0f87f63827b4f4f09e215508",
     "modules/grades/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "modules/grades/entry.py": "b11e64a5d5f3d9faf59cece014fcb2ec5fb7cac37778685d12566737a520005d",
     "modules/grades/approval.py": "50189c216cfb8db1c10b7b90abef58b5717c464950ee5f0600aada5f320a45ad",
-    "modules/grades/results.py": "440b42c5180c86e335ea708fb46e122bfe5b1bcc11fef7c5c8c9f0a270c8425c",
     "modules/grades/exams.py": "e0111d0ccdb9f138cce6492eb7a4059634584c1cd075a6975cd83102d6928260",
     "modules/grades/main.py": "5748005db4f6fe228fbcf6c0aea77747819bbd570c71aab9c314984258d2e741",
+    "modules/grades/entry.py": "0f5323350bb0e02e89f6eaf7ecf304c402ea67bcc7a35e2931bfc6a3bfb060dc",
+    "modules/grades/results.py": "e0e5f6cfa278317b29a697f439cffd7d6a19188f5807d7f5b16a435ecc49fcf2",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "database/db.py": "6ae1da9033a7c5dbbf7b35f26f117af0e35d411b67800e3960c3ae5eb4d6257a",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
@@ -74,6 +74,6 @@
     "services/student_service.py": "c6b0d8b32a6cc7dfc90717363b635e6ab4d88fa0f28cc374cc72986b26659771",
     "services/auth_service.py": "ce4c3f1bf459ad212c9ccb13aa3000450a65c24426b3e5ce7a78b47db7fae1cd",
     "services/welfare_service.py": "8cb2377f9f4f48c8fe2e12c00b7dc99abd77b7d46823ee37c5b7cc2a32afd427",
-    "services/grades_service.py": "57ae74e7ee6635cc0cea73d008457ce4d24394af48b6accd4638191f399f0db7"
+    "services/grades_service.py": "024cff9ca41872291b8f504a1a14efc2d218d573c64a2721e5dc420d0a65acea"
   }
 }

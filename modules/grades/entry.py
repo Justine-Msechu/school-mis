@@ -120,7 +120,7 @@ class GradeEntryTab(QWidget):
             self.exam_cb.addItem(label, e["id"])
 
         classes = fetch_all(
-            "SELECT id, name FROM classes WHERE is_active=1 ORDER BY name"
+            "SELECT id, name FROM classes ORDER BY name"
         )
         self.class_cb.clear()
         self.class_cb.addItem("-- Select class --", None)

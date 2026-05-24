@@ -89,7 +89,7 @@ class ResultsTab(QWidget):
         for e in exams:
             self.exam_cb.addItem(f"{e['name']} (T{e['term']}) — {e['year_label'] or ''}", e["id"])
 
-        classes = fetch_all("SELECT id, name FROM classes WHERE is_active=1 ORDER BY name")
+        classes = fetch_all("SELECT id, name FROM classes ORDER BY name")
         self.class_cb.clear()
         self.class_cb.addItem("-- Select class --", None)
         for c in classes:
