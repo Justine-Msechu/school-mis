@@ -41,6 +41,7 @@ from modules.inventory.main       import InventoryWidget
 from modules.accounting.main      import AccountingWidget
 from modules.reports.main         import ReportsWidget
 from modules.grades.main          import GradesWidget
+from modules.library.main         import LibraryWidget
 from modules.settings             import SettingsWidget
 
 SIDEBAR_W = 220
@@ -58,6 +59,7 @@ ALL_NAV = [
     (7,  "Accounting",  "accounting",  "accounting.view"),
     (4,  "Grades",      "grades",      "grades.view"),
     (8,  "Reports",     "reports",     "reports.view"),
+    (12, "Library",     "library",     "library.view"),
     (58, "Settings",    "settings",    "settings.view"),
 ]
 
@@ -141,6 +143,7 @@ class MainWindow(QMainWindow):
             "accounting": AccountingWidget,
             "grades":     GradesWidget,
             "reports":    ReportsWidget,
+            "library":    LibraryWidget,
             "settings":   SettingsWidget,
         }
 

@@ -33,6 +33,7 @@ ROLES = {
             "reports.welfare", "reports.inventory",
             "settings.view", "settings.school.manage",
             "settings.years.manage", "settings.users.manage",
+            "library.view",
         ],
     },
     # ── Academic Officer: student + academic records, no finance or inventory ──
@@ -106,6 +107,14 @@ ROLES = {
             "grades.view", "grades.enter",
             "attendance.view",
             "classes.view",
+        ],
+    },
+    # ── Librarian: library catalogue, checkout/return ─────────────────────────
+    "librarian": {
+        "label": "Librarian", "color": "#F59E0B",
+        "permissions": [
+            "student.view",
+            "library.view", "library.checkout", "library.manage",
         ],
     },
 }
@@ -324,6 +333,41 @@ def initialize_database():
         recorded_by INTEGER REFERENCES users(id),
         created_at  TEXT DEFAULT (datetime('now')))""")
 
+    # ── Library domain ──────────────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS library_books (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        title            TEXT NOT NULL,
+        author           TEXT,
+        isbn             TEXT,
+        category         TEXT DEFAULT 'other'
+                         CHECK(category IN ('textbook','fiction','reference','non_fiction','other')),
+        shelf_location   TEXT,
+        publisher        TEXT,
+        year             TEXT,
+        total_copies     INTEGER NOT NULL DEFAULT 1,
+        available_copies INTEGER NOT NULL DEFAULT 1,
+        notes            TEXT,
+        is_active        INTEGER DEFAULT 1,
+        created_at       TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS library_loans (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id         INTEGER NOT NULL REFERENCES library_books(id),
+        borrower_type   TEXT NOT NULL CHECK(borrower_type IN ('student','teacher')),
+        borrower_id     INTEGER NOT NULL,
+        borrower_name   TEXT,
+        issue_date      TEXT NOT NULL DEFAULT (date('now')),
+        due_date        TEXT NOT NULL,
+        return_date     TEXT,
+        fine_amount     REAL DEFAULT 0,
+        fine_paid       INTEGER DEFAULT 0,
+        status          TEXT NOT NULL DEFAULT 'active'
+                        CHECK(status IN ('active','returned','overdue','lost')),
+        notes           TEXT,
+        issued_by       INTEGER REFERENCES users(id),
+        returned_to     INTEGER REFERENCES users(id),
+        created_at      TEXT DEFAULT (datetime('now')))""")
+
     # ── Accounting domain ───────────────────────────────────────────────────────
     cur.execute("""CREATE TABLE IF NOT EXISTS expenses (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -497,6 +541,10 @@ def initialize_database():
         ("settings.years.manage",       "settings",   "years",         "Manage academic years",             "GLOBAL"),
         ("settings.users.manage",       "settings",   "users",         "Manage user accounts",              "GLOBAL"),
         ("settings.roles.manage",       "settings",   "roles",         "Manage roles and permissions",      "GLOBAL"),
+        # Library
+        ("library.view",                "library",    "view",          "View library catalogue and loans",  "GLOBAL"),
+        ("library.checkout",            "library",    "checkout",      "Issue and return books",            "GLOBAL"),
+        ("library.manage",              "library",    "manage",        "Add, edit and deactivate books",    "GLOBAL"),
     ]
     cur.executemany(
         "INSERT OR IGNORE INTO permissions(code,domain,action,description,scope_type)"

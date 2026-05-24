@@ -1,7 +1,7 @@
 {
-  "version": "3.5.3",
+  "version": "3.6.0",
   "release_date": "2026-05-24",
-  "release_notes": "Fix icon rendering and role-aware dashboards",
+  "release_notes": "Library Management module: book catalogue, checkout/return workflow, overdue fine tracking, librarian role",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -52,11 +52,16 @@
     "modules/grades/main.py": "5748005db4f6fe228fbcf6c0aea77747819bbd570c71aab9c314984258d2e741",
     "modules/grades/entry.py": "0f5323350bb0e02e89f6eaf7ecf304c402ea67bcc7a35e2931bfc6a3bfb060dc",
     "modules/grades/results.py": "e0e5f6cfa278317b29a697f439cffd7d6a19188f5807d7f5b16a435ecc49fcf2",
+    "modules/library/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "modules/library/catalogue.py": "6c7f57f803b0130cef5af8591db18ea4b4cc8317bf17fc8be5f4f20792e12ae6",
+    "modules/library/checkout.py": "060fa3a0a89eceed4b1c88c138d70fb3200fedb79f6952855be11980a47609cf",
+    "modules/library/loans.py": "2fffa7e767ca54534b1288ac6fa5b39429d700c5325e823e1077f0343ecfdf96",
+    "modules/library/main.py": "6dca9f1aa756ab1ca069dc405c3ab67ff1aa6dc76bf7dba4f3f4af3e8cd94508",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-    "database/db.py": "6ae1da9033a7c5dbbf7b35f26f117af0e35d411b67800e3960c3ae5eb4d6257a",
+    "database/db.py": "3d98f8bd453d835b663ae2caed485120511694847b2c4a53280d526558fe5dc5",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
-    "ui/main_window.py": "deb267e7c3d83ac92b3b2b1c50efd41f00cf0a0323e3821e57405025ef8bc540",
+    "ui/main_window.py": "9c60c9b5d128c155b3fdeb2d81ddcbeba3f7db286bf73ea2763d848a1853aad7",
     "auth/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "auth/session.py": "fb9ba31d9310e19a0f668d4aaf9f92cb820e0b16dae15cab4b720486647ddab0",
     "auth/rbac.py": "bfbad6155e5ee983867758b712a4f7e7233571676fecf86ae56eca3c5e84eb84",
@@ -74,6 +79,7 @@
     "services/student_service.py": "c6b0d8b32a6cc7dfc90717363b635e6ab4d88fa0f28cc374cc72986b26659771",
     "services/auth_service.py": "ce4c3f1bf459ad212c9ccb13aa3000450a65c24426b3e5ce7a78b47db7fae1cd",
     "services/welfare_service.py": "8cb2377f9f4f48c8fe2e12c00b7dc99abd77b7d46823ee37c5b7cc2a32afd427",
-    "services/grades_service.py": "024cff9ca41872291b8f504a1a14efc2d218d573c64a2721e5dc420d0a65acea"
+    "services/grades_service.py": "024cff9ca41872291b8f504a1a14efc2d218d573c64a2721e5dc420d0a65acea",
+    "services/library_service.py": "f80d934ac14db034f784a8117e148245a262efffbe8974fb36f92c57e97db0b7"
   }
 }
