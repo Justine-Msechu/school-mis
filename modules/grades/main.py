@@ -5,11 +5,12 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from auth.session import session
-from modules.grades.entry          import GradeEntryTab
-from modules.grades.approval       import ApprovalTab
-from modules.grades.results        import ResultsTab
-from modules.grades.exams          import ExamManagementTab
+from modules.grades.entry           import GradeEntryTab
+from modules.grades.approval        import ApprovalTab
+from modules.grades.results         import ResultsTab
+from modules.grades.exams           import ExamManagementTab
 from modules.grades.change_requests import ChangeRequestsTab
+from modules.grades.homework        import HomeworkTab
 
 
 class GradesWidget(QWidget):
@@ -84,10 +85,17 @@ class GradesWidget(QWidget):
         else:
             self._change_tab = None
 
+        # Homework — teachers who can post/grade, and staff with homework.view
+        if session.can("homework.assign") or session.can("homework.view"):
+            self._homework_tab = HomeworkTab()
+            self.tabs.addTab(self._homework_tab, "Homework")
+        else:
+            self._homework_tab = None
+
         lay.addWidget(self.tabs)
 
     def refresh(self):
-        for tab in [self._entry_tab, self._approval_tab,
-                    self._results_tab, self._exams_tab, self._change_tab]:
+        for tab in [self._entry_tab, self._approval_tab, self._results_tab,
+                    self._exams_tab, self._change_tab, self._homework_tab]:
             if tab is not None and hasattr(tab, "refresh"):
                 tab.refresh()

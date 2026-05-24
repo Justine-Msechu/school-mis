@@ -69,8 +69,8 @@ ALL_NAV = [
     (14, "Health",      "health",      "health.view"),
     (15, "Promotion",   "promotion",   "student.promote"),
     (58, "Settings",    "settings",    "settings.view"),
-    (9,  "My Portal",   "student_portal", "portal.student.grades"),
-    (9,  "Parent View", "parent_portal",  "portal.parent.grades"),
+    (9,  "My Portal",   "student_portal", "role:student_portal"),
+    (9,  "Parent View", "parent_portal",  "role:parent_portal"),
 ]
 
 
@@ -164,8 +164,13 @@ class MainWindow(QMainWindow):
         }
 
         for icon, label, key, perm in ALL_NAV:
-            if perm and not session.can(perm):
-                continue
+            if perm:
+                if perm.startswith("role:"):
+                    # Exact role match — not expanded by wildcard (portal accounts only)
+                    if session.role != perm[5:]:
+                        continue
+                elif not session.can(perm):
+                    continue
             btn = NavButton(icon, label, key)
             btn.clicked.connect(lambda _, k=key: self._nav(k))
             sb.addWidget(btn)

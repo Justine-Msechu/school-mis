@@ -1,7 +1,7 @@
 {
-  "version": "4.0.0",
+  "version": "4.1.0",
   "release_date": "2026-05-24",
-  "release_notes": "Principle of Least Privilege enforcement: teacher subject-domain scoping, student and parent portals, homework assignments, leave requests, portal account management",
+  "release_notes": "Teacher homework UI, leave request review, attendance class scoping, portal nav fix",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -19,10 +19,10 @@
     "modules/teachers.py": "960ee03603e461657260e3123e6fe8dbe2108b7847f4e4622be52cdac1ffd704",
     "modules/updater.py": "49eb55fb368f99d1bee531fd7c6ab59caa9273e1332e7432f3c5b6fa228403c0",
     "modules/setup_wizard.py": "4675a3480a28c108c68d39637cf2ed857b6eeae8ded6100461fdd815c4296056",
-    "modules/attendance.py": "92a2992d30e467372bc2a419da91d523e7289d58676f3d7bb4e03f17c90f536e",
     "modules/dashboard.py": "2fadf5667848edea40efd9ef810fa9e1c9fb326b3637856a7d2af505879cbb85",
     "modules/students.py": "cc8c24c7da1b36910b71f79813e0d8da3ce1662d6ef4d991a2a9a35a8db4406d",
-    "modules/settings.py": "e0b78e3d7ce98436b2d252c666fb3f86cc6b1716332e0a765e317b5797f89dba",
+    "modules/settings.py": "78f076ffa96a95844edbad31976ddb1c70df071c777a75851dcb7c94dc0b44c4",
+    "modules/attendance.py": "966d4ece877c585647ca02b2c823974355c6f418cd278f2bc09454a3be03c261",
     "modules/finance/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/finance/main.py": "97bc3c0d836b7afde907ab54daf52711e6ac6e66970a2c0f35ecde4099c4e525",
     "modules/finance/payments.py": "00188d46274a36275a712fa8f360230d290447441159047400b0929db512ba05",
@@ -51,8 +51,9 @@
     "modules/grades/change_requests.py": "7075b8aed599af3fbd3226a0affe00d271d66fc7208f40131d341986f987aa8f",
     "modules/grades/entry.py": "ec924d05a6ca896f9f4ddbf33fd7980afc000d2bcb3a5122df1a9e3522da2295",
     "modules/grades/approval.py": "d927f6f5a7d99a789f042911e3060304ef4cf53090dd68a851c3ee080c6c3fd2",
-    "modules/grades/main.py": "8dd26108ec39d0aa29ae8f7992cc6ca43c1aac78c82f51c3366c6c9b0ffe2fc6",
     "modules/grades/results.py": "55b756b3266ff814535f7c2127ebb9225ecb9406c01634fa4dad104c80dd56c5",
+    "modules/grades/homework.py": "52e5cc1f9a6c20a0f58f2e0682e3572d3cf13c700a4bfa006ce25fe7ce44775d",
+    "modules/grades/main.py": "9d6d4553c16309f03c0e3bf6e7844318152c05b943f6705200e9e4c60b5f1f89",
     "modules/library/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/library/catalogue.py": "6c7f57f803b0130cef5af8591db18ea4b4cc8317bf17fc8be5f4f20792e12ae6",
     "modules/library/checkout.py": "060fa3a0a89eceed4b1c88c138d70fb3200fedb79f6952855be11980a47609cf",
@@ -74,7 +75,7 @@
     "database/db.py": "730eb8920016c842fca433991982b7e079aafc6feccd5394a636e3ed38ac6c58",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
-    "ui/main_window.py": "8f9225c43a5e9b3eecb6246c1edb05cf618e9aeb67c83ac91e175996dfca139c",
+    "ui/main_window.py": "f8fa17f03124a99f9d198308ac90206aa24462b2b46f5c66cfd8c077a30706a0",
     "auth/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "auth/rbac.py": "9b6cc94906fd50ea8e84f111a0913e06c5c004734ab357e7346960a2fad9eb40",
     "auth/session.py": "8a91609ec1f9810f5c7f3a26610b86813af393d2ea0395e0108947992a217a38",
@@ -100,6 +101,6 @@
     "services/portal_service.py": "e69ee44b27e20d6b79da08ebcd301c7ad2bd9b4eaa03c0524ce08510130c0e57",
     "services/homework_service.py": "8a847eebb192b119a752a787f8fb3d0f32062302a73238e8b0cf480de02744f4",
     "core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "core/background.py": "84d70e6f16496f328c55973de7183a3809db202fcd465127b58c886b91519dca"
+    "core/background.py": "01e046120cdbdce5b1e8f7a84b0bdf2abac2c3f7bce606583795b1bed9d284fe"
   }
 }
