@@ -5,10 +5,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from auth.session import session
-from modules.grades.entry    import GradeEntryTab
-from modules.grades.approval import ApprovalTab
-from modules.grades.results  import ResultsTab
-from modules.grades.exams    import ExamManagementTab
+from modules.grades.entry          import GradeEntryTab
+from modules.grades.approval       import ApprovalTab
+from modules.grades.results        import ResultsTab
+from modules.grades.exams          import ExamManagementTab
+from modules.grades.change_requests import ChangeRequestsTab
 
 
 class GradesWidget(QWidget):
@@ -76,10 +77,17 @@ class GradesWidget(QWidget):
         else:
             self._exams_tab = None
 
+        # Change Requests — anyone who can submit or review them
+        if session.can("grades.change_request") or session.can("grades.change_request.review"):
+            self._change_tab = ChangeRequestsTab()
+            self.tabs.addTab(self._change_tab, "Change Requests")
+        else:
+            self._change_tab = None
+
         lay.addWidget(self.tabs)
 
     def refresh(self):
         for tab in [self._entry_tab, self._approval_tab,
-                    self._results_tab, self._exams_tab]:
+                    self._results_tab, self._exams_tab, self._change_tab]:
             if tab is not None and hasattr(tab, "refresh"):
                 tab.refresh()

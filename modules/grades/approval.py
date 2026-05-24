@@ -42,8 +42,8 @@ class ApprovalTab(QWidget):
         lay.addLayout(hdr)
 
         info = QLabel(
-            "Review submitted grade batches and approve or reject them. "
-            "All batches must be approved before an exam can be published."
+            "Review locked grade batches submitted by teachers and approve or return them to draft. "
+            "Grades remain locked until approved; changes after approval require a formal change request."
         )
         info.setWordWrap(True)
         info.setStyleSheet(

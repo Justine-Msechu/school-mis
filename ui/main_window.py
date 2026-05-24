@@ -101,6 +101,7 @@ class MainWindow(QMainWindow):
         self._build()
         self._load_saved_theme()
         self._start_update_check()
+        self._init_background_worker()
 
     def _build(self):
         root = QWidget()
@@ -334,6 +335,19 @@ class MainWindow(QMainWindow):
         # Hide banner after dialog — if they chose "Remind me later" the next
         # connectivity check will surface the banner again.
         self._banner.setVisible(False)
+
+    def _init_background_worker(self):
+        from core.background import background_worker
+        self._bg_worker = background_worker
+        self._bg_worker.job_started.connect(
+            lambda name: self.statusBar().showMessage(f"Running: {name}…", 0)
+        )
+        self._bg_worker.job_finished.connect(
+            lambda name: self.statusBar().showMessage(f"Done: {name}", 3000)
+        )
+        self._bg_worker.job_failed.connect(
+            lambda name, err: self.statusBar().showMessage(f"Error in {name}: {err}", 6000)
+        )
 
     def closeEvent(self, event):
         if hasattr(self, "_conn_watcher"):

@@ -22,6 +22,7 @@ ROLES = {
             "classes.view", "classes.manage",
             "attendance.view",
             "grades.view", "grades.approve", "grades.publish",
+            "grades.change_request.review",
             # Finance: VIEW + billing + waiver approval only — cannot record payments
             # or create/edit fee structures
             "finance.view", "finance.structure.view", "finance.billing.generate",
@@ -47,6 +48,7 @@ ROLES = {
             "classes.view", "classes.manage",
             "attendance.view", "attendance.mark",
             "grades.view", "grades.approve", "grades.publish",
+            "grades.change_request.review",
             "welfare.view",
             "transport.view",
             "reports.view", "reports.academic", "reports.welfare",
@@ -100,7 +102,7 @@ ROLES = {
         "permissions": [
             "student.view",       # data scoped to own class in service layer
             "attendance.view", "attendance.mark",  # scoped to own class
-            "grades.view",        # scoped to own class
+            "grades.view", "grades.change_request",
             "classes.view",
         ],
     },
@@ -109,7 +111,7 @@ ROLES = {
         "label": "Subject Teacher", "color": "#0891B2",
         "permissions": [
             "student.view",       # data scoped to own class in service layer
-            "grades.view", "grades.enter",
+            "grades.view", "grades.enter", "grades.change_request",
             "attendance.view",
             "classes.view",
         ],
@@ -241,8 +243,38 @@ def initialize_database():
         grade_letter TEXT, remarks TEXT,
         entered_by INTEGER REFERENCES users(id),
         approved_by INTEGER REFERENCES users(id),
-        status TEXT DEFAULT 'draft' CHECK(status IN ('draft','submitted','approved')),
+        status TEXT DEFAULT 'draft'
+            CHECK(status IN ('draft','submitted_locked','approved')),
         UNIQUE(student_id, exam_id, subject_id))""")
+
+    # Grade change requests — required for modifying locked/approved grades
+    cur.execute("""CREATE TABLE IF NOT EXISTS grade_change_requests (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        grade_id        INTEGER NOT NULL REFERENCES grades(id),
+        requested_by    INTEGER REFERENCES users(id),
+        proposed_score  REAL,
+        proposed_max    REAL DEFAULT 100,
+        reason          TEXT NOT NULL,
+        status          TEXT DEFAULT 'pending'
+                        CHECK(status IN ('pending','approved','rejected')),
+        reviewed_by     INTEGER REFERENCES users(id),
+        review_note     TEXT,
+        reviewed_at     TEXT,
+        created_at      TEXT DEFAULT (datetime('now')))""")
+
+    # Period-based attendance for secondary schools
+    cur.execute("""CREATE TABLE IF NOT EXISTS period_attendance (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id  INTEGER NOT NULL REFERENCES students(id),
+        class_id    INTEGER REFERENCES classes(id),
+        subject_id  INTEGER REFERENCES subjects(id),
+        date        TEXT NOT NULL,
+        period_no   INTEGER NOT NULL DEFAULT 1,
+        status      TEXT NOT NULL CHECK(status IN ('Present','Absent','Late','Excused')),
+        notes       TEXT,
+        recorded_by INTEGER REFERENCES users(id),
+        created_at  TEXT DEFAULT (datetime('now')),
+        UNIQUE(student_id, date, subject_id, period_no))""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS fee_types (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -454,6 +486,39 @@ def initialize_database():
         recorded_by  INTEGER REFERENCES users(id),
         created_at   TEXT DEFAULT (datetime('now')))""")
 
+    # ── Grade status migration: 'submitted' → 'submitted_locked' ───────────────
+    # Runs once; recreates grades table with updated CHECK constraint + renames data.
+    _g_migrated = cur.execute(
+        "SELECT 1 FROM school_config WHERE key='grade_status_v2'"
+    ).fetchone()
+    if not _g_migrated:
+        try:
+            cur.execute("ALTER TABLE grades RENAME TO _grades_old")
+            cur.execute("""CREATE TABLE grades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL REFERENCES students(id),
+                exam_id INTEGER NOT NULL REFERENCES exams(id),
+                subject_id INTEGER NOT NULL REFERENCES subjects(id),
+                score REAL, max_score REAL DEFAULT 100,
+                grade_letter TEXT, remarks TEXT,
+                entered_by INTEGER REFERENCES users(id),
+                approved_by INTEGER REFERENCES users(id),
+                status TEXT DEFAULT 'draft'
+                    CHECK(status IN ('draft','submitted_locked','approved')),
+                UNIQUE(student_id, exam_id, subject_id))""")
+            cur.execute("""INSERT INTO grades
+                SELECT id, student_id, exam_id, subject_id, score, max_score,
+                       grade_letter, remarks, entered_by, approved_by,
+                       CASE WHEN status='submitted' THEN 'submitted_locked' ELSE status END
+                FROM _grades_old""")
+            cur.execute("DROP TABLE _grades_old")
+        except Exception:
+            try: cur.execute("ALTER TABLE _grades_old RENAME TO grades")
+            except Exception: pass
+        cur.execute(
+            "INSERT OR REPLACE INTO school_config(key,value) VALUES('grade_status_v2','1')"
+        )
+
     # ── Migrate existing tables (safe — skips if column already exists) ────────
     _migrations = [
         ("students",     "student_category", "TEXT DEFAULT 'regular'"),
@@ -465,6 +530,8 @@ def initialize_database():
         ("fee_payments", "created_at",       "TEXT DEFAULT (datetime('now'))"),
         ("audit_log",    "before_state",     "TEXT"),
         ("audit_log",    "after_state",      "TEXT"),
+        ("subjects",     "credit_hours",     "INTEGER DEFAULT 1"),
+        ("subjects",     "subject_type",     "TEXT DEFAULT 'compulsory'"),
     ]
     for table, col, col_type in _migrations:
         try:
@@ -532,6 +599,11 @@ def initialize_database():
         created_at   TEXT DEFAULT (datetime('now')),
         UNIQUE(policy_rule, entity_type, entity_id))""")
 
+    # Seed school_type default if not set
+    cur.execute(
+        "INSERT OR IGNORE INTO school_config(key,value) VALUES('school_type','primary')"
+    )
+
     # Seed defaults on first run
     cur.execute("SELECT COUNT(*) FROM academic_years")
     if cur.fetchone()[0] == 0:
@@ -572,6 +644,8 @@ def initialize_database():
         ("grades.enter",                "grades",     "enter",         "Enter and submit grades",           "CLASS"),
         ("grades.approve",              "grades",     "approve",       "Approve submitted grades",          "GLOBAL"),
         ("grades.publish",              "grades",     "publish",       "Publish approved grades",           "GLOBAL"),
+        ("grades.change_request",       "grades",     "change_req",    "Submit grade change requests",       "GLOBAL"),
+        ("grades.change_request.review","grades",     "change_review", "Approve/reject grade change requests","GLOBAL"),
         # Finance — granular, no wildcard for non-admin
         ("finance.view",                "finance",    "view",          "View billing and payment status",   "GLOBAL"),
         ("finance.structure.view",      "finance",    "struct.view",   "View fee structures",               "GLOBAL"),

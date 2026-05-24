@@ -166,6 +166,24 @@ class SettingsWidget(QWidget):
             form.addRow(QLabel(lbl), e)
             self._school_fields[key] = e
 
+        # School type selector
+        self._school_type_cb = QComboBox()
+        self._school_type_cb.setStyleSheet(
+            "QComboBox{border:1px solid #D1D5DB;border-radius:6px;"
+            "padding:6px 10px;font-size:13px;background:white;}"
+        )
+        self._school_type_cb.addItem("Primary School", "primary")
+        self._school_type_cb.addItem("Secondary School", "secondary")
+        current_type = get_config("school_type", "primary")
+        idx = self._school_type_cb.findData(current_type)
+        if idx >= 0:
+            self._school_type_cb.setCurrentIndex(idx)
+
+        type_note = QLabel("Affects grade display (GPA for secondary) and attendance mode.")
+        type_note.setStyleSheet("color:#6B7280;font-size:11px;")
+        form.addRow(QLabel("School type:"), self._school_type_cb)
+        form.addRow("", type_note)
+
         lay.addLayout(form)
 
         save = QPushButton("Save school settings"); save.setStyleSheet(BTN_PRIMARY)
@@ -177,6 +195,7 @@ class SettingsWidget(QWidget):
     def _save_school(self):
         for key, e in self._school_fields.items():
             set_config(key, e.text().strip())
+        set_config("school_type", self._school_type_cb.currentData())
         QMessageBox.information(self, "Saved", "School settings saved.")
 
     # ── Users tab ─────────────────────────────────────────────────

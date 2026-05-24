@@ -78,7 +78,8 @@ class GradesService(BaseService):
 
         if status == "published":
             unapproved = fetch_one(
-                "SELECT COUNT(*) AS n FROM grades WHERE exam_id=? AND status!='approved'",
+                "SELECT COUNT(*) AS n FROM grades WHERE exam_id=? "
+                "AND status NOT IN ('approved')",
                 (exam_id,)
             )
             self._enforce(
@@ -146,17 +147,34 @@ class GradesService(BaseService):
         )
         return [dict(r) for r in rows]
 
+    # ── Lockdown enforcement ─────────────────────────────────────────────────
+
+    def _check_grade_writable(self, exam_id: int, class_id: int, subject_id: int):
+        """
+        Raise ServiceError if any grades in this batch are past draft stage.
+        Called before any save/update on grade entries by non-approvers.
+        """
+        locked = fetch_one(
+            """SELECT COUNT(*) AS n FROM grades g
+               JOIN students s ON s.id=g.student_id
+               WHERE g.exam_id=? AND g.subject_id=? AND s.class_id=?
+                 AND g.status IN ('submitted_locked','approved')""",
+            (exam_id, subject_id, class_id),
+        )
+        if locked and locked["n"] > 0:
+            raise ServiceError(
+                "One or more grades in this batch are locked (submitted or approved). "
+                "Use 'Request Change' to propose corrections."
+            )
+
     def save_grades(
         self,
         exam_id: int,
         class_id: int,
         subject_id: int,
-        entries: list[dict],   # [{student_id, score, max_score, remarks}, ...]
+        entries: list[dict],
     ) -> int:
-        """
-        Bulk-upsert grades as 'draft'. Returns count saved.
-        Teachers can only save for exams that are 'open'.
-        """
+        """Bulk-upsert grades as 'draft'. Hard-blocked if any grade is locked/approved."""
         self._require_permission("grades.enter")
 
         from auth.rbac import check_class_access
@@ -167,11 +185,11 @@ class GradesService(BaseService):
         if not exam:
             raise ServiceError("Exam not found.")
 
-        self._enforce(
-            "grade.enter",
-            subject=dict(exam),
-            extra={"exam_status": exam["status"]},
-        )
+        self._enforce("grade.enter", subject=dict(exam),
+                      extra={"exam_status": exam["status"]})
+
+        # ── LOCKDOWN CHECK ────────────────────────────────────────────────────
+        self._check_grade_writable(exam_id, class_id, subject_id)
 
         saved = 0
         for entry in entries:
@@ -200,7 +218,7 @@ class GradesService(BaseService):
         return saved
 
     def submit_grades(self, exam_id: int, class_id: int, subject_id: int) -> int:
-        """Mark all draft grades for this batch as 'submitted' for approval."""
+        """Finalize & submit: transitions grades from 'draft' → 'submitted_locked'."""
         self._require_permission("grades.enter")
 
         from auth.rbac import check_class_access
@@ -217,21 +235,130 @@ class GradesService(BaseService):
             """SELECT COUNT(*) AS n FROM grades g
                JOIN students s ON s.id=g.student_id
                WHERE g.exam_id=? AND g.subject_id=? AND s.class_id=? AND g.status='draft'""",
-            (exam_id, subject_id, class_id)
+            (exam_id, subject_id, class_id),
         )
         if not count or count["n"] == 0:
-            raise ServiceError("No draft grades found to submit.")
+            raise ServiceError("No draft grades to submit.")
 
         execute(
-            """UPDATE grades SET status='submitted'
+            """UPDATE grades SET status='submitted_locked'
                WHERE exam_id=? AND subject_id=?
                  AND student_id IN (SELECT id FROM students WHERE class_id=?)
                  AND status='draft'""",
             (exam_id, subject_id, class_id),
         )
-        self._audit("grades_submitted", "grades",
-                    detail=f"Exam {exam_id} class {class_id} subj {subject_id}: {count['n']} submitted")
+        self._audit("grades_submitted_locked", "grades",
+                    detail=f"Exam {exam_id} class {class_id} subj {subject_id}: "
+                           f"{count['n']} locked for approval")
         return count["n"]
+
+    # ── Grade Change Requests ─────────────────────────────────────────────────
+
+    def request_grade_change(
+        self, grade_id: int, proposed_score: float,
+        proposed_max: float, reason: str,
+    ) -> int:
+        """Submit a change request for a locked/approved grade. Audited."""
+        self._require_permission("grades.change_request")
+        grade = fetch_one("SELECT * FROM grades WHERE id=?", (grade_id,))
+        if not grade:
+            raise ServiceError("Grade record not found.")
+        if grade["status"] == "draft":
+            raise ServiceError("Draft grades can be edited directly — no request needed.")
+        if not reason.strip():
+            raise ServiceError("A reason is required for grade change requests.")
+
+        existing = fetch_one(
+            "SELECT id FROM grade_change_requests WHERE grade_id=? AND status='pending'",
+            (grade_id,),
+        )
+        if existing:
+            raise ServiceError("A pending change request already exists for this grade.")
+
+        req_id = execute(
+            """INSERT INTO grade_change_requests
+               (grade_id, requested_by, proposed_score, proposed_max, reason)
+               VALUES (?,?,?,?,?)""",
+            (grade_id, self._session.user_id, proposed_score, proposed_max, reason.strip()),
+        )
+        self._audit("grade_change_requested", "grade_change_requests", req_id,
+                    detail=f"Grade {grade_id}: {proposed_score}/{proposed_max} — {reason[:60]}",
+                    before={"score": grade["score"], "max_score": grade["max_score"],
+                            "status": grade["status"]})
+        return req_id
+
+    def get_change_requests(self, status: str | None = "pending") -> list[dict]:
+        self._require_permission("grades.change_request.review")
+        where = f"WHERE gcr.status='{status}'" if status else ""
+        rows = fetch_all(
+            f"""SELECT gcr.*,
+                       g.score AS current_score, g.max_score AS current_max,
+                       g.grade_letter, g.status AS grade_status,
+                       e.name AS exam_name, s.name AS subject_name,
+                       st.first_name||' '||st.last_name AS student_name,
+                       st.admission_no, c.name AS class_name,
+                       u.full_name AS requested_by_name
+                FROM grade_change_requests gcr
+                JOIN grades g ON g.id=gcr.grade_id
+                JOIN exams e ON e.id=g.exam_id
+                JOIN subjects s ON s.id=g.subject_id
+                JOIN students st ON st.id=g.student_id
+                LEFT JOIN classes c ON c.id=st.class_id
+                LEFT JOIN users u ON u.id=gcr.requested_by
+                {where} ORDER BY gcr.id DESC""",
+        )
+        return [dict(r) for r in rows]
+
+    def approve_change_request(self, request_id: int) -> None:
+        """Apply the proposed change, update grade, mark request approved. Fully audited."""
+        self._require_permission("grades.change_request.review")
+        req = fetch_one("SELECT * FROM grade_change_requests WHERE id=?", (request_id,))
+        if not req:
+            raise ServiceError("Change request not found.")
+        if req["status"] != "pending":
+            raise ServiceError("This request has already been reviewed.")
+
+        grade = fetch_one("SELECT * FROM grades WHERE id=?", (req["grade_id"],))
+        if not grade:
+            raise ServiceError("Grade record not found.")
+
+        import datetime
+        new_score   = req["proposed_score"]
+        new_max     = req["proposed_max"] or 100
+        new_letter  = _letter_grade(float(new_score), float(new_max))
+
+        execute(
+            """UPDATE grades SET score=?, max_score=?, grade_letter=?, approved_by=?
+               WHERE id=?""",
+            (new_score, new_max, new_letter, self._session.user_id, req["grade_id"]),
+        )
+        execute(
+            """UPDATE grade_change_requests
+               SET status='approved', reviewed_by=?, reviewed_at=?
+               WHERE id=?""",
+            (self._session.user_id, datetime.datetime.now().isoformat(), request_id),
+        )
+        self._audit("grade_change_approved", "grade_change_requests", request_id,
+                    before={"score": grade["score"], "max_score": grade["max_score"]},
+                    after={"score": new_score, "max_score": new_max})
+
+    def reject_change_request(self, request_id: int, review_note: str) -> None:
+        self._require_permission("grades.change_request.review")
+        req = fetch_one("SELECT id, status FROM grade_change_requests WHERE id=?", (request_id,))
+        if not req:
+            raise ServiceError("Change request not found.")
+        if req["status"] != "pending":
+            raise ServiceError("This request has already been reviewed.")
+
+        import datetime
+        execute(
+            """UPDATE grade_change_requests
+               SET status='rejected', reviewed_by=?, reviewed_at=?, review_note=?
+               WHERE id=?""",
+            (self._session.user_id, datetime.datetime.now().isoformat(),
+             (review_note or "").strip(), request_id),
+        )
+        self._audit("grade_change_rejected", "grade_change_requests", request_id)
 
     # ── Approval (academic officer / head teacher) ────────────────────────────
 
@@ -249,7 +376,7 @@ class GradesService(BaseService):
                JOIN students st ON st.id=g.student_id
                JOIN classes c ON c.id=st.class_id
                JOIN subjects s ON s.id=g.subject_id
-               WHERE g.status='submitted'
+               WHERE g.status='submitted_locked'
                GROUP BY g.exam_id, c.id, g.subject_id
                ORDER BY e.id DESC, c.name, s.name""",
         )
@@ -269,7 +396,7 @@ class GradesService(BaseService):
             """UPDATE grades SET status='approved', approved_by=?
                WHERE exam_id=? AND subject_id=?
                  AND student_id IN (SELECT id FROM students WHERE class_id=?)
-                 AND status='submitted'""",
+                 AND status='submitted_locked'""",
             (self._session.user_id, exam_id, subject_id, class_id),
         )
         count = fetch_one(
@@ -291,7 +418,7 @@ class GradesService(BaseService):
             """UPDATE grades SET status='draft', approved_by=NULL
                WHERE exam_id=? AND subject_id=?
                  AND student_id IN (SELECT id FROM students WHERE class_id=?)
-                 AND status='submitted'""",
+                 AND status='submitted_locked'""",
             (exam_id, subject_id, class_id),
         )
         self._audit("grades_rejected", "grades",
@@ -379,11 +506,27 @@ class GradesService(BaseService):
             if "rank" not in r:
                 r["rank"] = "—"
 
+        # GPA calculation for secondary schools (A=4,B=3,C=2,D=1,F=0)
+        _gpa_map = {"A": 4.0, "B": 3.0, "C": 2.0, "D": 1.0, "F": 0.0}
+        subj_credits = {s["id"]: (s.get("credit_hours") or 1) for s in subjects}
+        for row in rows:
+            total_pts   = sum(
+                _gpa_map.get(row["grades"][sid].get("grade_letter", "F"), 0) * subj_credits.get(sid, 1)
+                for sid in row["grades"]
+                if row["grades"][sid].get("grade_letter")
+            )
+            total_creds = sum(subj_credits.get(sid, 1) for sid in row["grades"])
+            row["gpa"] = round(total_pts / total_creds, 2) if total_creds > 0 else None
+
+        from database.db import get_config
+        school_type = get_config("school_type", "primary")
+
         return {
-            "exam":     dict(exam),
-            "class":    dict(cls) if cls else {},
-            "subjects": subject_list,
-            "rows":     rows,
+            "exam":        dict(exam),
+            "class":       dict(cls) if cls else {},
+            "subjects":    subject_list,
+            "rows":        rows,
+            "school_type": school_type,
         }
 
 

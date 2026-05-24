@@ -111,13 +111,15 @@ class ResultsTab(QWidget):
         self.print_btn.setEnabled(True)
 
     def _fill_table(self, report: dict):
-        subjects  = report["subjects"]
-        rows      = report["rows"]
+        subjects    = report["subjects"]
+        rows        = report["rows"]
+        is_secondary = report.get("school_type") == "secondary"
 
-        # Columns: Rank | Student | Adm | [subject x N] | Total | Avg | Grade
-        fixed = ["Rank", "Student", "Adm No"]
+        # Columns: Rank | Student | Adm | [subject x N] | Total | Avg | Grade | (GPA if secondary)
+        fixed      = ["Rank", "Student", "Adm No"]
         subj_names = [s["name"] for s in subjects]
-        all_cols = fixed + subj_names + ["Total", "Avg %", "Grade"]
+        trail      = ["Total", "Avg %", "Grade"] + (["GPA"] if is_secondary else [])
+        all_cols   = fixed + subj_names + trail
 
         self.table.setColumnCount(len(all_cols))
         self.table.setHorizontalHeaderLabels(all_cols)
@@ -165,12 +167,23 @@ class ResultsTab(QWidget):
             self.table.setItem(r, 5 + n, cell(
                 grade, center, GRADE_COLOURS.get(grade)
             ))
+            if is_secondary:
+                gpa = row.get("gpa")
+                self.table.setItem(r, 6 + n, cell(
+                    f"{gpa:.2f}" if gpa is not None else "—", center,
+                    "#7C3AED" if gpa is not None else "#9CA3AF"
+                ))
 
         graded_rows = [r for r in rows if r["average"] is not None]
         avg_all = (sum(r["average"] for r in graded_rows) / len(graded_rows)) if graded_rows else 0
+        gpa_part = ""
+        if is_secondary and graded_rows:
+            gpa_vals = [r["gpa"] for r in graded_rows if r.get("gpa") is not None]
+            if gpa_vals:
+                gpa_part = f"  |  Class GPA: {sum(gpa_vals)/len(gpa_vals):.2f}"
         self.summary_bar.setText(
             f"Exam: {report['exam']['name']}  |  Class: {report['class'].get('name','—')}  |  "
-            f"Students: {len(rows)}  |  Class average: {avg_all:.1f}%"
+            f"Students: {len(rows)}  |  Class average: {avg_all:.1f}%{gpa_part}"
         )
         self.summary_bar.setVisible(True)
 
@@ -197,16 +210,19 @@ class ResultsTab(QWidget):
 
     @staticmethod
     def _build_html(report: dict) -> str:
-        exam  = report["exam"]
-        cls   = report["class"]
-        subjs = report["subjects"]
-        rows  = report["rows"]
+        exam         = report["exam"]
+        cls          = report["class"]
+        subjs        = report["subjects"]
+        rows         = report["rows"]
+        is_secondary = report.get("school_type") == "secondary"
 
         subj_heads = "".join(
             f"<th style='min-width:60px'>{s['name']}<br><small style='font-weight:normal'>"
             f"{s['code'] or ''}</small></th>"
             for s in subjs
         )
+        gpa_head = "<th>GPA</th>" if is_secondary else ""
+
         table_rows = ""
         for row in rows:
             scores = ""
@@ -225,6 +241,11 @@ class ResultsTab(QWidget):
             og  = row["overall_grade"]
             og_colour = {"A":"#059669","B":"#0891B2","C":"#D97706",
                          "D":"#EA580C","F":"#DC2626"}.get(og, "#374151")
+            gpa_cell = ""
+            if is_secondary:
+                gpa = row.get("gpa")
+                gpa_cell = (f"<td style='text-align:center;color:#7C3AED;font-weight:600'>"
+                            f"{gpa:.2f}</td>") if gpa is not None else "<td style='text-align:center;color:#9CA3AF'>—</td>"
             table_rows += (
                 f"<tr>"
                 f"<td style='text-align:center'>{row['rank']}</td>"
@@ -234,11 +255,17 @@ class ResultsTab(QWidget):
                 f"<td style='text-align:center'>{row['total']:.0f}/{row['max_total']:.0f}</td>"
                 f"<td style='text-align:center'>{avg}</td>"
                 f"<td style='text-align:center;color:{og_colour};font-weight:700'>{og}</td>"
+                f"{gpa_cell}"
                 f"</tr>"
             )
 
         graded = [r for r in rows if r["average"] is not None]
         class_avg = (sum(r["average"] for r in graded) / len(graded)) if graded else 0
+        gpa_note = ""
+        if is_secondary and graded:
+            gpa_vals = [r["gpa"] for r in graded if r.get("gpa") is not None]
+            if gpa_vals:
+                gpa_note = f" &nbsp;|&nbsp; Class GPA: {sum(gpa_vals)/len(gpa_vals):.2f}"
 
         return f"""
         <html><body style='font-family:Arial,sans-serif;font-size:11pt;color:#111827'>
@@ -247,7 +274,7 @@ class ResultsTab(QWidget):
             <p style='margin:4px 0;color:#374151'>Class: {cls.get("name","—")} &nbsp;|&nbsp;
             Term {exam.get("term","—")} &nbsp;|&nbsp; {exam.get("year_label","")}</p>
             <p style='margin:4px 0;color:#374151'>
-            Students: {len(rows)} &nbsp;|&nbsp; Class average: {class_avg:.1f}%</p>
+            Students: {len(rows)} &nbsp;|&nbsp; Class average: {class_avg:.1f}%{gpa_note}</p>
         </div>
         <table border='0' cellspacing='0' cellpadding='5' width='100%'
                style='border-collapse:collapse;font-size:10pt'>
@@ -255,7 +282,7 @@ class ResultsTab(QWidget):
             <tr style='border-bottom:2px solid #DDD6FE'>
                 <th>Rank</th><th style='text-align:left'>Student</th><th>Adm No</th>
                 {subj_heads}
-                <th>Total</th><th>Avg %</th><th>Grade</th>
+                <th>Total</th><th>Avg %</th><th>Grade</th>{gpa_head}
             </tr>
             </thead>
             <tbody>{table_rows}</tbody>
