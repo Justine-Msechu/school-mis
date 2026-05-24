@@ -1,7 +1,7 @@
 {
-  "version": "4.1.0",
+  "version": "4.1.1",
   "release_date": "2026-05-24",
-  "release_notes": "Teacher homework UI, leave request review, attendance class scoping, portal nav fix",
+  "release_notes": "Fix results view crash (sqlite3.Row .get() error)",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -97,9 +97,9 @@
     "services/transport_service.py": "c2f9d45b1320931259a44663aa85a9c4427fdedc96411c2b0f30828aec073b2a",
     "services/promotion_service.py": "ef9a50bc29f7153cac1c8fd091de01f0c1cb2a597729115770d58c0cec70aa73",
     "services/health_service.py": "eef9bfeb6047c4cb6b8b0995b674cdab01309798f7cff621473f28bc303cef17",
-    "services/grades_service.py": "b786f7064b757735faa9e539dee1c714685ce17924d64348bec07114ab49f27f",
     "services/portal_service.py": "e69ee44b27e20d6b79da08ebcd301c7ad2bd9b4eaa03c0524ce08510130c0e57",
     "services/homework_service.py": "8a847eebb192b119a752a787f8fb3d0f32062302a73238e8b0cf480de02744f4",
+    "services/grades_service.py": "07bd0417e44765de705a995c7ad1ad1a43e9312348cb440644ccde9758f89ca4",
     "core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "core/background.py": "01e046120cdbdce5b1e8f7a84b0bdf2abac2c3f7bce606583795b1bed9d284fe"
   }
