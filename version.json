@@ -1,7 +1,7 @@
 {
-  "version": "3.5.1",
+  "version": "3.5.2",
   "release_date": "2026-05-24",
-  "release_notes": "Fix crash on startup: remove invalid is_active filter on classes table",
+  "release_notes": "Role-aware dashboards: each role sees their own focused dashboard",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -20,9 +20,9 @@
     "modules/updater.py": "49eb55fb368f99d1bee531fd7c6ab59caa9273e1332e7432f3c5b6fa228403c0",
     "modules/setup_wizard.py": "4675a3480a28c108c68d39637cf2ed857b6eeae8ded6100461fdd815c4296056",
     "modules/students.py": "11de4fa3135abfb6dd8a0cde1d0aab6fcd194955083f4af43bd2493eb15a604e",
-    "modules/dashboard.py": "635ac3f4d804ae083d452c968aa4087e7463f33ff445d08c4ffd9f10430ab99a",
     "modules/attendance.py": "92a2992d30e467372bc2a419da91d523e7289d58676f3d7bb4e03f17c90f536e",
     "modules/settings.py": "b27b83b5033244940ecf14ea778d1bde0fd31ee0351731bb3607439b601ac96a",
+    "modules/dashboard.py": "bb0551d9ecad9373c4fd870d76bd359c6ceac2ca874ffc62c00db636e65aa6c5",
     "modules/finance/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/finance/main.py": "97bc3c0d836b7afde907ab54daf52711e6ac6e66970a2c0f35ecde4099c4e525",
     "modules/finance/payments.py": "00188d46274a36275a712fa8f360230d290447441159047400b0929db512ba05",
