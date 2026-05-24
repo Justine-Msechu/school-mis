@@ -65,7 +65,7 @@ class BackgroundWorker(QThread):
         super().__init__()
         self._queue      = Queue()
         self._dispatcher = _Dispatcher()
-        self.setDaemon(True)
+        self.setObjectName("BackgroundWorker")
 
     # ── Public API ────────────────────────────────────────────────────────────
 
