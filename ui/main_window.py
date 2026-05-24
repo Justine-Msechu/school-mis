@@ -25,8 +25,8 @@ def _load_nav_icon(n: int, rgb: tuple = (148, 163, 184), size: int = 20) -> QIco
     for y in range(img.height()):
         for x in range(img.width()):
             c = QColor(img.pixel(x, y))
-            lum = (c.red() + c.green() + c.blue()) // 3
-            img.setPixelColor(x, y, QColor(r, g, b, 255 - lum))
+            # Preserve original alpha — only recolor the visible (non-transparent) pixels
+            img.setPixelColor(x, y, QColor(r, g, b, c.alpha()))
     return QIcon(QPixmap.fromImage(img))
 
 # All module imports
