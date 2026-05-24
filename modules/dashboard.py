@@ -16,10 +16,20 @@ from auth.session import session
 _ICON_DIR = Path(__file__).parent.parent / "assets" / "Icons" / "PNG"
 
 
-# ── Icon loader (alpha-preserving recolor) ────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _tinted_icon(n: int, hex_color: str, size: int = 26) -> QPixmap:
-    """Load a PNG icon and recolor it to hex_color, preserving transparency."""
+def _hex_to_rgba(hex_color: str, alpha_0_255: int) -> str:
+    """Convert #RRGGBB + integer alpha (0–255) to Qt rgba() string."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha_0_255})"
+
+
+def _tinted_icon(n: int, hex_color: str, size: int = 20) -> QPixmap:
+    """
+    Load a white-background PNG icon and recolor it to hex_color.
+    White pixels become transparent; black lines become the target color.
+    """
     src = QPixmap(str(_ICON_DIR / f"Icon {n}.png"))
     if src.isNull():
         return QPixmap()
@@ -31,8 +41,9 @@ def _tinted_icon(n: int, hex_color: str, size: int = 26) -> QPixmap:
     r, g, b = c.red(), c.green(), c.blue()
     for y in range(img.height()):
         for x in range(img.width()):
-            alpha = QColor(img.pixel(x, y)).alpha()
-            img.setPixelColor(x, y, QColor(r, g, b, alpha))
+            px = QColor(img.pixel(x, y))
+            lum = (px.red() + px.green() + px.blue()) // 3
+            img.setPixelColor(x, y, QColor(r, g, b, 255 - lum))
     return QPixmap.fromImage(img)
 
 
@@ -43,75 +54,56 @@ def _n(row, key="n"):
 # ── Reusable widgets ──────────────────────────────────────────────────────────
 
 class StatCard(QFrame):
-    """A KPI card with icon badge, big number, and title."""
+    """Clean KPI card: large colored number + title + icon in top-right corner."""
 
     def __init__(self, title: str, value, color: str = "#2563EB",
                  icon_num: int = 0, subtitle: str = ""):
         super().__init__()
         self._color = color
-        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setFrameShape(QFrame.Shape.NoFrame)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(108)
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: white;
-                border-radius: 12px;
-                border: 1px solid #E5E7EB;
-            }}
-            QFrame:hover {{
-                border: 1px solid {color};
-            }}
-        """)
+        self.setMinimumHeight(100)
+        self.setStyleSheet(
+            "QFrame { background: white; border-radius: 10px; border: 1px solid #E5E7EB; }"
+        )
 
-        root = QHBoxLayout(self)
-        root.setContentsMargins(16, 14, 16, 14)
-        root.setSpacing(14)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 14, 18, 14)
+        lay.setSpacing(4)
 
-        # Colored icon badge on the left
+        # Top row: title left, icon right
+        top = QHBoxLayout(); top.setSpacing(8)
+        t_lbl = QLabel(title)
+        t_lbl.setStyleSheet("font-size:12px;color:#6B7280;font-weight:500;background:transparent;")
+        top.addWidget(t_lbl, 1)
+
         if icon_num:
-            badge = QFrame()
-            badge.setFixedSize(52, 52)
-            # light-tinted background derived from the color
-            badge.setStyleSheet(f"""
-                QFrame {{
-                    background: {color}18;
-                    border-radius: 12px;
-                    border: none;
-                }}
-            """)
-            badge_lay = QVBoxLayout(badge)
-            badge_lay.setContentsMargins(0, 0, 0, 0)
-            badge_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            ico_lbl = QLabel()
-            ico_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            pix = _tinted_icon(icon_num, color, 28)
-            ico_lbl.setPixmap(pix)
-            badge_lay.addWidget(ico_lbl)
-            root.addWidget(badge)
+            ico = QLabel()
+            ico.setFixedSize(32, 32)
+            ico.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ico.setStyleSheet(
+                f"background:{_hex_to_rgba(color, 28)};"  # ~11% opacity
+                f"border-radius:8px;"
+            )
+            pix = _tinted_icon(icon_num, color, 20)
+            ico.setPixmap(pix)
+            top.addWidget(ico)
 
-        # Text block
-        text = QVBoxLayout()
-        text.setSpacing(3)
+        lay.addLayout(top)
 
+        # Big value
         self.value_lbl = QLabel(str(value))
         self.value_lbl.setStyleSheet(
-            f"font-size:24px;font-weight:700;color:{color};letter-spacing:-0.5px;"
+            f"font-size:26px;font-weight:700;color:{color};background:transparent;"
         )
-        text.addWidget(self.value_lbl)
-
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-size:12px;color:#6B7280;font-weight:500;")
-        text.addWidget(title_lbl)
+        lay.addWidget(self.value_lbl)
 
         if subtitle:
             self.sub_lbl = QLabel(subtitle)
-            self.sub_lbl.setStyleSheet("font-size:11px;color:#9CA3AF;")
-            text.addWidget(self.sub_lbl)
+            self.sub_lbl.setStyleSheet("font-size:11px;color:#9CA3AF;background:transparent;")
+            lay.addWidget(self.sub_lbl)
         else:
             self.sub_lbl = None
-
-        root.addLayout(text)
-        root.addStretch()
 
     def set_value(self, v, subtitle: str = ""):
         self.value_lbl.setText(str(v))
@@ -119,93 +111,80 @@ class StatCard(QFrame):
             self.sub_lbl.setText(subtitle)
 
 
-class SectionHeader(QLabel):
+class SectionLabel(QLabel):
     def __init__(self, text: str):
         super().__init__(text)
         self.setStyleSheet(
-            "font-size:13px;font-weight:700;color:#374151;"
-            "padding-bottom:6px;margin-top:10px;"
+            "font-size:12px;font-weight:700;color:#6B7280;"
+            "letter-spacing:0.5px;margin-top:8px;background:transparent;"
         )
 
 
-class Divider(QFrame):
-    def __init__(self):
-        super().__init__()
-        self.setFrameShape(QFrame.Shape.HLine)
-        self.setStyleSheet("color:#F3F4F6;background:#F3F4F6;border:none;max-height:1px;")
-
-
 class RecentList(QFrame):
-    """A compact list of recent activity rows."""
+    """Compact list of recent activity rows."""
 
-    def __init__(self, rows: list[tuple], empty_text="Nothing to show yet."):
+    def __init__(self, rows: list[tuple], empty_text: str = "Nothing to show yet."):
         super().__init__()
-        self.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 12px;
-            }
-        """)
+        self.setStyleSheet(
+            "QFrame { background: white; border: 1px solid #E5E7EB; border-radius: 10px; }"
+        )
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setContentsMargins(16, 12, 16, 12)
         lay.setSpacing(0)
 
         if not rows:
             lbl = QLabel(empty_text)
-            lbl.setStyleSheet("font-size:12px;color:#9CA3AF;padding:4px 0;")
+            lbl.setStyleSheet("font-size:12px;color:#9CA3AF;background:transparent;")
             lay.addWidget(lbl)
             return
 
         for i, (left, right, colour) in enumerate(rows):
-            row_w = QWidget()
-            row_w.setStyleSheet("background:transparent;")
-            row_lay = QHBoxLayout(row_w)
-            row_lay.setContentsMargins(0, 7, 0, 7)
+            if i > 0:
+                sep = QFrame()
+                sep.setFixedHeight(1)
+                sep.setStyleSheet("background:#F3F4F6;border:none;")
+                lay.addWidget(sep)
+
+            row_lay = QHBoxLayout()
+            row_lay.setContentsMargins(0, 8, 0, 8)
             row_lay.setSpacing(10)
 
-            dot = QLabel()
-            dot.setFixedSize(8, 8)
-            dot.setStyleSheet(
-                f"background:{colour};border-radius:4px;min-width:8px;max-width:8px;"
-            )
+            dot = QLabel("●")
+            dot.setFixedWidth(12)
+            dot.setStyleSheet(f"color:{colour};font-size:8px;background:transparent;")
 
             l = QLabel(left)
-            l.setStyleSheet("font-size:12px;color:#374151;")
+            l.setStyleSheet("font-size:12px;color:#374151;background:transparent;")
             l.setWordWrap(True)
 
             r_lbl = QLabel(right)
             r_lbl.setStyleSheet(
-                f"font-size:11px;color:{colour};font-weight:600;"
-                "background:transparent;"
+                f"font-size:11px;color:{colour};font-weight:600;background:transparent;"
             )
             r_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            r_lbl.setMinimumWidth(80)
+            r_lbl.setMinimumWidth(90)
 
             row_lay.addWidget(dot)
             row_lay.addWidget(l, 1)
             row_lay.addWidget(r_lbl)
-            lay.addWidget(row_w)
-
-            if i < len(rows) - 1:
-                sep = QFrame()
-                sep.setFrameShape(QFrame.Shape.HLine)
-                sep.setStyleSheet(
-                    "color:#F3F4F6;background:#F3F4F6;"
-                    "border:none;max-height:1px;margin:0;"
-                )
-                lay.addWidget(sep)
+            lay.addLayout(row_lay)
 
 
-def _card_grid(cards: list, cols: int = 3) -> QGridLayout:
-    grid = QGridLayout()
-    grid.setSpacing(14)
-    for i, card in enumerate(cards):
-        grid.addWidget(card, i // cols, i % cols)
-    return grid
+def _grid(cards: list, cols: int = 3) -> QGridLayout:
+    g = QGridLayout(); g.setSpacing(12)
+    for i, c in enumerate(cards):
+        g.addWidget(c, i // cols, i % cols)
+    return g
 
 
-# ── Role-specific dashboard panels ───────────────────────────────────────────
+def _section(lay: QVBoxLayout, title: str, cards: list, cols: int = 3):
+    lay.addWidget(SectionLabel(title.upper()))
+    lay.addLayout(_grid(cards, cols))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Role-specific dashboard panels
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class _FullDashboard(QWidget):
     """Admin / Head Teacher — complete school overview."""
@@ -214,41 +193,58 @@ class _FullDashboard(QWidget):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        lay.setContentsMargins(0, 4, 0, 16)
+        lay.setSpacing(8)
 
-        lay.addWidget(SectionHeader("School Overview"))
-        self.c_students = StatCard("Active Students",       "—", "#2563EB", 10)
-        self.c_teachers = StatCard("Teachers & Staff",      "—", "#059669", 41)
-        self.c_classes  = StatCard("Classes",               "—", "#7C3AED", 38)
-        lay.addLayout(_card_grid([self.c_students, self.c_teachers, self.c_classes]))
+        _section(lay, "Students & Staff", [
+            StatCard("Active Students",   "—", "#2563EB", 10),
+            StatCard("Teachers & Staff",  "—", "#059669", 41),
+            StatCard("Classes",           "—", "#7C3AED", 38),
+        ])
+        self.c_students, self.c_teachers, self.c_classes = self._last3(lay)
 
-        lay.addWidget(SectionHeader("Attendance Today"))
-        self.c_present = StatCard("Present",           "—", "#059669",  2)
-        self.c_absent  = StatCard("Absent",            "—", "#DC2626",  2)
-        self.c_late    = StatCard("Late / Excused",    "—", "#D97706",  2)
-        lay.addLayout(_card_grid([self.c_present, self.c_absent, self.c_late]))
+        _section(lay, "Attendance Today", [
+            StatCard("Present",        "—", "#059669",  2),
+            StatCard("Absent",         "—", "#DC2626",  2),
+            StatCard("Late / Excused", "—", "#D97706",  2),
+        ])
+        self.c_present, self.c_absent, self.c_late = self._last3(lay)
 
-        lay.addWidget(SectionHeader("Finance, Welfare & Inventory"))
-        self.c_fees     = StatCard("Fees Collected (Month)", "—", "#059669",  3)
-        self.c_unpaid   = StatCard("Unpaid Bills",           "—", "#DC2626",  3)
-        self.c_welfare  = StatCard("Welfare Students",       "—", "#9333EA",  5)
-        self.c_stock    = StatCard("Low Stock Items",        "—", "#B45309",  6)
-        self.c_expenses = StatCard("Expenses (Month)",       "—", "#EA580C",  7)
-        self.c_grades   = StatCard("Grades Awaiting Approval","—","#0891B2",  4)
-        lay.addLayout(_card_grid([
-            self.c_fees, self.c_unpaid, self.c_welfare,
-            self.c_stock, self.c_expenses, self.c_grades,
-        ]))
+        _section(lay, "Finance & Operations", [
+            StatCard("Fees Collected (Month)", "—", "#059669",  3),
+            StatCard("Unpaid Bills",           "—", "#DC2626",  3),
+            StatCard("Welfare Students",       "—", "#9333EA",  5),
+            StatCard("Low Stock Items",        "—", "#B45309",  6),
+            StatCard("Expenses (Month)",       "—", "#EA580C",  7),
+            StatCard("Grades Pending Approval","—", "#0891B2",  4),
+        ], cols=3)
+        cards = self._last_n(lay, 6)
+        self.c_fees, self.c_unpaid, self.c_welfare, \
+            self.c_stock, self.c_expenses, self.c_grades = cards
 
-        lay.addWidget(SectionHeader("Recent Payments"))
-        self.recent_frame = RecentList([])
-        lay.addWidget(self.recent_frame)
+        lay.addWidget(SectionLabel("RECENT PAYMENTS"))
+        self.recent = RecentList([])
+        lay.addWidget(self.recent)
         lay.addStretch()
+
+    @staticmethod
+    def _last3(lay):
+        grid = lay.itemAt(lay.count() - 1).layout()
+        return grid.itemAtPosition(0,0).widget(), \
+               grid.itemAtPosition(0,1).widget(), \
+               grid.itemAtPosition(0,2).widget()
+
+    @staticmethod
+    def _last_n(lay, n):
+        grid = lay.itemAt(lay.count() - 1).layout()
+        result = []
+        cols = 3
+        for i in range(n):
+            result.append(grid.itemAtPosition(i // cols, i % cols).widget())
+        return result
 
     def refresh(self):
         today = date.today().isoformat()
-
         self.c_students.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM students WHERE is_active=1")))
         self.c_teachers.set_value(_n(fetch_one(
@@ -262,11 +258,9 @@ class _FullDashboard(QWidget):
         self.c_late.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM attendance "
             "WHERE date=? AND status IN ('Late','Excused')", (today,))))
-
         r = fetch_one("SELECT COALESCE(SUM(amount_paid),0) AS t FROM fee_payments "
                       "WHERE strftime('%Y-%m',payment_date)=strftime('%Y-%m','now')")
         self.c_fees.set_value(f"TZS {_n(r,'t'):,.0f}")
-
         self.c_unpaid.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM student_bills WHERE status IN ('unpaid','partial')")))
         self.c_welfare.set_value(_n(fetch_one(
@@ -274,7 +268,6 @@ class _FullDashboard(QWidget):
         self.c_stock.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM inventory_items "
             "WHERE is_active=1 AND stock_qty<=reorder_qty")))
-
         r = fetch_one("SELECT COALESCE(SUM(amount),0) AS t FROM expenses "
                       "WHERE strftime('%Y-%m',expense_date)=strftime('%Y-%m','now')")
         self.c_expenses.set_value(f"TZS {_n(r,'t'):,.0f}")
@@ -288,42 +281,42 @@ class _FullDashboard(QWidget):
             ORDER BY fp.id DESC LIMIT 7
         """)
         rows = [(f"{p['student']}  ·  {p['payment_method']}  ·  {p['payment_date']}",
-                 f"TZS {p['amount_paid']:,.0f}", "#059669")
-                for p in payments]
-        self._replace(self.recent_frame, RecentList(rows, "No payments recorded yet."))
+                 f"TZS {p['amount_paid']:,.0f}", "#059669") for p in payments]
+        self._swap_list("recent", rows, "No payments recorded yet.")
 
-    def _replace(self, old, new):
+    def _swap_list(self, attr: str, rows: list, empty: str):
         lay = self.layout()
-        idx = lay.indexOf(old)
-        old.setParent(None)
-        lay.insertWidget(idx, new)
-        self.recent_frame = new
+        old = getattr(self, attr)
+        new = RecentList(rows, empty)
+        lay.replaceWidget(old, new)
+        old.deleteLater()
+        setattr(self, attr, new)
 
 
 class _AccountantDashboard(QWidget):
-    """Accountant — finance view."""
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(10)
+        lay.setContentsMargins(0, 4, 0, 16); lay.setSpacing(8)
 
-        lay.addWidget(SectionHeader("Collections"))
-        self.c_today   = StatCard("Collected Today",      "—", "#059669", 3)
-        self.c_month   = StatCard("Collected This Month", "—", "#2563EB", 3)
-        self.c_expense = StatCard("Expenses This Month",  "—", "#EA580C", 7)
-        lay.addLayout(_card_grid([self.c_today, self.c_month, self.c_expense]))
+        _section(lay, "Collections", [
+            StatCard("Collected Today",      "—", "#059669", 3),
+            StatCard("Collected This Month", "—", "#2563EB", 3),
+            StatCard("Expenses This Month",  "—", "#EA580C", 7),
+        ])
+        self.c_today, self.c_month, self.c_expense = _FullDashboard._last3(lay)
 
-        lay.addWidget(SectionHeader("Outstanding Bills"))
-        self.c_unpaid  = StatCard("Unpaid Bills",   "—", "#DC2626", 3)
-        self.c_partial = StatCard("Partial Bills",  "—", "#D97706", 3)
-        self.c_waived  = StatCard("Waived Bills",   "—", "#9333EA", 5)
-        lay.addLayout(_card_grid([self.c_unpaid, self.c_partial, self.c_waived]))
+        _section(lay, "Bill Status", [
+            StatCard("Unpaid",  "—", "#DC2626", 3),
+            StatCard("Partial", "—", "#D97706", 3),
+            StatCard("Waived",  "—", "#9333EA", 5),
+        ])
+        self.c_unpaid, self.c_partial, self.c_waived = _FullDashboard._last3(lay)
 
-        lay.addWidget(SectionHeader("Recent Payments"))
-        self.recent_frame = RecentList([])
-        lay.addWidget(self.recent_frame)
+        lay.addWidget(SectionLabel("RECENT PAYMENTS"))
+        self.recent = RecentList([])
+        lay.addWidget(self.recent)
         lay.addStretch()
 
     def refresh(self):
@@ -343,47 +336,43 @@ class _AccountantDashboard(QWidget):
             "SELECT COUNT(*) AS n FROM student_bills WHERE status='partial'")))
         self.c_waived.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM student_bills WHERE status='waived'")))
-
         rows_db = fetch_all("""
             SELECT s.first_name||' '||s.last_name AS student,
-                   fp.amount_paid, fp.payment_method, fp.receipt_no, fp.payment_date
+                   fp.amount_paid, fp.payment_method, fp.payment_date
             FROM fee_payments fp JOIN students s ON s.id=fp.student_id
             ORDER BY fp.id DESC LIMIT 8
         """)
         rows = [(f"{p['student']}  ·  {p['payment_method']}  ·  {p['payment_date']}",
                  f"TZS {p['amount_paid']:,.0f}", "#059669") for p in rows_db]
-        new = RecentList(rows, "No payments recorded yet.")
-        lay = self.layout()
-        idx = lay.indexOf(self.recent_frame)
-        self.recent_frame.setParent(None)
-        lay.insertWidget(idx, new)
-        self.recent_frame = new
+        old = self.recent
+        self.recent = RecentList(rows, "No payments yet.")
+        self.layout().replaceWidget(old, self.recent); old.deleteLater()
 
 
 class _AcademicDashboard(QWidget):
-    """Academic Officer — attendance, grades, exams."""
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(10)
+        lay.setContentsMargins(0, 4, 0, 16); lay.setSpacing(8)
 
-        lay.addWidget(SectionHeader("School — Academic Overview"))
-        self.c_students = StatCard("Active Students",          "—", "#2563EB", 10)
-        self.c_classes  = StatCard("Classes",                  "—", "#7C3AED", 38)
-        self.c_exams    = StatCard("Open Exams",               "—", "#0891B2",  4)
-        lay.addLayout(_card_grid([self.c_students, self.c_classes, self.c_exams]))
+        _section(lay, "School Overview", [
+            StatCard("Active Students",          "—", "#2563EB", 10),
+            StatCard("Classes",                  "—", "#7C3AED", 38),
+            StatCard("Open Exams",               "—", "#0891B2",  4),
+        ])
+        self.c_students, self.c_classes, self.c_exams = _FullDashboard._last3(lay)
 
-        lay.addWidget(SectionHeader("Attendance Today"))
-        self.c_present = StatCard("Present", "—", "#059669", 2)
-        self.c_absent  = StatCard("Absent",  "—", "#DC2626", 2)
-        self.c_pending = StatCard("Grade Batches Pending Approval", "—", "#D97706", 4)
-        lay.addLayout(_card_grid([self.c_present, self.c_absent, self.c_pending]))
+        _section(lay, "Attendance Today", [
+            StatCard("Present",                      "—", "#059669",  2),
+            StatCard("Absent",                       "—", "#DC2626",  2),
+            StatCard("Grade Batches Pending Approval","—", "#D97706",  4),
+        ])
+        self.c_present, self.c_absent, self.c_pending = _FullDashboard._last3(lay)
 
-        lay.addWidget(SectionHeader("Grade Batches Awaiting Approval"))
-        self.pending_frame = RecentList([])
-        lay.addWidget(self.pending_frame)
+        lay.addWidget(SectionLabel("GRADE BATCHES AWAITING APPROVAL"))
+        self.pending_list = RecentList([])
+        lay.addWidget(self.pending_list)
         lay.addStretch()
 
     def refresh(self):
@@ -397,13 +386,11 @@ class _AcademicDashboard(QWidget):
             "SELECT COUNT(*) AS n FROM attendance WHERE date=? AND status='Present'", (today,))))
         self.c_absent.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM attendance WHERE date=? AND status='Absent'", (today,))))
-
         pc = fetch_one("""
             SELECT COUNT(DISTINCT (g.exam_id||'-'||st.class_id||'-'||g.subject_id)) AS n
             FROM grades g JOIN students st ON st.id=g.student_id WHERE g.status='submitted'
         """)
         self.c_pending.set_value(_n(pc))
-
         batches = fetch_all("""
             SELECT e.name AS exam_name, c.name AS class_name, s.name AS subj_name,
                    COUNT(g.id) AS cnt
@@ -416,40 +403,35 @@ class _AcademicDashboard(QWidget):
             GROUP BY g.exam_id, c.id, g.subject_id
             ORDER BY e.id DESC LIMIT 8
         """)
-        rows = [(f"{b['exam_name']}  ·  {b['class_name']}  /  {b['subj_name']}",
+        rows = [(f"{b['exam_name']}  ·  {b['class_name']} / {b['subj_name']}",
                  f"{b['cnt']} grades", "#D97706") for b in batches]
-        new = RecentList(rows, "No pending grade submissions.")
-        lay = self.layout()
-        idx = lay.indexOf(self.pending_frame)
-        self.pending_frame.setParent(None)
-        lay.insertWidget(idx, new)
-        self.pending_frame = new
+        old = self.pending_list
+        self.pending_list = RecentList(rows, "No pending grade submissions.")
+        self.layout().replaceWidget(old, self.pending_list); old.deleteLater()
 
 
 class _WelfareDashboard(QWidget):
-    """Welfare Officer — welfare records and exemptions."""
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(10)
+        lay.setContentsMargins(0, 4, 0, 16); lay.setSpacing(8)
 
-        lay.addWidget(SectionHeader("Welfare Records"))
-        self.c_total    = StatCard("Total Welfare Records", "—", "#9333EA", 5)
-        self.c_verified = StatCard("Verified",              "—", "#059669", 5)
-        self.c_pending  = StatCard("Awaiting Verification", "—", "#D97706", 5)
-        lay.addLayout(_card_grid([self.c_total, self.c_verified, self.c_pending]))
+        _section(lay, "Welfare Records", [
+            StatCard("Total Records",       "—", "#9333EA", 5),
+            StatCard("Verified",            "—", "#059669", 5),
+            StatCard("Awaiting Verification","—","#D97706", 5),
+            StatCard("Orphan Students",     "—", "#7C3AED", 10),
+            StatCard("Half-Orphan",         "—", "#6B7280", 10),
+            StatCard("Full Fee Exemptions", "—", "#0891B2",  5),
+        ])
+        cards = _FullDashboard._last_n(lay, 6)
+        self.c_total, self.c_verified, self.c_pending, \
+            self.c_orphan, self.c_half, self.c_exempt = cards
 
-        lay.addWidget(SectionHeader("Categories"))
-        self.c_orphan = StatCard("Orphan Students",       "—", "#7C3AED", 10)
-        self.c_half   = StatCard("Half-Orphan Students",  "—", "#6B7280", 10)
-        self.c_exempt = StatCard("Full Fee Exemptions",   "—", "#0891B2",  5)
-        lay.addLayout(_card_grid([self.c_orphan, self.c_half, self.c_exempt]))
-
-        lay.addWidget(SectionHeader("Recent Welfare Registrations"))
-        self.recent_frame = RecentList([])
-        lay.addWidget(self.recent_frame)
+        lay.addWidget(SectionLabel("RECENT REGISTRATIONS"))
+        self.recent = RecentList([])
+        lay.addWidget(self.recent)
         lay.addStretch()
 
     def refresh(self):
@@ -464,56 +446,48 @@ class _WelfareDashboard(QWidget):
             "SELECT COUNT(*) AS n FROM welfare_records WHERE category='half_orphan'")))
         self.c_exempt.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM welfare_records WHERE support_type='full_fees'")))
-
         recent = fetch_all("""
-            SELECT s.first_name||' '||s.last_name AS student,
-                   wr.category, wr.support_type, wr.verified
+            SELECT s.first_name||' '||s.last_name AS student, wr.category, wr.verified
             FROM welfare_records wr JOIN students s ON s.id=wr.student_id
             ORDER BY wr.id DESC LIMIT 8
         """)
         rows = [(f"{r['student']}  ·  {r['category'].replace('_',' ').title()}",
                  "Verified" if r["verified"] else "Pending",
                  "#059669" if r["verified"] else "#D97706") for r in recent]
-        new = RecentList(rows, "No welfare records yet.")
-        lay = self.layout()
-        idx = lay.indexOf(self.recent_frame)
-        self.recent_frame.setParent(None)
-        lay.insertWidget(idx, new)
-        self.recent_frame = new
+        old = self.recent
+        self.recent = RecentList(rows, "No welfare records yet.")
+        self.layout().replaceWidget(old, self.recent); old.deleteLater()
 
 
 class _ClassTeacherDashboard(QWidget):
-    """Class Teacher — their class only."""
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(10)
+        lay.setContentsMargins(0, 4, 0, 16); lay.setSpacing(8)
 
-        self.class_banner = QLabel("")
+        self.class_banner = QLabel("Loading class info…")
         self.class_banner.setStyleSheet(
-            "background:#EFF6FF;color:#1D4ED8;border-radius:10px;"
-            "padding:12px 16px;font-size:13px;font-weight:600;"
+            "background:#EFF6FF;color:#1D4ED8;border-radius:8px;"
+            "padding:10px 14px;font-size:13px;font-weight:600;"
         )
-        self.class_banner.setWordWrap(True)
         lay.addWidget(self.class_banner)
 
-        lay.addWidget(SectionHeader("My Class — Today"))
-        self.c_students = StatCard("Students",           "—", "#2563EB", 10)
-        self.c_present  = StatCard("Present Today",      "—", "#059669",  2)
-        self.c_absent   = StatCard("Absent Today",       "—", "#DC2626",  2)
-        self.c_late     = StatCard("Late / Excused",     "—", "#D97706",  2)
-        self.c_drafts   = StatCard("My Grade Drafts",    "—", "#0891B2",  4)
-        self.c_submit   = StatCard("Grades Submitted",   "—", "#7C3AED",  4)
-        lay.addLayout(_card_grid([
-            self.c_students, self.c_present, self.c_absent,
-            self.c_late, self.c_drafts, self.c_submit,
-        ]))
+        _section(lay, "My Class — Today", [
+            StatCard("Students",         "—", "#2563EB", 10),
+            StatCard("Present Today",    "—", "#059669",  2),
+            StatCard("Absent Today",     "—", "#DC2626",  2),
+            StatCard("Late / Excused",   "—", "#D97706",  2),
+            StatCard("Grade Drafts",     "—", "#0891B2",  4),
+            StatCard("Grades Submitted", "—", "#7C3AED",  4),
+        ])
+        cards = _FullDashboard._last_n(lay, 6)
+        self.c_students, self.c_present, self.c_absent, \
+            self.c_late, self.c_drafts, self.c_submit = cards
 
-        lay.addWidget(SectionHeader("Absent Students Today"))
-        self.absent_frame = RecentList([])
-        lay.addWidget(self.absent_frame)
+        lay.addWidget(SectionLabel("ABSENT STUDENTS TODAY"))
+        self.absent_list = RecentList([])
+        lay.addWidget(self.absent_list)
         lay.addStretch()
 
     def _get_class(self):
@@ -527,14 +501,10 @@ class _ClassTeacherDashboard(QWidget):
     def refresh(self):
         today = date.today().isoformat()
         class_id, class_name = self._get_class()
-
         if not class_id:
-            self.class_banner.setText(
-                "No class assigned yet — contact admin to assign you a class."
-            )
+            self.class_banner.setText("No class assigned — contact admin.")
             return
-        self.class_banner.setText(f"Showing data for: {class_name}")
-
+        self.class_banner.setText(f"Showing data for:  {class_name}")
         self.c_students.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM students WHERE class_id=? AND is_active=1", (class_id,))))
         self.c_present.set_value(_n(fetch_one(
@@ -552,47 +522,40 @@ class _ClassTeacherDashboard(QWidget):
         self.c_submit.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM grades g JOIN students s ON s.id=g.student_id "
             "WHERE s.class_id=? AND g.status='submitted'", (class_id,))))
-
         absent = fetch_all("""
             SELECT s.first_name||' '||s.last_name AS student, a.notes
             FROM attendance a JOIN students s ON s.id=a.student_id
-            WHERE s.class_id=? AND a.date=? AND a.status='Absent'
-            ORDER BY s.last_name
+            WHERE s.class_id=? AND a.date=? AND a.status='Absent' ORDER BY s.last_name
         """, (class_id, today))
-        rows = [(r["student"], r["notes"] or "No reason given", "#DC2626") for r in absent]
-        new = RecentList(rows, "No absences recorded today.")
-        lay = self.layout()
-        idx = lay.indexOf(self.absent_frame)
-        self.absent_frame.setParent(None)
-        lay.insertWidget(idx, new)
-        self.absent_frame = new
+        rows = [(r["student"], r["notes"] or "No reason", "#DC2626") for r in absent]
+        old = self.absent_list
+        self.absent_list = RecentList(rows, "No absences recorded today.")
+        self.layout().replaceWidget(old, self.absent_list); old.deleteLater()
 
 
 class _SubjectTeacherDashboard(QWidget):
-    """Subject Teacher — grade entry status."""
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(10)
+        lay.setContentsMargins(0, 4, 0, 16); lay.setSpacing(8)
 
-        lay.addWidget(SectionHeader("My Grade Entry Status"))
-        self.c_drafts    = StatCard("My Draft Grades",      "—", "#D97706", 4)
-        self.c_submitted = StatCard("Submitted for Review", "—", "#0891B2", 4)
-        self.c_approved  = StatCard("Approved Grades",      "—", "#059669", 4)
-        self.c_exams     = StatCard("Open Exams",           "—", "#7C3AED", 4)
-        lay.addLayout(_card_grid([
-            self.c_drafts, self.c_submitted, self.c_approved, self.c_exams,
-        ], cols=4))
+        _section(lay, "My Grade Status", [
+            StatCard("Draft Grades",        "—", "#D97706", 4),
+            StatCard("Submitted for Review","—", "#0891B2", 4),
+            StatCard("Approved Grades",     "—", "#059669", 4),
+            StatCard("Open Exams",          "—", "#7C3AED", 4),
+        ], cols=4)
+        cards = _FullDashboard._last_n(lay, 4)
+        self.c_drafts, self.c_submitted, self.c_approved, self.c_exams = cards
 
-        lay.addWidget(SectionHeader("Open Exams"))
-        self.exam_frame = RecentList([])
-        lay.addWidget(self.exam_frame)
+        lay.addWidget(SectionLabel("OPEN EXAMS"))
+        self.exam_list = RecentList([])
+        lay.addWidget(self.exam_list)
 
-        lay.addWidget(SectionHeader("My Pending Submissions"))
-        self.draft_frame = RecentList([])
-        lay.addWidget(self.draft_frame)
+        lay.addWidget(SectionLabel("MY PENDING SUBMISSIONS"))
+        self.draft_list = RecentList([])
+        lay.addWidget(self.draft_list)
         lay.addStretch()
 
     def refresh(self):
@@ -615,20 +578,17 @@ class _SubjectTeacherDashboard(QWidget):
             "SELECT COUNT(*) AS n FROM exams WHERE status='open'")))
 
         exams = fetch_all("""
-            SELECT e.name, e.term, ay.label AS year
-            FROM exams e LEFT JOIN academic_years ay ON ay.id=e.academic_year_id
+            SELECT e.name, e.term, ay.label AS year FROM exams e
+            LEFT JOIN academic_years ay ON ay.id=e.academic_year_id
             WHERE e.status='open' ORDER BY e.id DESC LIMIT 5
         """)
         erows = [(f"{e['name']}  ·  Term {e['term']}", e["year"] or "—", "#7C3AED")
                  for e in exams]
+        old = self.exam_list
+        self.exam_list = RecentList(erows, "No open exams.")
+        self.layout().replaceWidget(old, self.exam_list); old.deleteLater()
 
-        lay = self.layout()
-        new_e = RecentList(erows, "No open exams.")
-        idx_e = lay.indexOf(self.exam_frame)
-        self.exam_frame.setParent(None)
-        lay.insertWidget(idx_e, new_e)
-        self.exam_frame = new_e
-
+        drows = []
         if tid:
             drafts = fetch_all("""
                 SELECT e.name AS exam_name, s.name AS subj_name,
@@ -638,8 +598,7 @@ class _SubjectTeacherDashboard(QWidget):
                 JOIN subjects s ON s.id=g.subject_id
                 JOIN students st ON st.id=g.student_id
                 JOIN classes c ON c.id=st.class_id
-                JOIN teacher_subjects ts
-                  ON ts.subject_id=g.subject_id AND ts.teacher_id=?
+                JOIN teacher_subjects ts ON ts.subject_id=g.subject_id AND ts.teacher_id=?
                 WHERE g.status IN ('draft','submitted')
                 GROUP BY g.exam_id, g.subject_id, st.class_id, g.status
                 ORDER BY g.status, e.id DESC LIMIT 8
@@ -648,45 +607,39 @@ class _SubjectTeacherDashboard(QWidget):
             drows = [(f"{d['exam_name']}  ·  {d['subj_name']} ({d['class_name']})",
                       d["status"].title(), colour_map.get(d["status"], "#374151"))
                      for d in drafts]
-        else:
-            drows = []
-
-        new_d = RecentList(drows, "No pending grade work.")
-        idx_d = lay.indexOf(self.draft_frame)
-        self.draft_frame.setParent(None)
-        lay.insertWidget(idx_d, new_d)
-        self.draft_frame = new_d
+        old = self.draft_list
+        self.draft_list = RecentList(drows, "No pending grade work.")
+        self.layout().replaceWidget(old, self.draft_list); old.deleteLater()
 
 
 class _StorekeeperDashboard(QWidget):
-    """Storekeeper — inventory levels and issuances."""
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(10)
+        lay.setContentsMargins(0, 4, 0, 16); lay.setSpacing(8)
 
-        lay.addWidget(SectionHeader("Inventory Overview"))
-        self.c_items    = StatCard("Active Items",       "—", "#2563EB", 6)
-        self.c_lowstock = StatCard("Low Stock Alerts",   "—", "#DC2626", 6)
-        self.c_today    = StatCard("Units Issued Today", "—", "#D97706", 6)
-        lay.addLayout(_card_grid([self.c_items, self.c_lowstock, self.c_today]))
+        _section(lay, "Inventory Overview", [
+            StatCard("Active Items",       "—", "#2563EB", 6),
+            StatCard("Low Stock Alerts",   "—", "#DC2626", 6),
+            StatCard("Units Issued Today", "—", "#D97706", 6),
+        ])
+        self.c_items, self.c_low, self.c_today = _FullDashboard._last3(lay)
 
-        lay.addWidget(SectionHeader("Low Stock Items"))
-        self.low_frame = RecentList([])
-        lay.addWidget(self.low_frame)
+        lay.addWidget(SectionLabel("LOW STOCK ITEMS"))
+        self.low_list = RecentList([])
+        lay.addWidget(self.low_list)
 
-        lay.addWidget(SectionHeader("Issued Today"))
-        self.issue_frame = RecentList([])
-        lay.addWidget(self.issue_frame)
+        lay.addWidget(SectionLabel("ISSUED TODAY"))
+        self.issue_list = RecentList([])
+        lay.addWidget(self.issue_list)
         lay.addStretch()
 
     def refresh(self):
         today = date.today().isoformat()
         self.c_items.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1")))
-        self.c_lowstock.set_value(_n(fetch_one(
+        self.c_low.set_value(_n(fetch_one(
             "SELECT COUNT(*) AS n FROM inventory_items "
             "WHERE is_active=1 AND stock_qty<=reorder_qty")))
         r = fetch_one("SELECT COALESCE(SUM(qty),0) AS n FROM inventory_transactions "
@@ -694,13 +647,11 @@ class _StorekeeperDashboard(QWidget):
         self.c_today.set_value(_n(r))
 
         low = fetch_all("""
-            SELECT name, stock_qty, reorder_qty, unit FROM inventory_items
+            SELECT name, stock_qty, unit FROM inventory_items
             WHERE is_active=1 AND stock_qty<=reorder_qty ORDER BY stock_qty LIMIT 8
         """)
-        lrows = [(r["name"],
-                  f"{r['stock_qty']} {r['unit']} remaining",
-                  "#DC2626" if r["stock_qty"] == 0 else "#D97706")
-                 for r in low]
+        lrows = [(r["name"], f"{r['stock_qty']} {r['unit']} left",
+                  "#DC2626" if r["stock_qty"] == 0 else "#D97706") for r in low]
 
         issues = fetch_all("""
             SELECT s.first_name||' '||s.last_name AS student,
@@ -711,21 +662,22 @@ class _StorekeeperDashboard(QWidget):
             WHERE it.type='issued' AND date(it.created_at)=?
             ORDER BY it.id DESC LIMIT 8
         """, (today,))
-        irows = [(f"{r['student'] or '—'}  ·  {r['item']}",
-                  f"×{r['qty']}", "#059669") for r in issues]
+        irows = [(f"{r['student'] or '—'}  ·  {r['item']}", f"×{r['qty']}", "#059669")
+                 for r in issues]
 
-        lay = self.layout()
-        for old, new, attr in [
-            (self.low_frame,   RecentList(lrows, "All items adequately stocked."), "low_frame"),
-            (self.issue_frame, RecentList(irows, "No issuances today."),           "issue_frame"),
+        for old_attr, new_widget, attr in [
+            ("low_list",   RecentList(lrows, "All items adequately stocked."), "low_list"),
+            ("issue_list", RecentList(irows, "No issuances today."),           "issue_list"),
         ]:
-            idx = lay.indexOf(old)
-            old.setParent(None)
-            lay.insertWidget(idx, new)
-            setattr(self, attr, new)
+            old = getattr(self, old_attr)
+            self.layout().replaceWidget(old, new_widget)
+            old.deleteLater()
+            setattr(self, attr, new_widget)
 
 
-# ── Main dashboard widget (role router) ───────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Main dashboard widget
+# ═══════════════════════════════════════════════════════════════════════════════
 
 _ROLE_MAP = {
     "admin":           _FullDashboard,
@@ -743,48 +695,48 @@ class DashboardWidget(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background:#F8FAFC;")
+        self.setStyleSheet("background:#F1F5F9;")
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(28, 24, 28, 24)
-        outer.setSpacing(16)
+        outer.setContentsMargins(24, 20, 24, 20)
+        outer.setSpacing(14)
 
-        # ── Greeting strip ────────────────────────────────────────────────────
-        school  = get_config("school_name", "School MIS")
-        today   = date.today().strftime("%A, %d %B %Y")
-        name    = (session.full_name or session.username or "User").split()[0]
+        # ── Greeting bar ──────────────────────────────────────────────────────
+        school     = get_config("school_name", "School MIS")
+        today_str  = date.today().strftime("%A, %d %B %Y")
+        name       = (session.full_name or session.username or "User").split()[0]
         role_label = (session.user or {}).get(
             "role_label", session.role.replace("_", " ").title()
         )
 
-        greet_frame = QFrame()
-        greet_frame.setStyleSheet(
-            "QFrame{background:white;border-radius:12px;border:1px solid #E5E7EB;}"
+        bar = QFrame()
+        bar.setStyleSheet(
+            "QFrame { background: #0F172A; border-radius: 10px; }"
         )
-        gf = QHBoxLayout(greet_frame)
-        gf.setContentsMargins(20, 14, 20, 14)
+        bar_lay = QHBoxLayout(bar)
+        bar_lay.setContentsMargins(20, 14, 20, 14)
 
-        left = QVBoxLayout(); left.setSpacing(2)
-        hi = QLabel(f"Welcome, {name}")
-        hi.setStyleSheet("font-size:20px;font-weight:700;color:#111827;")
-        sub = QLabel(f"{role_label}  ·  {today}")
-        sub.setStyleSheet("font-size:12px;color:#6B7280;")
-        left.addWidget(hi); left.addWidget(sub)
-        gf.addLayout(left); gf.addStretch()
+        left_v = QVBoxLayout(); left_v.setSpacing(2)
+        hi = QLabel(f"Welcome back, {name}")
+        hi.setStyleSheet("font-size:18px;font-weight:700;color:#F8FAFC;background:transparent;")
+        sub = QLabel(f"{role_label}  ·  {today_str}")
+        sub.setStyleSheet("font-size:12px;color:#94A3B8;background:transparent;")
+        left_v.addWidget(hi); left_v.addWidget(sub)
 
-        school_badge = QLabel(school)
-        school_badge.setStyleSheet(
-            "font-size:12px;font-weight:600;color:#374151;"
-            "background:#F3F4F6;border-radius:8px;padding:6px 14px;"
+        badge = QLabel(school)
+        badge.setStyleSheet(
+            "font-size:11px;font-weight:600;color:#94A3B8;"
+            "background:#1E293B;border-radius:6px;padding:5px 12px;"
         )
-        gf.addWidget(school_badge)
-        outer.addWidget(greet_frame)
 
-        # ── Role-specific content in a scroll area ────────────────────────────
+        bar_lay.addLayout(left_v); bar_lay.addStretch(); bar_lay.addWidget(badge)
+        outer.addWidget(bar)
+
+        # ── Scrollable role content ───────────────────────────────────────────
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
 
         DashClass = _ROLE_MAP.get(session.role, _FullDashboard)
         self._inner = DashClass()

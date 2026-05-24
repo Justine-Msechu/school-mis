@@ -1,7 +1,7 @@
 {
   "version": "3.5.3",
   "release_date": "2026-05-24",
-  "release_notes": "Fix icon rendering (alpha-preserving recolor) and redesign stat cards with icon badges",
+  "release_notes": "Fix icon rendering and role-aware dashboards",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -22,7 +22,7 @@
     "modules/students.py": "11de4fa3135abfb6dd8a0cde1d0aab6fcd194955083f4af43bd2493eb15a604e",
     "modules/attendance.py": "92a2992d30e467372bc2a419da91d523e7289d58676f3d7bb4e03f17c90f536e",
     "modules/settings.py": "b27b83b5033244940ecf14ea778d1bde0fd31ee0351731bb3607439b601ac96a",
-    "modules/dashboard.py": "e232fdeebc6a5d4c61c5f3ffa9566afbac25fef8d305bf30d273b44df45af1d0",
+    "modules/dashboard.py": "2fadf5667848edea40efd9ef810fa9e1c9fb326b3637856a7d2af505879cbb85",
     "modules/finance/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/finance/main.py": "97bc3c0d836b7afde907ab54daf52711e6ac6e66970a2c0f35ecde4099c4e525",
     "modules/finance/payments.py": "00188d46274a36275a712fa8f360230d290447441159047400b0929db512ba05",
@@ -56,7 +56,7 @@
     "database/db.py": "6ae1da9033a7c5dbbf7b35f26f117af0e35d411b67800e3960c3ae5eb4d6257a",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
-    "ui/main_window.py": "64d3a788f688af4ddf1d813d5d8ff2276da14c9222b3c210aba22eeaf9087aaf",
+    "ui/main_window.py": "deb267e7c3d83ac92b3b2b1c50efd41f00cf0a0323e3821e57405025ef8bc540",
     "auth/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "auth/session.py": "fb9ba31d9310e19a0f668d4aaf9f92cb820e0b16dae15cab4b720486647ddab0",
     "auth/rbac.py": "bfbad6155e5ee983867758b712a4f7e7233571676fecf86ae56eca3c5e84eb84",
