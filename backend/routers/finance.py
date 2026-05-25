@@ -87,6 +87,45 @@ def create_fee_structure(body: FeeStructureBody, user: Usr):
         raise HTTPException(400, str(e))
 
 
+# ── Outstanding debtors ───────────────────────────────────────────────────────
+
+@router.get("/outstanding")
+def get_outstanding(
+    user: Usr,
+    academic_year_id: int = Query(None),
+    class_id:         int = Query(None),
+):
+    require_permission(user, "finance.view")
+    from backend.core.db import _get_conn
+    conn = _get_conn()
+    where = ["(sb.amount_due - sb.amount_paid) > 0.01", "s.is_active = 1"]
+    params: list = []
+    if academic_year_id:
+        where.append("sb.academic_year_id = ?")
+        params.append(academic_year_id)
+    if class_id:
+        where.append("s.class_id = ?")
+        params.append(class_id)
+    rows = conn.execute(
+        f"""SELECT
+                s.id            AS student_id,
+                s.first_name || ' ' || s.last_name AS student_name,
+                s.admission_no,
+                c.name          AS class_name,
+                SUM(sb.amount_due)                       AS total_billed,
+                COALESCE(SUM(sb.amount_paid), 0)         AS total_paid,
+                SUM(sb.amount_due - sb.amount_paid)      AS balance
+            FROM student_bills sb
+            JOIN students s  ON s.id  = sb.student_id
+            LEFT JOIN classes c ON c.id = s.class_id
+            WHERE {' AND '.join(where)}
+            GROUP BY s.id
+            ORDER BY balance DESC""",
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ── Student bill ──────────────────────────────────────────────────────────────
 
 @router.get("/student-bill")

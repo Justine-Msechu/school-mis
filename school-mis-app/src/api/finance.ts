@@ -50,3 +50,16 @@ export const recordPayment = (body: { student_id: number; amount: number; paymen
 
 export const getFinanceSummary = () =>
   api.get<FinanceSummary>("/finance/summary").then((r) => r.data);
+
+export interface DebtorRow {
+  student_id: number;
+  student_name: string;
+  admission_no: string;
+  class_name: string | null;
+  total_billed: number;
+  total_paid: number;
+  balance: number;
+}
+
+export const getOutstandingDebtors = (params?: { academic_year_id?: number; class_id?: number }) =>
+  api.get<DebtorRow[]>("/finance/outstanding", { params }).then((r) => r.data);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
-import { getPayments, getFinanceSummary, recordPayment, getStudentBill, type Payment, type FinanceSummary, type StudentBill } from "@/api/finance";
+import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, type Payment, type FinanceSummary, type StudentBill, type DebtorRow } from "@/api/finance";
 import { getStudents } from "@/api/students";
 import { getFeeStructures, getFeeTypes, createFeeStructure, createFeeType, getAcademicYears, type FeeStructure, type FeeType, type AcademicYear } from "@/api/settings";
 import StatCard from "@/components/ui/StatCard";
@@ -21,7 +21,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-type Tab = "payments" | "fees" | "student-bill";
+type Tab = "payments" | "fees" | "student-bill" | "outstanding";
 
 // ── Payment dialog ──────────────────────────────────────────────────────────
 
@@ -268,6 +268,114 @@ function StudentBillPanel() {
   );
 }
 
+// ── Outstanding debtors tab ─────────────────────────────────────────────────
+
+function OutstandingTab() {
+  const [debtors, setDebtors]   = useState<DebtorRow[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    getOutstandingDebtors()
+      .then(setDebtors)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = debtors.filter((d) => {
+    const q = search.toLowerCase();
+    return (
+      d.student_name.toLowerCase().includes(q) ||
+      d.admission_no.toLowerCase().includes(q) ||
+      (d.class_name ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const totalBalance = debtors.reduce((s, d) => s + d.balance, 0);
+
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="text-xs font-medium text-red-600">Students with Debt</div>
+          <div className="text-2xl font-bold text-red-900 mt-1">{loading ? "—" : debtors.length}</div>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="text-xs font-medium text-red-600">Total Outstanding</div>
+          <div className="text-2xl font-bold text-red-900 mt-1">{loading ? "—" : fmt(totalBalance)}</div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+          <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
+          <p className="text-xs text-amber-800">These students have unpaid or partially paid bills for the selected year.</p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mb-4">
+        <div className="relative max-w-xs flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, adm no, class…"
+            className="w-full h-9 pl-8 pr-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
+        </div>
+        {filtered.length > 0 && (
+          <button
+            onClick={() => downloadCSV(
+              "Outstanding Debtors",
+              ["Student", "Adm No", "Class", "Billed (TZS)", "Paid (TZS)", "Balance (TZS)"],
+              filtered.map((d) => [d.student_name, d.admission_no, d.class_name ?? "", d.total_billed, d.total_paid, d.balance])
+            )}
+            className="flex items-center gap-1.5 h-9 px-3 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download size={14} /> Export
+          </button>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <th className="px-4 py-3">Student</th>
+              <th className="px-4 py-3">Adm. No</th>
+              <th className="px-4 py-3">Class</th>
+              <th className="px-4 py-3 text-right">Billed</th>
+              <th className="px-4 py-3 text-right">Paid</th>
+              <th className="px-4 py-3 text-right">Balance Due</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {loading
+              ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
+              : filtered.length === 0
+              ? (
+                <tr>
+                  <td colSpan={6} className="py-16">
+                    <EmptyState icon={DollarSign} title="No outstanding debts" description={search ? "No matches for your search." : "All students are fully paid up."} />
+                  </td>
+                </tr>
+              )
+              : filtered.map((d) => (
+                <tr key={d.student_id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900">{d.student_name}</td>
+                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{d.admission_no}</td>
+                  <td className="px-4 py-3 text-gray-600">{d.class_name ?? "—"}</td>
+                  <td className="px-4 py-3 text-right text-gray-600">{fmt(d.total_billed)}</td>
+                  <td className="px-4 py-3 text-right text-emerald-700">{fmt(d.total_paid)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-red-600">{fmt(d.balance)}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function FinancePage() {
@@ -301,13 +409,14 @@ export default function FinancePage() {
   useEffect(() => {
     if (tab === "payments") loadPayments();
     else if (tab === "fees") loadFees();
-    else setLoading(false);
+    else setLoading(false); // student-bill and outstanding manage their own loading
   }, [tab, loadPayments, loadFees]);
 
   const TABS = [
-    { key: "payments" as Tab,    label: "Payments" },
-    { key: "fees" as Tab,        label: "Fee Structures" },
+    { key: "payments" as Tab,     label: "Payments" },
+    { key: "fees" as Tab,         label: "Fee Structures" },
     { key: "student-bill" as Tab, label: "Student Bill" },
+    { key: "outstanding" as Tab,  label: "Outstanding Debts" },
   ];
 
   return (
@@ -410,6 +519,7 @@ export default function FinancePage() {
       )}
 
       {tab === "student-bill" && <StudentBillPanel />}
+      {tab === "outstanding"  && <OutstandingTab />}
 
       {paymentDialog && (
         <PaymentDialog onSave={() => { setPaymentDialog(false); loadPayments(); }} onClose={() => setPaymentDialog(false)} />
