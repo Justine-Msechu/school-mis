@@ -32,13 +32,13 @@ function BookDialog({ onSave, onClose }: { onSave: () => void; onClose: () => vo
     setError("");
     try {
       await createBook({
-        title:          form.title,
-        author:         form.author,
-        isbn:           form.isbn           || null,
-        category:       form.category       || null,
-        copies_total:   Number(form.copies_total) || 1,
-        publisher:      form.publisher      || null,
-        published_year: form.published_year ? Number(form.published_year) : null,
+        title:        form.title,
+        author:       form.author       || null,
+        isbn:         form.isbn         || null,
+        category:     form.category     || null,
+        total_copies: Number(form.copies_total) || 1,
+        publisher:    form.publisher    || null,
+        year:         form.published_year || null,
       });
       onSave();
     } catch (e: any) {
@@ -106,7 +106,7 @@ function CheckoutDialog({ book, onSave, onClose }: { book: Book; onSave: () => v
     setSaving(true);
     setError("");
     try {
-      await checkoutBook(book.id, form.student_id, form.due_date);
+      await checkoutBook(book.id, form.student_id!, form.due_date);
       onSave();
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? "Failed to checkout book.");
@@ -247,12 +247,12 @@ export default function LibraryPage() {
                       <td className="px-4 py-3 font-medium text-gray-900">{b.title}</td>
                       <td className="px-4 py-3 text-gray-600">{b.author}</td>
                       <td className="px-4 py-3 text-gray-500">{b.category || "—"}</td>
-                      <td className="px-4 py-3 text-gray-600">{b.copies_total}</td>
+                      <td className="px-4 py-3 text-gray-600">{b.total_copies}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={b.copies_available > 0 ? "green" : "red"}>{b.copies_available}</Badge>
+                        <Badge variant={b.available_copies > 0 ? "green" : "red"}>{b.available_copies}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        {b.copies_available > 0 && (
+                        {b.available_copies > 0 && (
                           <Button variant="outline" size="sm" icon={<ArrowRightLeft size={12} />} onClick={() => setCheckoutBook_(b)}>
                             Checkout
                           </Button>
@@ -290,8 +290,11 @@ export default function LibraryPage() {
                   return (
                     <tr key={l.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-gray-900">{l.book_title}</td>
-                      <td className="px-4 py-3 text-gray-600">{l.student_name} <span className="text-xs text-gray-400">({l.admission_no})</span></td>
-                      <td className="px-4 py-3 text-gray-500">{l.issued_at?.slice(0, 10)}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {l.borrower_name}
+                        <span className="text-xs text-gray-400 ml-1">({l.borrower_type})</span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">{l.issue_date?.slice(0, 10)}</td>
                       <td className="px-4 py-3 text-gray-500">{l.due_date}</td>
                       <td className="px-4 py-3">
                         {l.returned_at

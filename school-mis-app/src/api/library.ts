@@ -6,10 +6,11 @@ export interface Book {
   author: string;
   isbn: string | null;
   category: string | null;
-  copies_total: number;
-  copies_available: number;
+  total_copies: number;
+  available_copies: number;
+  shelf_location: string | null;
   publisher: string | null;
-  published_year: number | null;
+  year: string | null;
   is_active: number;
 }
 
@@ -17,19 +18,13 @@ export interface Loan {
   id: number;
   book_id: number;
   book_title: string;
-  student_id: number;
-  student_name: string;
-  admission_no: string;
-  issued_at: string;
+  borrower_id: number;
+  borrower_type: string;  // student | teacher
+  borrower_name: string;
+  issue_date: string;
   due_date: string;
   returned_at: string | null;
-}
-
-export interface LibraryStats {
-  total_books: number;
-  available_books: number;
-  active_loans: number;
-  overdue_loans: number;
+  status: string;
 }
 
 export const getBooks = (search = "", category = "", available_only = false) =>
@@ -41,17 +36,17 @@ export const getCategories = () =>
 export const getBook = (id: number) =>
   api.get<Book>(`/library/books/${id}`).then((r) => r.data);
 
-export const createBook = (body: Partial<Book>) =>
+export const createBook = (body: { title: string; author?: string | null; isbn?: string | null; category?: string | null; total_copies?: number; shelf_location?: string | null; publisher?: string | null; year?: string | null }) =>
   api.post<Book>("/library/books", body).then((r) => r.data);
 
 export const getLoans = (status?: string) =>
   api.get<Loan[]>("/library/loans", { params: { status } }).then((r) => r.data);
 
-export const checkoutBook = (book_id: number, student_id: number, due_date: string) =>
-  api.post("/library/checkout", { book_id, student_id, due_date }).then((r) => r.data);
+export const checkoutBook = (book_id: number, borrower_id: number, due_date: string, borrower_type = "student") =>
+  api.post("/library/checkout", { book_id, borrower_id, borrower_type, due_date }).then((r) => r.data);
 
 export const returnBook = (loan_id: number) =>
   api.post(`/library/return/${loan_id}`).then((r) => r.data);
 
 export const getLibraryStats = () =>
-  api.get<LibraryStats>("/library/stats").then((r) => r.data);
+  api.get("/library/stats").then((r) => r.data);
