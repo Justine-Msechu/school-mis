@@ -95,7 +95,7 @@ _DEFAULT_ROLE_PERMISSIONS = {
         "inventory.report", "reports.view", "reports.inventory",
     ],
     "class_teacher": [
-        "student.view", "student.edit",
+        "student.view",
         "attendance.view", "attendance.mark",
         "grades.view", "grades.write", "grades.submit",
         "grades.change_request.create",
