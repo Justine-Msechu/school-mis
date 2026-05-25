@@ -17,6 +17,7 @@ interface NavItem {
   label: string;
   to: string;
   perm?: string;
+  roles?: string[];
 }
 
 interface NavGroupDef {
@@ -70,7 +71,7 @@ const NAV_GROUPS: NavGroupDef[] = [
     items: [
       { icon: BarChart2,    label: "Reports",       to: "/reports",   perm: "reports.view" },
       { icon: Settings,     label: "Settings",      to: "/settings",  perm: "settings.view" },
-      { icon: ShieldCheck,  label: "Roles & Access",to: "/rbac",      perm: "teachers.manage" },
+      { icon: ShieldCheck,  label: "Roles & Access",to: "/rbac",      roles: ["admin"] },
       { icon: Shield,       label: "Audit Log",     to: "/audit",     perm: "audit.view" },
     ],
   },
@@ -99,9 +100,13 @@ function NavItemEl({ item }: { item: NavItem }) {
 
 function NavGroupEl({ group }: { group: NavGroupDef }) {
   const [open, setOpen] = useState(true);
-  const { can } = useAuthStore();
+  const { can, user } = useAuthStore();
 
-  const visible = group.items.filter((i) => !i.perm || can(i.perm));
+  const visible = group.items.filter((i) => {
+    if (i.roles && !i.roles.includes(user?.role ?? "")) return false;
+    if (i.perm && !can(i.perm)) return false;
+    return true;
+  });
   if (visible.length === 0) return null;
 
   return (

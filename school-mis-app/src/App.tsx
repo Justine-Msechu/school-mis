@@ -35,6 +35,11 @@ function PermRoute({ perm, children }: { perm: string; children: React.ReactNode
   return can(perm) ? <>{children}</> : <Navigate to="/" replace />;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuthStore();
+  return user?.role === "admin" ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 export default function App() {
   const { isLoggedIn } = useAuthStore();
 
@@ -69,7 +74,7 @@ export default function App() {
                   <Route path="/enrollment"  element={<PermRoute perm="enrollment.view"><EnrollmentPage /></PermRoute>} />
                   <Route path="/guardians"   element={<PermRoute perm="guardian.view"><GuardiansPage /></PermRoute>} />
                   <Route path="/report-cards" element={<PermRoute perm="report_cards.view"><ReportCardsPage /></PermRoute>} />
-                  <Route path="/rbac"         element={<PermRoute perm="teachers.manage"><RbacPage /></PermRoute>} />
+                  <Route path="/rbac"         element={<AdminRoute><RbacPage /></AdminRoute>} />
                 </Routes>
               </AppShell>
             </PrivateRoute>
