@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
 import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, type Payment, type FinanceSummary, type StudentBill, type DebtorRow } from "@/api/finance";
 import { getStudents } from "@/api/students";
 import { getFeeStructures, getFeeTypes, createFeeStructure, createFeeType, getAcademicYears, type FeeStructure, type FeeType, type AcademicYear } from "@/api/settings";
+import { getClasses } from "@/api/grades";
+import { useAuthStore } from "@/stores/authStore";
+import { useToast } from "@/components/ui/Toast";
 import StatCard from "@/components/ui/StatCard";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
+import api from "@/api/client";
 
 const fmt = (n: number) => `TZS ${(n ?? 0).toLocaleString()}`;
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
@@ -268,6 +272,98 @@ function StudentBillPanel() {
   );
 }
 
+// ── Generate Bills dialog ───────────────────────────────────────────────────
+
+function GenerateBillsDialog({ years, onDone, onClose }: {
+  years: AcademicYear[];
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const [classes, setClasses]   = useState<{ id: number; name: string }[]>([]);
+  const [yearId, setYearId]     = useState(years.find((y) => y.is_current)?.id?.toString() ?? years[0]?.id?.toString() ?? "");
+  const [classId, setClassId]   = useState("");
+  const [running, setRunning]   = useState(false);
+  const [result, setResult]     = useState<{ created: number; skipped: number } | null>(null);
+
+  useEffect(() => {
+    getClasses().then(setClasses).catch(() => {});
+  }, []);
+
+  const run = async () => {
+    if (!yearId) return;
+    setRunning(true);
+    try {
+      const { data } = await api.post("/finance/billing/generate", {
+        academic_year_id: Number(yearId),
+        class_id: classId ? Number(classId) : null,
+      });
+      setResult(data);
+      toast.success(`${data.created} bill${data.created !== 1 ? "s" : ""} created`);
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail ?? "Billing failed.");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Generate Student Bills</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          Creates one bill per student per fee structure. Already-billed combinations are skipped automatically.
+        </p>
+
+        {result ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-emerald-700">{result.created}</div>
+                <div className="text-xs text-emerald-600 mt-1">Bills created</div>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-gray-500">{result.skipped}</div>
+                <div className="text-xs text-gray-400 mt-1">Already existed</div>
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button variant="primary" onClick={onClose}>Done</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Field label="Academic Year *">
+              <select className={INPUT} value={yearId} onChange={(e) => setYearId(e.target.value)}>
+                {years.map((y) => (
+                  <option key={y.id} value={y.id}>{y.label}{y.is_current ? " (current)" : ""}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Class (leave blank for all classes)">
+              <select className={INPUT} value={classId} onChange={(e) => setClassId(e.target.value)}>
+                <option value="">All classes</option>
+                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2 text-xs text-amber-800">
+              <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-amber-500" />
+              This will charge all active students based on the fee structures defined for the selected year. Existing bills are never duplicated.
+            </div>
+            <div className="flex justify-end gap-2 mt-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button variant="primary" icon={<Zap size={14} />} onClick={run} disabled={running || !yearId}>
+                {running ? "Generating…" : "Generate Bills"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Outstanding debtors tab ─────────────────────────────────────────────────
 
 function OutstandingTab() {
@@ -379,6 +475,7 @@ function OutstandingTab() {
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function FinancePage() {
+  const { can }                 = useAuthStore();
   const [tab, setTab]           = useState<Tab>("payments");
   const [payments, setPayments] = useState<Payment[]>([]);
   const [summary, setSummary]   = useState<FinanceSummary | null>(null);
@@ -386,8 +483,9 @@ export default function FinancePage() {
   const [feeTypes, setFeeTypes] = useState<FeeType[]>([]);
   const [years, setYears]       = useState<AcademicYear[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [paymentDialog, setPaymentDialog] = useState(false);
-  const [feeDialog, setFeeDialog]         = useState(false);
+  const [paymentDialog, setPaymentDialog]     = useState(false);
+  const [feeDialog, setFeeDialog]             = useState(false);
+  const [billingDialog, setBillingDialog]     = useState(false);
 
   const paymentsLoaded = useRef(false);
   const feesLoaded     = useRef(false);
@@ -441,7 +539,12 @@ export default function FinancePage() {
           </div>
         )}
         {tab === "fees" && (
-          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setFeeDialog(true)}>Add Fee Structure</Button>
+          <div className="flex gap-2">
+            {can("finance.billing.generate") && years.length > 0 && (
+              <Button variant="outline" icon={<Zap size={14} />} onClick={() => setBillingDialog(true)}>Generate Bills</Button>
+            )}
+            <Button variant="primary" icon={<Plus size={15} />} onClick={() => setFeeDialog(true)}>Add Fee Structure</Button>
+          </div>
         )}
       </div>
 
@@ -526,6 +629,9 @@ export default function FinancePage() {
       )}
       {feeDialog && years.length > 0 && (
         <FeeStructureDialog feeTypes={feeTypes} years={years} onSave={() => { setFeeDialog(false); loadFees(); }} onClose={() => setFeeDialog(false)} />
+      )}
+      {billingDialog && years.length > 0 && (
+        <GenerateBillsDialog years={years} onDone={loadFees} onClose={() => setBillingDialog(false)} />
       )}
     </div>
   );

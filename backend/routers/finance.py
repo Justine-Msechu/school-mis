@@ -87,6 +87,72 @@ def create_fee_structure(body: FeeStructureBody, user: Usr):
         raise HTTPException(400, str(e))
 
 
+# ── Billing engine ────────────────────────────────────────────────────────────
+
+class BillingGenerateBody(BaseModel):
+    academic_year_id: int
+    class_id:         int | None = None
+
+@router.post("/billing/generate")
+def generate_bills(body: BillingGenerateBody, user: Usr):
+    require_permission(user, "finance.billing.generate")
+    import uuid
+    from backend.core.db import _get_conn
+    conn = _get_conn()
+
+    # Fetch fee structures for this year
+    fs_where = ["fs.academic_year_id = ?"]
+    fs_params: list = [body.academic_year_id]
+    if body.class_id:
+        fs_where.append("(fs.class_id = ? OR fs.class_id IS NULL)")
+        fs_params.append(body.class_id)
+
+    structures = conn.execute(
+        f"""SELECT fs.* FROM fee_structures fs
+            WHERE {' AND '.join(fs_where)}""",
+        fs_params,
+    ).fetchall()
+
+    if not structures:
+        raise HTTPException(400, "No fee structures found for the selected year/class combination.")
+
+    created = 0
+    skipped = 0
+
+    for fs in structures:
+        # Determine which students get this bill
+        target_class = fs["class_id"] or body.class_id
+        if target_class:
+            students = conn.execute(
+                "SELECT id FROM students WHERE class_id=? AND is_active=1 AND deleted_at IS NULL",
+                (target_class,),
+            ).fetchall()
+        else:
+            students = conn.execute(
+                "SELECT id FROM students WHERE is_active=1 AND deleted_at IS NULL"
+            ).fetchall()
+
+        for s in students:
+            existing = conn.execute(
+                "SELECT id FROM student_bills WHERE student_id=? AND fee_structure_id=?",
+                (s["id"], fs["id"]),
+            ).fetchone()
+            if existing:
+                skipped += 1
+                continue
+            control_no = f"BILL/{body.academic_year_id}/{uuid.uuid4().hex[:8].upper()}"
+            conn.execute(
+                """INSERT INTO student_bills
+                   (student_id, fee_structure_id, academic_year_id, control_number, amount_due, due_date)
+                   VALUES (?,?,?,?,?,?)""",
+                (s["id"], fs["id"], body.academic_year_id, control_no, fs["amount"], fs["due_date"]),
+            )
+            created += 1
+
+    conn.commit()
+    return {"created": created, "skipped": skipped}
+
+
 # ── Outstanding debtors ───────────────────────────────────────────────────────
 
 @router.get("/outstanding")
