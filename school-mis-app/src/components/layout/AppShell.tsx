@@ -1,7 +1,17 @@
+import { useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  const { refreshPermissions } = useAuthStore();
+
+  // Re-fetch permissions from DB on every mount so role changes take effect
+  // without requiring the user to manually log out and back in.
+  useEffect(() => {
+    refreshPermissions();
+  }, []);
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

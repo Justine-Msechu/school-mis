@@ -28,6 +28,7 @@ interface AuthState {
   logout:       () => void;
   setMustChangePw: (v: boolean) => void;
   can:          (permission: string) => boolean;
+  refreshPermissions: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -60,6 +61,23 @@ export const useAuthStore = create<AuthState>()(
         if (!user) return false;
         if (user.permissions.includes("*")) return true;
         return user.permissions.includes(permission);
+      },
+
+      async refreshPermissions() {
+        const { token, isLoggedIn } = get();
+        if (!isLoggedIn || !token) return;
+        try {
+          const { default: api } = await import("@/api/client");
+          const res = await api.get<User & { must_change_pw: boolean }>("/auth/me");
+          const fresh = res.data;
+          set((s) => ({
+            user: s.user ? { ...s.user, permissions: fresh.permissions } : s.user,
+            mustChangePw: fresh.must_change_pw,
+          }));
+        } catch {
+          // 401 = token invalid (server restarted) → force logout
+          get().logout();
+        }
       },
     }),
     {

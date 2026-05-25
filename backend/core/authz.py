@@ -54,19 +54,15 @@ def authorize(user: dict, action: str, context: dict | None = None) -> bool:
     """
     Single authorization entry point. Use this everywhere.
 
-    Priority order:
-      1. Wildcard ('*') in token permissions → always True
-      2. DB DENY override → always False
-      3. DB ALLOW override → True (then context check)
-      4. Token permissions → True (then context check)
-      5. False
+    Always re-reads permissions from DB so that role revocations and
+    overrides take effect immediately — no re-login required.
 
     Context keys: class_id, subject_id
     """
     if not user:
         return False
 
-    # Wildcard (admin)
+    # Fast path: wildcard from token (admin never changes)
     if "*" in user.get("permissions", []):
         return True
 
@@ -74,29 +70,16 @@ def authorize(user: dict, action: str, context: dict | None = None) -> bool:
     if not user_id:
         return False
 
-    # 1. Hard DENY override (authoritative, checked against DB on every request)
-    deny = fetch_one(
-        """SELECT 1 FROM user_permission_overrides
-           WHERE user_id = ? AND permission = ? AND effect = 'DENY'
-           AND (expires_at IS NULL OR expires_at > datetime('now'))""",
-        (user_id, action),
-    )
-    if deny:
+    # Always re-read from DB — catches role revocations without re-login
+    current_perms = compute_effective_permissions(user_id)
+
+    if "*" in current_perms:
+        return True
+
+    if action not in current_perms:
         return False
 
-    # 2. ALLOW override (DB)
-    allow_override = fetch_one(
-        """SELECT 1 FROM user_permission_overrides
-           WHERE user_id = ? AND permission = ? AND effect = 'ALLOW'
-           AND (expires_at IS NULL OR expires_at > datetime('now'))""",
-        (user_id, action),
-    )
-    has_perm = bool(allow_override) or (action in user.get("permissions", []))
-
-    if not has_perm:
-        return False
-
-    # 3. Context check
+    # Context check (class/subject scoping)
     if context:
         return _check_context(user_id, context)
 

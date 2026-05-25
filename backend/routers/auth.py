@@ -168,6 +168,8 @@ def logout(user: Usr):
 @router.get("/me")
 def me(user: Usr):
     row = fetch_one("SELECT must_change_pw FROM users WHERE id=?", (user["id"],))
+    # Always re-compute permissions from DB so revocations reflect immediately
+    fresh_perms = compute_effective_permissions(user["id"])
     return {
         "id":             user["id"],
         "username":       user["username"],
@@ -175,6 +177,6 @@ def me(user: Usr):
         "role":           user["role"],
         "role_label":     user["role_label"],
         "role_color":     user["role_color"],
-        "permissions":    user["permissions"],
+        "permissions":    fresh_perms,
         "must_change_pw": bool(row["must_change_pw"]) if row else False,
     }

@@ -226,17 +226,8 @@ def run():
                     (role_id, perm_row[0]),
                 )
 
-    # ── Migrate existing users into user_roles (only if table was empty) ───────
-    count = cur.execute("SELECT COUNT(*) FROM user_roles").fetchone()[0]
-    if count == 0:
-        for u_row in cur.execute("SELECT id, role FROM users WHERE is_active=1").fetchall():
-            u_id, role_name = u_row
-            r = cur.execute("SELECT id FROM roles WHERE name=?", (role_name,)).fetchone()
-            if r:
-                cur.execute(
-                    "INSERT OR IGNORE INTO user_roles(user_id, role_id) VALUES(?,?)",
-                    (u_id, r[0]),
-                )
+    # NOTE: user_roles are intentionally NOT auto-seeded here.
+    # Roles are assigned explicitly via the Roles & Access page.
 
     conn.commit()
     conn.close()
