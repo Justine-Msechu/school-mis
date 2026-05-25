@@ -6,9 +6,11 @@ interface AuthState {
   isLoggedIn: boolean;
   user: User | null;
   token: string | null;
+  _hasHydrated: boolean;
   login: (user: User, token: string) => void;
   logout: () => void;
   can: (permission: string) => boolean;
+  setHasHydrated: (v: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -17,6 +19,11 @@ export const useAuthStore = create<AuthState>()(
       isLoggedIn: false,
       user: null,
       token: null,
+      _hasHydrated: false,
+
+      setHasHydrated(v) {
+        set({ _hasHydrated: v });
+      },
 
       login(user, token) {
         sessionStorage.setItem("mis_token", token);
@@ -46,6 +53,7 @@ export const useAuthStore = create<AuthState>()(
           localStorage.setItem("mis_token", state.token);
           state.isLoggedIn = true;
         }
+        state?.setHasHydrated(true);
       },
     }
   )
