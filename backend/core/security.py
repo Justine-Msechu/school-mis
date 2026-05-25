@@ -1,19 +1,18 @@
 """
 ABAC (Attribute-Based Access Control) for the FastAPI layer.
 
-Unlike the PyQt6 layer which uses a role-based permission string list,
-the API layer enforces row-level conditions so that:
-  - Class teachers see ONLY their class data
-  - Subject teachers see ONLY their subject+class data
-  - Finance staff see all student financial records (no class restriction)
+Authorization is now fully delegated to backend.core.authz.authorize().
+require_permission() is kept as a convenience wrapper so existing callers
+continue to work without modification.
 
 Usage in routers:
     require_permission(actor, "grades.write")
-    require_permission(actor, "attendance.write", context={"class_teacher_id": class_.teacher_id})
+    require_permission(actor, "attendance.write", context={"class_id": 5})
 """
 
 from __future__ import annotations
 from backend.core.exceptions import PermissionError as AppPermError
+from backend.core.authz import authorize as _authorize
 
 # Role → flat permission set (matches the PyQt6 ROLES dict)
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -135,27 +134,11 @@ def get_conditions(actor: dict, permission: str) -> list[str]:
 def require_permission(actor: dict, permission: str, context: dict | None = None) -> None:
     """
     Raise AppPermError if the actor lacks the permission.
-    `context` is used to evaluate row-level conditions, e.g.:
-        context={"class_teacher_id": 5, "subject_teacher_ids": [3, 7]}
+    Delegates to authorize() in backend.core.authz — the single decision point.
+    `context` may contain class_id and/or subject_id for scope checks.
     """
-    if not has_permission(actor, permission):
+    if not _authorize(actor, permission, context):
         raise AppPermError(permission)
-
-    conditions = get_conditions(actor, permission)
-    if not conditions or not context:
-        return
-
-    actor_id = actor.get("id")
-    teacher_id = actor.get("teacher_id")
-
-    for cond in conditions:
-        if cond == "own_class":
-            if context.get("class_teacher_id") not in (actor_id, teacher_id):
-                raise AppPermError(permission, resource="own class only")
-        elif cond == "own_subject":
-            allowed_teacher_ids = context.get("subject_teacher_ids", [])
-            if teacher_id not in allowed_teacher_ids and actor_id not in allowed_teacher_ids:
-                raise AppPermError(permission, resource="own subject only")
 
 
 def role_filter_sql(actor: dict, permission: str, alias: str = "") -> tuple[str, list]:

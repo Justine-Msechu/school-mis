@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from database.db import fetch_one, execute, ROLES
 from auth.session import session as _session
 from backend.deps import create_token, require_auth, revoke_token, hydrate_session
+from backend.core.authz import compute_effective_permissions
 
 router = APIRouter(tags=["auth"])
 Usr = Annotated[dict, Depends(require_auth)]
@@ -60,14 +61,10 @@ def _user_to_dict(row) -> dict:
     user = dict(row)
     role = user.get("role", "")
     role_info = ROLES.get(role, {})
-    if isinstance(role_info, dict):
-        user["role_label"] = role_info.get("label", role)
-        user["role_color"]  = role_info.get("color", "#94A3B8")
-        user["permissions"] = role_info.get("permissions", [])
-    else:
-        user["role_label"] = str(role_info)
-        user["role_color"]  = "#94A3B8"
-        user["permissions"] = []
+    user["role_label"] = role_info.get("label", role) if isinstance(role_info, dict) else str(role_info)
+    user["role_color"]  = role_info.get("color", "#94A3B8") if isinstance(role_info, dict) else "#94A3B8"
+    # Compute from DB (user_roles → role_permissions → permissions + overrides)
+    user["permissions"] = compute_effective_permissions(user["id"])
     if not user.get("full_name"):
         user["full_name"] = user.get("username", "")
     return user

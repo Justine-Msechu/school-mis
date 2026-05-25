@@ -2,10 +2,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from backend.deps import require_auth
+from backend.core.authz import authorize
 from database.db import fetch_all, fetch_one, execute, get_config, set_config, ROLES, hash_password
 
 router = APIRouter(tags=["settings"])
 Usr = Annotated[dict, Depends(require_auth)]
+
+# Roles that are teacher-level (manageable by head_teacher / academic via teachers.manage perm)
+_TEACHER_ROLES = {"class_teacher", "subject_teacher"}
+# Roles that cannot be assigned by anyone other than admin
+_ADMIN_ONLY_ROLES = {"admin"}
 
 
 @router.get("/config")
@@ -27,41 +33,41 @@ def set_config_endpoint(body: ConfigBody, user: Usr):
 
 @router.get("/users")
 def list_users(user: Usr):
-    actor_role = user.get("role", "")
+    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_teachers = authorize(user, "settings.teachers.manage")
+
+    if not can_manage_all and not can_manage_teachers:
+        raise HTTPException(403, "Insufficient permissions to list users")
+
     rows = fetch_all(
         "SELECT id, username, full_name, role, is_active, created_at FROM users ORDER BY full_name"
     )
     result = []
     for r in rows:
         d = dict(r)
-        if actor_role == "head_teacher" and d["role"] in _ELEVATED_ROLES:
-            continue
-        # Academic officers only see teacher accounts
-        if actor_role == "academic" and d["role"] not in _ACADEMIC_ASSIGNABLE:
+        # Users with only teacher management can only see teacher-role accounts
+        if not can_manage_all and d["role"] not in _TEACHER_ROLES:
             continue
         d["role_label"] = ROLES.get(d["role"], {}).get("label", d["role"])
         result.append(d)
     return result
 
 
-_ELEVATED_ROLES = {"admin", "head_teacher", "academic", "accountant", "welfare_officer"}
-_HEAD_TEACHER_ASSIGNABLE = {"class_teacher", "subject_teacher"}
-_ACADEMIC_ASSIGNABLE     = {"class_teacher", "subject_teacher"}
-
-
 @router.get("/roles")
 def get_roles(user: Usr):
-    actor_role = user.get("role", "")
+    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_teachers = authorize(user, "settings.teachers.manage")
+
     all_roles = [
         {"key": k, "label": v["label"], "color": v.get("color", "#94A3B8")}
         for k, v in ROLES.items()
         if k not in ("student_portal", "parent_portal")
     ]
-    if actor_role == "head_teacher":
-        return [r for r in all_roles if r["key"] in _HEAD_TEACHER_ASSIGNABLE]
-    if actor_role == "academic":
-        return [r for r in all_roles if r["key"] in _ACADEMIC_ASSIGNABLE]
-    return all_roles
+    if can_manage_all:
+        return all_roles
+    if can_manage_teachers:
+        return [r for r in all_roles if r["key"] in _TEACHER_ROLES]
+    return []
 
 
 class UserPayload(BaseModel):
@@ -74,13 +80,21 @@ class UserPayload(BaseModel):
 
 @router.post("/users")
 def create_user(body: UserPayload, user: Usr):
-    actor_role = user.get("role", "")
-    if actor_role == "head_teacher" and body.role not in _HEAD_TEACHER_ASSIGNABLE:
-        raise HTTPException(403, "Head teachers may only create class_teacher or subject_teacher accounts")
-    if actor_role == "academic" and body.role not in _ACADEMIC_ASSIGNABLE:
-        raise HTTPException(403, "Academic officers may only create class_teacher or subject_teacher accounts")
-    if actor_role not in ("admin", "head_teacher", "academic"):
+    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_teachers = authorize(user, "settings.teachers.manage")
+
+    if not can_manage_all and not can_manage_teachers:
         raise HTTPException(403, "Insufficient permissions to create users")
+
+    # Teacher-only managers can only create teacher-role accounts
+    if not can_manage_all and body.role not in _TEACHER_ROLES:
+        raise HTTPException(403, "You may only create class_teacher or subject_teacher accounts")
+
+    # Nobody (not even admin) can create another admin via this endpoint
+    # — admin accounts must be seeded directly
+    if body.role in _ADMIN_ONLY_ROLES and not authorize(user, "*"):
+        raise HTTPException(403, "Only administrators may create admin accounts")
+
     if not body.password:
         raise HTTPException(400, "Password required for new users")
     if len(body.password) < 8:
@@ -93,6 +107,12 @@ def create_user(body: UserPayload, user: Usr):
         "INSERT INTO users (username, password_hash, salt, full_name, role, teacher_id, is_active, must_change_pw) VALUES (?,?,?,?,?,?,1,1)",
         (body.username, pw_hash, salt, body.full_name, body.role, body.teacher_id),
     )
+    # Sync new user into user_roles
+    try:
+        from database.db import sync_user_role
+        sync_user_role(row_id, body.role)
+    except Exception:
+        pass
     try:
         execute(
             "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
@@ -102,7 +122,7 @@ def create_user(body: UserPayload, user: Usr):
     except Exception:
         pass
     result = dict(fetch_one("SELECT id, username, full_name, role, is_active FROM users WHERE id=?", (row_id,)))
-    if body.role in ("class_teacher", "subject_teacher") and not body.teacher_id:
+    if body.role in _TEACHER_ROLES and not body.teacher_id:
         result["warning"] = "No teacher record linked. Link a teacher so this user can access class data."
     return result
 
@@ -116,24 +136,27 @@ class EditUserPayload(BaseModel):
 
 @router.put("/users/{uid}")
 def edit_user(uid: int, body: EditUserPayload, user: Usr):
-    actor_role = user.get("role", "")
-    actor_id = user.get("id")
+    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_teachers = authorize(user, "settings.teachers.manage")
+
+    if not can_manage_all and not can_manage_teachers:
+        raise HTTPException(403, "Insufficient permissions to edit users")
+
     target = fetch_one("SELECT role FROM users WHERE id=?", (uid,))
     if not target:
         raise HTTPException(404, "User not found")
     target_role = target["role"]
-    if actor_role == "head_teacher":
-        if target_role in _ELEVATED_ROLES:
-            raise HTTPException(403, "Head teachers cannot edit elevated accounts")
-        if body.role not in _HEAD_TEACHER_ASSIGNABLE:
-            raise HTTPException(403, "Head teachers may only assign class_teacher or subject_teacher roles")
-    elif actor_role == "academic":
-        if target_role not in _ACADEMIC_ASSIGNABLE:
-            raise HTTPException(403, "Academic officers can only edit teacher accounts")
-        if body.role not in _ACADEMIC_ASSIGNABLE:
-            raise HTTPException(403, "Academic officers may only assign teacher roles")
-    elif actor_role != "admin":
-        raise HTTPException(403, "Insufficient permissions to edit users")
+
+    # Teacher-only managers cannot edit non-teacher accounts
+    if not can_manage_all and target_role not in _TEACHER_ROLES:
+        raise HTTPException(403, "You can only edit teacher accounts")
+    # Teacher-only managers cannot assign non-teacher roles
+    if not can_manage_all and body.role not in _TEACHER_ROLES:
+        raise HTTPException(403, "You may only assign class_teacher or subject_teacher roles")
+    # Admin role assignment restricted to wildcards only
+    if body.role in _ADMIN_ONLY_ROLES and not authorize(user, "*"):
+        raise HTTPException(403, "Only administrators may assign the admin role")
+
     if body.password:
         if len(body.password) < 8:
             raise HTTPException(400, "Password must be at least 8 characters")
@@ -147,6 +170,14 @@ def edit_user(uid: int, body: EditUserPayload, user: Usr):
             "UPDATE users SET full_name=?, role=?, teacher_id=? WHERE id=?",
             (body.full_name, body.role, body.teacher_id, uid),
         )
+    # Keep user_roles in sync with the updated role
+    try:
+        from database.db import execute as db_execute, fetch_one as db_fetch_one
+        db_execute("DELETE FROM user_roles WHERE user_id=?", (uid,))
+        from database.db import sync_user_role
+        sync_user_role(uid, body.role)
+    except Exception:
+        pass
     try:
         execute(
             "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
@@ -160,19 +191,24 @@ def edit_user(uid: int, body: EditUserPayload, user: Usr):
 
 @router.post("/users/{uid}/toggle-active")
 def toggle_active(uid: int, user: Usr):
-    actor_role = user.get("role", "")
     actor_id = user.get("id")
     if uid == actor_id:
         raise HTTPException(400, "Cannot deactivate your own account")
+
+    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_teachers = authorize(user, "settings.teachers.manage")
+
+    if not can_manage_all and not can_manage_teachers:
+        raise HTTPException(403, "Insufficient permissions")
+
     target = fetch_one("SELECT role FROM users WHERE id=?", (uid,))
     if not target:
         raise HTTPException(404, "User not found")
-    if actor_role == "head_teacher" and target["role"] in _ELEVATED_ROLES:
-        raise HTTPException(403, "Head teachers cannot deactivate elevated accounts")
-    if actor_role == "academic" and target["role"] not in _ACADEMIC_ASSIGNABLE:
-        raise HTTPException(403, "Academic officers can only toggle teacher accounts")
-    if actor_role not in ("admin", "head_teacher", "academic"):
-        raise HTTPException(403, "Insufficient permissions")
+
+    # Teacher-only managers can only toggle teacher accounts
+    if not can_manage_all and target["role"] not in _TEACHER_ROLES:
+        raise HTTPException(403, "You can only toggle teacher accounts")
+
     execute("UPDATE users SET is_active = 1 - is_active WHERE id=?", (uid,))
     return {"ok": True}
 

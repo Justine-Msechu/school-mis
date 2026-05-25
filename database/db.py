@@ -757,6 +757,41 @@ def initialize_database():
         created_at   TEXT DEFAULT (datetime('now')),
         UNIQUE(policy_rule, entity_type, entity_id))""")
 
+    # ── Direct user permission overrides ──────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_permission_overrides (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        permission  TEXT NOT NULL,
+        effect      TEXT NOT NULL CHECK(effect IN ('ALLOW','DENY')),
+        reason      TEXT,
+        granted_by  INTEGER REFERENCES users(id),
+        expires_at  TEXT,
+        created_at  TEXT DEFAULT (datetime('now')),
+        UNIQUE(user_id, permission))""")
+
+    # ── Teacher subject+class assignments (user-based, not teacher record) ────
+    cur.execute("""CREATE TABLE IF NOT EXISTS teacher_assignments (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        class_id         INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        subject_id       INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        academic_year_id INTEGER REFERENCES academic_years(id),
+        is_active        INTEGER NOT NULL DEFAULT 1,
+        assigned_by      INTEGER REFERENCES users(id),
+        assigned_at      TEXT DEFAULT (datetime('now')),
+        UNIQUE(user_id, class_id, subject_id, academic_year_id))""")
+
+    # ── Class teacher assignments (one teacher responsible for a whole class) ─
+    cur.execute("""CREATE TABLE IF NOT EXISTS class_teacher_assignments (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        class_id         INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        academic_year_id INTEGER REFERENCES academic_years(id),
+        is_active        INTEGER NOT NULL DEFAULT 1,
+        assigned_by      INTEGER REFERENCES users(id),
+        assigned_at      TEXT DEFAULT (datetime('now')),
+        UNIQUE(user_id, class_id, academic_year_id))""")
+
     # Seed school_type default if not set
     cur.execute(
         "INSERT OR IGNORE INTO school_config(key,value) VALUES('school_type','primary')"
@@ -928,6 +963,20 @@ def initialize_database():
                     "INSERT OR IGNORE INTO role_permissions(role_id,permission_id)"
                     " VALUES(?,?)",
                     (role_id, perm_row[0])
+                )
+
+    # ── Migrate existing users into user_roles ─────────────────────────────────
+    cur.execute("SELECT COUNT(*) FROM user_roles")
+    if cur.fetchone()[0] == 0:
+        cur.execute("SELECT id, role FROM users WHERE is_active=1")
+        for u_row in cur.fetchall():
+            u_id, role_name = u_row
+            cur.execute("SELECT id FROM roles WHERE name=?", (role_name,))
+            r = cur.fetchone()
+            if r:
+                cur.execute(
+                    "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?,?)",
+                    (u_id, r[0])
                 )
 
     conn.commit()

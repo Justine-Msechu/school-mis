@@ -6,7 +6,7 @@ import {
   Award, Calendar, Library, DollarSign, Building2,
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
-  UserCheck, FileText, UsersRound,
+  UserCheck, FileText, UsersRound, ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -68,9 +68,10 @@ const NAV_GROUPS: NavGroupDef[] = [
   {
     label: "System",
     items: [
-      { icon: BarChart2, label: "Reports",   to: "/reports",   perm: "reports.view" },
-      { icon: Settings,  label: "Settings",  to: "/settings",  perm: "settings.view" },
-      { icon: Shield,    label: "Audit Log", to: "/audit",     perm: "audit.view" },
+      { icon: BarChart2,    label: "Reports",       to: "/reports",   perm: "reports.view" },
+      { icon: Settings,     label: "Settings",      to: "/settings",  perm: "settings.view" },
+      { icon: ShieldCheck,  label: "Roles & Access",to: "/rbac",      perm: "teachers.manage" },
+      { icon: Shield,       label: "Audit Log",     to: "/audit",     perm: "audit.view" },
     ],
   },
 ];
