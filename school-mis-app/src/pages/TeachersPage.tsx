@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Search, Plus, Edit2, Mail, Phone, Users, Download, UserX } from "lucide-react";
+import { Search, Plus, Edit2, Mail, Phone, Users, Download, UserX, BookOpen } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
 import { getTeachers, createTeacher, updateTeacher, deactivateTeacher, getNextEmployeeNo, type Teacher } from "@/api/teachers";
 import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
+import TeacherAssignmentsPanel from "@/components/teachers/TeacherAssignmentsPanel";
 
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -142,11 +143,12 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
 
 export default function TeachersPage() {
   const { can } = useAuthStore();
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [search, setSearch]     = useState("");
-  const [loading, setLoading]   = useState(true);
-  const [dialog, setDialog]     = useState<Teacher | null | "new">(null);
-  const firstLoad               = useRef(true);
+  const [teachers, setTeachers]         = useState<Teacher[]>([]);
+  const [search, setSearch]             = useState("");
+  const [loading, setLoading]           = useState(true);
+  const [dialog, setDialog]             = useState<Teacher | null | "new">(null);
+  const [assignPanel, setAssignPanel]   = useState<Teacher | null>(null);
+  const firstLoad                       = useRef(true);
 
   const load = useCallback(() => {
     if (firstLoad.current) setLoading(true);
@@ -251,6 +253,15 @@ export default function TeachersPage() {
                     <div className="flex items-center justify-end gap-1">
                       {can("teachers.manage") && (
                         <button
+                          onClick={() => setAssignPanel(t)}
+                          title="Manage subject assignments"
+                          className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                        >
+                          <BookOpen size={13} />
+                        </button>
+                      )}
+                      {can("teachers.manage") && (
+                        <button
                           onClick={() => setDialog(t)}
                           className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors"
                         >
@@ -279,6 +290,13 @@ export default function TeachersPage() {
           initial={dialog === "new" ? undefined : dialog}
           onSave={() => { setDialog(null); load(); }}
           onClose={() => setDialog(null)}
+        />
+      )}
+
+      {assignPanel && (
+        <TeacherAssignmentsPanel
+          teacher={assignPanel}
+          onClose={() => setAssignPanel(null)}
         />
       )}
     </div>

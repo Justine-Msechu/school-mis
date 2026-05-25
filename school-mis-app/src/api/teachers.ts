@@ -12,6 +12,7 @@ export interface Teacher {
   qualification: string | null;
   joining_date: string | null;
   is_active: number;
+  user_id?: number | null;
   username?: string;
   role?: string;
   user_active?: number;

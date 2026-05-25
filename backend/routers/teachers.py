@@ -40,7 +40,7 @@ def list_teachers(user: Usr, search: str = Query(""), include_inactive: bool = Q
         where.append("(t.first_name || ' ' || t.last_name LIKE ? OR t.employee_no LIKE ? OR t.subject_specialization LIKE ?)")
         params += [f"%{search}%", f"%{search}%", f"%{search}%"]
     rows = fetch_all(
-        f"""SELECT t.*, u.username, u.role, u.is_active as user_active
+        f"""SELECT t.*, u.id as user_id, u.username, u.role, u.is_active as user_active
             FROM teachers t
             LEFT JOIN users u ON u.teacher_id = t.id
             WHERE {' AND '.join(where)}
