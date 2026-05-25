@@ -39,6 +39,7 @@ ROLES = {
             "health.view", "health.record", "health.report",
             "homework.view",
             "leave.review",
+            "audit.view",
         ],
     },
     # ── Academic Officer: student + academic records, no finance or inventory ──

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, GraduationCap, BookOpen,
   Award, Calendar, Library, DollarSign, Building2,
   Bus, Package, Heart, HandHeart, TrendingUp,
-  BarChart2, Settings, LogOut, ChevronDown,
+  BarChart2, Settings, LogOut, ChevronDown, Shield,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -64,8 +64,9 @@ const NAV_GROUPS: NavGroupDef[] = [
   {
     label: "System",
     items: [
-      { icon: BarChart2, label: "Reports",  to: "/reports",  perm: "reports.view" },
-      { icon: Settings,  label: "Settings", to: "/settings", perm: "settings.view" },
+      { icon: BarChart2, label: "Reports",   to: "/reports",   perm: "reports.view" },
+      { icon: Settings,  label: "Settings",  to: "/settings",  perm: "settings.view" },
+      { icon: Shield,    label: "Audit Log", to: "/audit",     perm: "audit.view" },
     ],
   },
 ];

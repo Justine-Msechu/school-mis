@@ -18,6 +18,7 @@ import WelfarePage from "@/pages/WelfarePage";
 import PromotionPage from "@/pages/PromotionPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import AuditLogPage from "@/pages/AuditLogPage";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuthStore();
@@ -53,6 +54,7 @@ export default function App() {
                   <Route path="/promotion"  element={<PromotionPage />} />
                   <Route path="/reports"    element={<ReportsPage />} />
                   <Route path="/settings"   element={<SettingsPage />} />
+                  <Route path="/audit"      element={<AuditLogPage />} />
                 </Routes>
               </AppShell>
             </PrivateRoute>

@@ -1,105 +1,248 @@
+"""
+Finance router — thin HTTP controller.
+
+All business logic lives in backend.services.finance_service.FinanceService.
+This module: validates input schemas, checks permissions, calls service, returns JSON.
+"""
+
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
 from backend.deps import require_auth
-from database.db import fetch_all, fetch_one, execute
+from backend.core.db import get_db
+from backend.core.security import require_permission
+from backend.core.exceptions import AppError
+from backend.services.finance_service import FinanceService
 
 router = APIRouter(tags=["finance"])
 Usr = Annotated[dict, Depends(require_auth)]
 
 
-@router.get("/fee-structures")
-def get_fee_structures(user: Usr):
-    rows = fetch_all(
-        """SELECT fs.*, ft.name as fee_type_name, ay.label as year_label
-           FROM fee_structures fs
-           JOIN fee_types ft ON ft.id = fs.fee_type_id
-           LEFT JOIN academic_years ay ON ay.id = fs.academic_year_id
-           ORDER BY ay.label DESC, ft.name""",
-    )
-    return [dict(r) for r in rows]
+def _svc(actor: dict = None) -> FinanceService:
+    """Create a FinanceService with the thread-local DB connection."""
+    from backend.core.db import _get_conn
+    return FinanceService(_get_conn())
 
+
+# ── Fee structures ─────────────────────────────────────────────────────────────
+
+@router.get("/fee-structures")
+def get_fee_structures(user: Usr, academic_year_id: int = Query(None)):
+    require_permission(user, "finance.structure.view")
+    svc = _svc()
+    return svc.repo.list_fee_structures(academic_year_id)
+
+
+@router.get("/fee-types")
+def get_fee_types(user: Usr):
+    svc = _svc()
+    return svc.repo.list_fee_types()
+
+
+class FeeTypeBody(BaseModel):
+    name: str
+    is_recurring: int = 1
+
+@router.post("/fee-types")
+def create_fee_type(body: FeeTypeBody, user: Usr):
+    require_permission(user, "finance.structure.view")
+    from backend.core.db import _get_conn
+    conn = _get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO fee_types (name, is_recurring) VALUES (?,?)",
+            (body.name, body.is_recurring),
+        )
+        conn.commit()
+        return {"id": cur.lastrowid, "name": body.name}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+class FeeStructureBody(BaseModel):
+    academic_year_id: int
+    fee_type_id:      int
+    amount:           float
+    class_id:         int | None = None
+    term:             int | None = None
+    due_date:         str | None = None
+
+@router.post("/fee-structures")
+def create_fee_structure(body: FeeStructureBody, user: Usr):
+    require_permission(user, "finance.structure.view")
+    from backend.core.db import _get_conn
+    conn = _get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO fee_structures (academic_year_id, class_id, fee_type_id, amount, term, due_date) VALUES (?,?,?,?,?,?)",
+            (body.academic_year_id, body.class_id, body.fee_type_id, body.amount, body.term, body.due_date),
+        )
+        conn.commit()
+        return {"id": cur.lastrowid, "ok": True}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+# ── Student bill ──────────────────────────────────────────────────────────────
 
 @router.get("/student-bill")
-def get_student_bill(user: Usr, student_id: int = Query(None), admission_no: str = Query(None)):
-    if student_id:
-        student = fetch_one("SELECT id, admission_no FROM students WHERE id=?", (student_id,))
-    elif admission_no:
-        student = fetch_one("SELECT id, admission_no FROM students WHERE admission_no=?", (admission_no,))
-    else:
-        raise HTTPException(400, "Provide student_id or admission_no")
-    if not student:
-        raise HTTPException(404, "Student not found")
+def get_student_bill(
+    user: Usr,
+    student_id:   int = Query(None),
+    admission_no: str = Query(None),
+    academic_year_id: int = Query(None),
+):
+    require_permission(user, "finance.view")
+    try:
+        svc = _svc()
+        return svc.get_student_bill_summary(
+            student_id=student_id,
+            admission_no=admission_no,
+            academic_year_id=academic_year_id,
+        )
+    except AppError as e:
+        raise HTTPException(e.http_status, e.message)
 
-    bills = fetch_all(
-        """SELECT sb.*, ft.name as fee_type_name
-           FROM student_bills sb
-           JOIN fee_structures fs ON fs.id = sb.fee_structure_id
-           JOIN fee_types ft ON ft.id = fs.fee_type_id
-           WHERE sb.student_id=?
-           ORDER BY sb.due_date DESC""",
-        (student["id"],),
-    )
-    payments = fetch_all(
-        "SELECT * FROM fee_payments WHERE student_id=? ORDER BY payment_date DESC",
-        (student["id"],),
-    )
-    total_billed = sum(b["amount"] for b in bills)
-    total_paid   = sum(p["amount"] for p in payments)
-    return {
-        "student_id":   student["id"],
-        "bills":        [dict(b) for b in bills],
-        "payments":     [dict(p) for p in payments],
-        "total_billed": total_billed,
-        "total_paid":   total_paid,
-        "balance":      total_billed - total_paid,
-    }
 
+# ── Payments ──────────────────────────────────────────────────────────────────
 
 @router.get("/payments")
-def get_payments(user: Usr, limit: int = Query(50)):
-    rows = fetch_all(
-        """SELECT fp.*, s.first_name || ' ' || s.last_name as student_name, s.admission_no
-           FROM fee_payments fp
-           JOIN students s ON s.id = fp.student_id
-           ORDER BY fp.payment_date DESC LIMIT ?""",
-        (limit,),
+def get_payments(
+    user:     Usr,
+    limit:    int = Query(100),
+    student_id: int = Query(None),
+    academic_year_id: int = Query(None),
+):
+    require_permission(user, "finance.view")
+    svc = _svc()
+    return svc.repo.list_payments(
+        student_id=student_id,
+        academic_year_id=academic_year_id,
+        limit=limit,
     )
-    return [dict(r) for r in rows]
 
 
 class PaymentBody(BaseModel):
-    student_id:   int
-    amount:       float
-    payment_date: str
-    method:       str = "cash"
-    reference:    str = ""
-    notes:        str = ""
+    student_id:      int
+    amount:          float = Field(gt=0)
+    payment_date:    str
+    method:          str = "cash"
+    bill_id:         int | None = None
+    fee_type_id:     int | None = None
+    academic_year_id: int | None = None
+    reference_no:    str = ""
+    notes:           str = ""
 
 
 @router.post("/payment")
 def record_payment(body: PaymentBody, user: Usr):
-    row_id = execute(
-        """INSERT INTO fee_payments (student_id, amount, payment_date, method, reference, notes, recorded_by)
-           VALUES (?,?,?,?,?,?,?)""",
-        (body.student_id, body.amount, body.payment_date, body.method,
-         body.reference, body.notes, user.get("id")),
-    )
-    return {"id": row_id, "ok": True}
+    require_permission(user, "finance.payment.record")
+    try:
+        svc = _svc()
+        return svc.record_payment(
+            student_id=body.student_id,
+            amount=body.amount,
+            method=body.method,
+            payment_date=body.payment_date,
+            bill_id=body.bill_id,
+            fee_type_id=body.fee_type_id,
+            academic_year_id=body.academic_year_id,
+            reference_no=body.reference_no,
+            notes=body.notes,
+            actor=user,
+        )
+    except AppError as e:
+        raise HTTPException(e.http_status, e.message)
+
+
+class ReverseBody(BaseModel):
+    reason: str
+
+@router.post("/payment/{payment_id}/reverse")
+def reverse_payment(payment_id: int, body: ReverseBody, user: Usr):
+    require_permission(user, "finance.payment.void")
+    try:
+        svc = _svc()
+        return svc.reverse_payment(payment_id, body.reason, actor=user)
+    except AppError as e:
+        raise HTTPException(e.http_status, e.message)
+
+
+# ── Expenses ──────────────────────────────────────────────────────────────────
+
+@router.get("/expense-categories")
+def list_expense_categories(user: Usr):
+    from backend.core.db import _get_conn
+    rows = _get_conn().execute(
+        "SELECT * FROM expense_categories WHERE is_active=1 ORDER BY name"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/expenses")
+def get_expenses(user: Usr, limit: int = Query(100)):
+    require_permission(user, "accounting.view")
+    svc = _svc()
+    return svc.repo.list_expenses(limit)
+
+
+class ExpenseBody(BaseModel):
+    category:    str
+    description: str
+    amount:      float = Field(gt=0)
+    expense_date: str
+    reference:   str = ""
+    vendor:      str = ""
+
+
+@router.post("/expense")
+def record_expense(body: ExpenseBody, user: Usr):
+    require_permission(user, "accounting.expense.record")
+    try:
+        svc = _svc()
+        return svc.record_expense(
+            category=body.category,
+            description=body.description,
+            amount=body.amount,
+            expense_date=body.expense_date,
+            reference=body.reference,
+            vendor=body.vendor,
+            actor=user,
+        )
+    except AppError as e:
+        raise HTTPException(e.http_status, e.message)
+
+
+# ── Ledger / financial reports ────────────────────────────────────────────────
+
+@router.get("/ledger")
+def get_ledger_summary(
+    user:      Usr,
+    from_date: str = Query(None),
+    to_date:   str = Query(None),
+):
+    require_permission(user, "finance.report")
+    svc = _svc()
+    return svc.get_ledger_summary(from_date=from_date, to_date=to_date)
+
+
+@router.get("/ledger/entries")
+def get_ledger_entries(
+    user:           Usr,
+    reference_type: str = Query(None),
+    reference_id:   int = Query(None),
+    limit:          int = Query(200),
+):
+    require_permission(user, "finance.report")
+    svc = _svc()
+    return svc.repo.get_ledger_entries(reference_type, reference_id, limit)
 
 
 @router.get("/summary")
 def get_summary(user: Usr):
-    total_billed = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM student_bills") or {}).get("n", 0)
-    total_paid   = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM fee_payments") or {}).get("n", 0)
-    recent_payments = fetch_all(
-        """SELECT fp.*, s.first_name || ' ' || s.last_name as student_name
-           FROM fee_payments fp JOIN students s ON s.id=fp.student_id
-           ORDER BY fp.payment_date DESC LIMIT 10"""
-    )
-    return {
-        "total_billed":    total_billed,
-        "total_collected": total_paid,
-        "balance":         total_billed - total_paid,
-        "recent_payments": [dict(r) for r in recent_payments],
-    }
+    require_permission(user, "finance.view")
+    svc = _svc()
+    base = svc.get_summary()
+    recent = svc.repo.list_payments(limit=10)
+    return {**base, "recent_payments": recent}
