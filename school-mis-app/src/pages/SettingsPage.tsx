@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star } from "lucide-react";
 import { getUsers, getRoles, createUser, updateUser, toggleUserActive, getConfig, setConfig, getAcademicYears, createAcademicYear, setCurrentYear, type AppUser, type Role, type AcademicYear } from "@/api/settings";
+import { getTeachers, type Teacher } from "@/api/teachers";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -29,25 +30,42 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 // ── User form ───────────────────────────────────────────────────────────────
 
-function UserForm({ roles, initial, onSave, onCancel }: {
+const TEACHER_ROLES = new Set(["class_teacher", "subject_teacher"]);
+
+function UserForm({ roles, teachers, initial, onSave, onCancel }: {
   roles: Role[];
+  teachers: Teacher[];
   initial?: AppUser;
-  onSave: (data: any) => void;
+  onSave: (data: any) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [username, setUsername] = useState(initial?.username || "");
-  const [fullName, setFullName] = useState(initial?.full_name || "");
-  const [role, setRole]         = useState(initial?.role || roles[0]?.key || "");
+  const [username, setUsername]   = useState(initial?.username || "");
+  const [fullName, setFullName]   = useState(initial?.full_name || "");
+  const [role, setRole]           = useState(initial?.role || roles[0]?.key || "");
+  const [teacherId, setTeacherId] = useState<number | "">(
+    (initial as any)?.teacher_id ?? ""
+  );
   const [password, setPassword] = useState("");
   const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
+
+  const needsTeacher = TEACHER_ROLES.has(role);
 
   const submit = async () => {
+    setError("");
+    if (!fullName.trim()) { setError("Full name is required."); return; }
+    if (!initial && !username.trim()) { setError("Username is required."); return; }
+    if (!initial && !password) { setError("Password is required for new users."); return; }
+    if (password && password.length < 8) { setError("Password must be at least 8 characters."); return; }
     setSaving(true);
     try {
-      const payload: any = { full_name: fullName, role };
-      if (!initial) payload.username = username;
+      const payload: any = { full_name: fullName.trim(), role };
+      if (!initial) payload.username = username.trim();
       if (password) payload.password = password;
+      payload.teacher_id = teacherId !== "" ? teacherId : null;
       await onSave(payload);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? "Failed to save user.");
     } finally { setSaving(false); }
   };
 
@@ -55,6 +73,7 @@ function UserForm({ roles, initial, onSave, onCancel }: {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">{initial ? "Edit User" : "New User"}</h2>
+        {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="flex flex-col gap-3">
           {!initial && (
             <Field label="Username">
@@ -69,6 +88,15 @@ function UserForm({ roles, initial, onSave, onCancel }: {
               {roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
           </Field>
+          {needsTeacher && (
+            <Field label="Linked Teacher Record">
+              <select value={teacherId} onChange={(e) => setTeacherId(e.target.value ? Number(e.target.value) : "")} className={INPUT}>
+                <option value="">— Not linked —</option>
+                {teachers.map((t) => <option key={t.id} value={t.id}>{t.first_name} {t.last_name} ({t.employee_no || "no emp no"})</option>)}
+              </select>
+              <p className="text-2xs text-gray-400 mt-0.5">Link to a teacher so they can access their class and attendance data.</p>
+            </Field>
+          )}
           <Field label={`Password${initial ? " (leave blank to keep current)" : " *"}`}>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT} />
           </Field>
@@ -277,8 +305,13 @@ export default function SettingsPage() {
   const [tab, setTab]       = useState<Tab>("users");
   const [users, setUsers]   = useState<AppUser[]>([]);
   const [roles, setRoles]   = useState<Role[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [editUser, setEditUser] = useState<AppUser | null | "new">(null);
+
+  useEffect(() => {
+    getTeachers("").then(setTeachers).catch(() => {});
+  }, []);
 
   const load = () => {
     setLoading(true);
@@ -290,12 +323,10 @@ export default function SettingsPage() {
   useEffect(() => { if (tab === "users") load(); else setLoading(false); }, [tab]);
 
   const handleSave = async (data: any) => {
-    try {
-      if (editUser === "new") await createUser(data);
-      else if (editUser)      await updateUser(editUser.id, data);
-      setEditUser(null);
-      load();
-    } catch {}
+    if (editUser === "new") await createUser(data);
+    else if (editUser)      await updateUser(editUser.id, data);
+    setEditUser(null);
+    load();
   };
 
   const handleToggle = async (id: number) => {
@@ -390,8 +421,9 @@ export default function SettingsPage() {
       {editUser !== null && (
         <UserForm
           roles={roles}
+          teachers={teachers}
           initial={editUser === "new" ? undefined : editUser}
-          onSave={handleSave}
+          onSave={handleSave as (data: any) => Promise<void>}
           onCancel={() => setEditUser(null)}
         />
       )}

@@ -59,10 +59,11 @@ def get_roles(user: Usr):
 
 
 class UserPayload(BaseModel):
-    username:  str
-    full_name: str
-    role:      str
-    password:  str | None = None
+    username:   str
+    full_name:  str
+    role:       str
+    password:   str | None = None
+    teacher_id: int | None = None
 
 
 @router.post("/users")
@@ -76,12 +77,13 @@ def create_user(body: UserPayload, user: Usr):
         raise HTTPException(400, "Password required for new users")
     if len(body.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
-    # Warn if class/subject teacher has no teacher_id link
-    teacher_id = getattr(body, "teacher_id", None)
+    existing = fetch_one("SELECT id FROM users WHERE username=?", (body.username,))
+    if existing:
+        raise HTTPException(400, f"Username '{body.username}' is already taken")
     pw_hash, salt = hash_password(body.password)
     row_id = execute(
-        "INSERT INTO users (username, password_hash, salt, full_name, role, is_active, must_change_pw) VALUES (?,?,?,?,?,1,1)",
-        (body.username, pw_hash, salt, body.full_name, body.role),
+        "INSERT INTO users (username, password_hash, salt, full_name, role, teacher_id, is_active, must_change_pw) VALUES (?,?,?,?,?,?,1,1)",
+        (body.username, pw_hash, salt, body.full_name, body.role, body.teacher_id),
     )
     try:
         execute(
@@ -92,15 +94,16 @@ def create_user(body: UserPayload, user: Usr):
     except Exception:
         pass
     result = dict(fetch_one("SELECT id, username, full_name, role, is_active FROM users WHERE id=?", (row_id,)))
-    if body.role in ("class_teacher", "subject_teacher") and not teacher_id:
-        result["warning"] = "No teacher record linked. This user will see no class data until linked to a teacher."
+    if body.role in ("class_teacher", "subject_teacher") and not body.teacher_id:
+        result["warning"] = "No teacher record linked. Link a teacher so this user can access class data."
     return result
 
 
 class EditUserPayload(BaseModel):
-    full_name: str
-    role:      str
-    password:  str | None = None
+    full_name:  str
+    role:       str
+    password:   str | None = None
+    teacher_id: int | None = None
 
 
 @router.put("/users/{uid}")
@@ -123,11 +126,14 @@ def edit_user(uid: int, body: EditUserPayload, user: Usr):
             raise HTTPException(400, "Password must be at least 8 characters")
         pw_hash, salt = hash_password(body.password)
         execute(
-            "UPDATE users SET full_name=?, role=?, password_hash=?, salt=? WHERE id=?",
-            (body.full_name, body.role, pw_hash, salt, uid),
+            "UPDATE users SET full_name=?, role=?, teacher_id=?, password_hash=?, salt=? WHERE id=?",
+            (body.full_name, body.role, body.teacher_id, pw_hash, salt, uid),
         )
     else:
-        execute("UPDATE users SET full_name=?, role=? WHERE id=?", (body.full_name, body.role, uid))
+        execute(
+            "UPDATE users SET full_name=?, role=?, teacher_id=? WHERE id=?",
+            (body.full_name, body.role, body.teacher_id, uid),
+        )
     try:
         execute(
             "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
