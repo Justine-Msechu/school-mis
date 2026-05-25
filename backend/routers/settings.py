@@ -27,24 +27,35 @@ def set_config_endpoint(body: ConfigBody, user: Usr):
 
 @router.get("/users")
 def list_users(user: Usr):
+    actor_role = user.get("role", "")
     rows = fetch_all(
         "SELECT id, username, full_name, role, is_active, created_at FROM users ORDER BY full_name"
     )
     result = []
     for r in rows:
         d = dict(r)
+        if actor_role == "head_teacher" and d["role"] in _ELEVATED_ROLES:
+            continue
         d["role_label"] = ROLES.get(d["role"], {}).get("label", d["role"])
         result.append(d)
     return result
 
 
+_ELEVATED_ROLES = {"admin", "head_teacher", "academic", "accountant", "welfare_officer"}
+_HEAD_TEACHER_ASSIGNABLE = {"class_teacher", "subject_teacher"}
+
+
 @router.get("/roles")
 def get_roles(user: Usr):
-    return [
+    actor_role = user.get("role", "")
+    all_roles = [
         {"key": k, "label": v["label"], "color": v.get("color", "#94A3B8")}
         for k, v in ROLES.items()
         if k not in ("student_portal", "parent_portal")
     ]
+    if actor_role == "head_teacher":
+        return [r for r in all_roles if r["key"] in _HEAD_TEACHER_ASSIGNABLE]
+    return all_roles
 
 
 class UserPayload(BaseModel):
@@ -56,14 +67,34 @@ class UserPayload(BaseModel):
 
 @router.post("/users")
 def create_user(body: UserPayload, user: Usr):
+    actor_role = user.get("role", "")
+    if actor_role == "head_teacher" and body.role not in _HEAD_TEACHER_ASSIGNABLE:
+        raise HTTPException(403, "Head teachers may only create class_teacher or subject_teacher accounts")
+    if actor_role not in ("admin", "head_teacher"):
+        raise HTTPException(403, "Only admin or head teacher can create users")
     if not body.password:
         raise HTTPException(400, "Password required for new users")
+    if len(body.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    # Warn if class/subject teacher has no teacher_id link
+    teacher_id = getattr(body, "teacher_id", None)
     pw_hash, salt = hash_password(body.password)
     row_id = execute(
         "INSERT INTO users (username, password_hash, salt, full_name, role, is_active, must_change_pw) VALUES (?,?,?,?,?,1,1)",
         (body.username, pw_hash, salt, body.full_name, body.role),
     )
-    return dict(fetch_one("SELECT id, username, full_name, role, is_active FROM users WHERE id=?", (row_id,)))
+    try:
+        execute(
+            "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
+            (user["id"], "user_create", "users", row_id,
+             f"Created user {body.username} with role {body.role}"),
+        )
+    except Exception:
+        pass
+    result = dict(fetch_one("SELECT id, username, full_name, role, is_active FROM users WHERE id=?", (row_id,)))
+    if body.role in ("class_teacher", "subject_teacher") and not teacher_id:
+        result["warning"] = "No teacher record linked. This user will see no class data until linked to a teacher."
+    return result
 
 
 class EditUserPayload(BaseModel):
@@ -74,7 +105,22 @@ class EditUserPayload(BaseModel):
 
 @router.put("/users/{uid}")
 def edit_user(uid: int, body: EditUserPayload, user: Usr):
+    actor_role = user.get("role", "")
+    actor_id = user.get("id")
+    target = fetch_one("SELECT role FROM users WHERE id=?", (uid,))
+    if not target:
+        raise HTTPException(404, "User not found")
+    target_role = target["role"]
+    if actor_role == "head_teacher":
+        if target_role in _ELEVATED_ROLES:
+            raise HTTPException(403, "Head teachers cannot edit elevated accounts")
+        if body.role not in _HEAD_TEACHER_ASSIGNABLE:
+            raise HTTPException(403, "Head teachers may only assign class_teacher or subject_teacher roles")
+    elif actor_role != "admin":
+        raise HTTPException(403, "Only admin or head teacher can edit users")
     if body.password:
+        if len(body.password) < 8:
+            raise HTTPException(400, "Password must be at least 8 characters")
         pw_hash, salt = hash_password(body.password)
         execute(
             "UPDATE users SET full_name=?, role=?, password_hash=?, salt=? WHERE id=?",
@@ -82,11 +128,30 @@ def edit_user(uid: int, body: EditUserPayload, user: Usr):
         )
     else:
         execute("UPDATE users SET full_name=?, role=? WHERE id=?", (body.full_name, body.role, uid))
+    try:
+        execute(
+            "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
+            (user["id"], "user_edit", "users", uid,
+             f"Edited user id={uid} role→{body.role}"),
+        )
+    except Exception:
+        pass
     return dict(fetch_one("SELECT id, username, full_name, role, is_active FROM users WHERE id=?", (uid,)))
 
 
 @router.post("/users/{uid}/toggle-active")
 def toggle_active(uid: int, user: Usr):
+    actor_role = user.get("role", "")
+    actor_id = user.get("id")
+    if uid == actor_id:
+        raise HTTPException(400, "Cannot deactivate your own account")
+    target = fetch_one("SELECT role FROM users WHERE id=?", (uid,))
+    if not target:
+        raise HTTPException(404, "User not found")
+    if actor_role == "head_teacher" and target["role"] in _ELEVATED_ROLES:
+        raise HTTPException(403, "Head teachers cannot deactivate elevated accounts")
+    if actor_role not in ("admin", "head_teacher"):
+        raise HTTPException(403, "Insufficient permissions")
     execute("UPDATE users SET is_active = 1 - is_active WHERE id=?", (uid,))
     return {"ok": True}
 

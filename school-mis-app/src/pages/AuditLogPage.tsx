@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Shield, Search } from "lucide-react";
+import { Shield, Download } from "lucide-react";
+import { downloadCSV } from "@/utils/export";
 import { getAuditLog } from "@/api/notifications";
 import DataTable from "@/components/data/DataTable";
 import Select from "@/components/ui/Select";
@@ -147,6 +148,15 @@ export default function AuditLogPage() {
           className="w-40"
         />
         <span className="text-sm text-gray-400">{rows.length} entries</span>
+        {rows.length > 0 && (
+          <button
+            onClick={() => downloadCSV("Audit_Log", ["Timestamp","User","Role","Action","Table","Record","Detail"],
+              rows.map((r) => [r.ts, r.full_name || r.username, r.role, r.action, r.table_name, r.record_id ?? "", r.detail]))}
+            className="flex items-center gap-1.5 h-9 px-3 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ml-auto"
+          >
+            <Download size={14} /> Export CSV
+          </button>
+        )}
       </div>
 
       <DataTable

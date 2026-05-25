@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Printer } from "lucide-react";
+import { printHTML } from "@/utils/export";
 import PageHeader from "@/components/ui/PageHeader";
 import Modal from "@/components/ui/Modal";
 import FormField from "@/components/ui/FormField";
@@ -72,6 +73,39 @@ export default function ReportCardsPage() {
     } catch (e: any) {
       toast.error(e.response?.data?.detail || "Failed to publish");
     }
+  };
+
+  const handlePrint = (card: ReportCard) => {
+    const subjectRows = (card.subjects ?? []).map((s) => `
+      <tr>
+        <td>${s.subject_name}</td>
+        <td class="center">${s.marks_obtained ?? "—"}/${s.total_marks ?? "—"}</td>
+        <td class="center">${s.percentage != null ? s.percentage.toFixed(1) + "%" : "—"}</td>
+        <td class="center bold">${s.grade_label ?? "—"}</td>
+      </tr>`).join("");
+
+    printHTML(
+      `Report Card — ${card.student_name}`,
+      `<h1>Student Report Card</h1>
+       <h2>${card.class_name_snapshot ?? ""}</h2>
+       <p class="meta">
+         <strong>Name:</strong> ${card.student_name} &nbsp;|&nbsp;
+         <strong>Adm No:</strong> ${card.admission_no} &nbsp;|&nbsp;
+         <strong>Rank:</strong> #${card.class_rank ?? "—"} &nbsp;|&nbsp;
+         <strong>Overall:</strong> ${card.overall_pct != null ? card.overall_pct.toFixed(1) + "%" : "—"} — Grade ${card.overall_grade ?? "—"}
+       </p>
+       <table>
+         <thead>
+           <tr>
+             <th>Subject</th>
+             <th class="center">Marks</th>
+             <th class="center">%</th>
+             <th class="center">Grade</th>
+           </tr>
+         </thead>
+         <tbody>${subjectRows}</tbody>
+       </table>`,
+    );
   };
 
   const handleLock = async (card: ReportCard) => {
@@ -159,6 +193,12 @@ export default function ReportCardsPage() {
               <div>
                 <h3 className="font-semibold text-lg">{selected.student_name}</h3>
                 <p className="text-sm text-gray-500">{selected.class_name_snapshot} · Rank #{selected.class_rank}</p>
+                <button
+                  onClick={() => handlePrint(selected)}
+                  className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Printer size={12} /> Print
+                </button>
               </div>
               <div className="text-right">
                 <div className={`text-2xl font-bold ${

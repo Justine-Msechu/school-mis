@@ -39,12 +39,11 @@ def fee_collection(user: Usr, academic_year_id: int = Query(None)):
     rows = fetch_all(
         f"""SELECT ft.name as fee_type,
                    COUNT(DISTINCT sb.student_id) as students,
-                   COALESCE(SUM(sb.amount),0) as billed,
-                   COALESCE(SUM(fp.amount),0) as collected
+                   COALESCE(SUM(sb.amount_due),0) as billed,
+                   COALESCE(SUM(sb.amount_paid),0) as collected
             FROM fee_structures fs
             JOIN fee_types ft ON ft.id=fs.fee_type_id
             LEFT JOIN student_bills sb ON sb.fee_structure_id=fs.id
-            LEFT JOIN fee_payments fp ON fp.student_id=sb.student_id
             {where}
             GROUP BY fs.fee_type_id ORDER BY ft.name""",
         params,
@@ -83,9 +82,9 @@ def overview(user: Usr):
     students  = dict(fetch_one("SELECT COUNT(*) as n FROM students WHERE is_active=1") or {}).get("n", 0)
     teachers  = dict(fetch_one("SELECT COUNT(*) as n FROM teachers") or {}).get("n", 0)
     books     = dict(fetch_one("SELECT COUNT(*) as n FROM library_books WHERE is_active=1") or {}).get("n", 0)
-    loans_out = dict(fetch_one("SELECT COUNT(*) as n FROM library_loans WHERE returned_at IS NULL") or {}).get("n", 0)
+    loans_out = dict(fetch_one("SELECT COUNT(*) as n FROM library_loans WHERE status='active'") or {}).get("n", 0)
     expenses  = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM expenses") or {}).get("n", 0)
-    revenue   = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM fee_payments") or {}).get("n", 0)
+    revenue   = dict(fetch_one("SELECT COALESCE(SUM(amount_paid),0) as n FROM fee_payments") or {}).get("n", 0)
     return {
         "students": students, "teachers": teachers,
         "books": books,       "active_loans": loans_out,

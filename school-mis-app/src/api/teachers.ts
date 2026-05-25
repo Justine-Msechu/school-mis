@@ -32,6 +32,9 @@ export interface TeacherPayload {
 export const getTeachers = (search = "") =>
   api.get<Teacher[]>("/teachers", { params: { search } }).then((r) => r.data);
 
+export const getNextEmployeeNo = (): Promise<string> =>
+  api.get<{ employee_no: string }>("/teachers/next-employee-no").then((r) => r.data.employee_no);
+
 export const getTeacher = (id: number) =>
   api.get<Teacher>(`/teachers/${id}`).then((r) => r.data);
 

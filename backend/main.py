@@ -41,6 +41,16 @@ async def lifespan(app: FastAPI):
         _mod2 = importlib.util.module_from_spec(_spec2)
         _spec2.loader.exec_module(_mod2)
         _mod2.run()
+        _mig3_path = os.path.join(os.path.dirname(__file__), "migrations", "003_structural_fixes.py")
+        _spec3 = importlib.util.spec_from_file_location("migration_003", _mig3_path)
+        _mod3 = importlib.util.module_from_spec(_spec3)
+        _spec3.loader.exec_module(_mod3)
+        _mod3.run()
+        _mig4_path = os.path.join(os.path.dirname(__file__), "migrations", "004_id_generation.py")
+        _spec4 = importlib.util.spec_from_file_location("migration_004", _mig4_path)
+        _mod4 = importlib.util.module_from_spec(_spec4)
+        _spec4.loader.exec_module(_mod4)
+        _mod4.run()
     except Exception as e:
         log.warning("Migration warning (may already be applied): %s", e)
 

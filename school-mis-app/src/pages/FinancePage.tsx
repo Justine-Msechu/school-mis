@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Plus, Search } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download } from "lucide-react";
+import { downloadCSV } from "@/utils/export";
 import { getPayments, getFinanceSummary, recordPayment, getStudentBill, type Payment, type FinanceSummary, type StudentBill } from "@/api/finance";
 import { getStudents } from "@/api/students";
 import { getFeeStructures, getFeeTypes, createFeeStructure, createFeeType, getAcademicYears, type FeeStructure, type FeeType, type AcademicYear } from "@/api/settings";
@@ -317,7 +318,18 @@ export default function FinancePage() {
           <p className="text-sm text-gray-500 mt-0.5">Fee collection and payments</p>
         </div>
         {tab === "payments" && (
-          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setPaymentDialog(true)}>Record Payment</Button>
+          <div className="flex gap-2">
+            {payments.length > 0 && (
+              <button
+                onClick={() => downloadCSV("Payments", ["Student","Adm No","Amount (TZS)","Method","Date","Reference"],
+                  payments.map((p: any) => [p.student_name, p.admission_no, p.amount_paid ?? p.amount, p.payment_method ?? "", p.payment_date ?? p.created_at?.slice(0,10), p.reference ?? ""]))}
+                className="flex items-center gap-1.5 h-9 px-3 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Download size={14} /> Export
+              </button>
+            )}
+            <Button variant="primary" icon={<Plus size={15} />} onClick={() => setPaymentDialog(true)}>Record Payment</Button>
+          </div>
         )}
         {tab === "fees" && (
           <Button variant="primary" icon={<Plus size={15} />} onClick={() => setFeeDialog(true)}>Add Fee Structure</Button>

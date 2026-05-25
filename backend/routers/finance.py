@@ -41,8 +41,10 @@ def get_fee_types(user: Usr):
 
 
 class FeeTypeBody(BaseModel):
-    name: str
-    is_recurring: int = 1
+    name:        str
+    amount:      float = 0
+    term:        int | None = None
+    description: str | None = None
 
 @router.post("/fee-types")
 def create_fee_type(body: FeeTypeBody, user: Usr):
@@ -51,11 +53,12 @@ def create_fee_type(body: FeeTypeBody, user: Usr):
     conn = _get_conn()
     try:
         cur = conn.execute(
-            "INSERT INTO fee_types (name, is_recurring) VALUES (?,?)",
-            (body.name, body.is_recurring),
+            "INSERT INTO fee_types (name, amount, term, description) VALUES (?,?,?,?)",
+            (body.name, body.amount, body.term, body.description),
         )
         conn.commit()
-        return {"id": cur.lastrowid, "name": body.name}
+        row = conn.execute("SELECT * FROM fee_types WHERE id=?", (cur.lastrowid,)).fetchone()
+        return dict(row)
     except Exception as e:
         raise HTTPException(400, str(e))
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Search, Plus, Edit2, Mail, Phone, Users } from "lucide-react";
-import { getTeachers, createTeacher, updateTeacher, type Teacher } from "@/api/teachers";
+import { Search, Plus, Edit2, Mail, Phone, Users, Download } from "lucide-react";
+import { downloadCSV } from "@/utils/export";
+import { getTeachers, createTeacher, updateTeacher, getNextEmployeeNo, type Teacher } from "@/api/teachers";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
@@ -23,6 +24,7 @@ interface TeacherDialogProps {
 }
 
 function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
+  const isEdit = !!initial;
   const [form, setForm] = useState({
     first_name:             initial?.first_name             ?? "",
     last_name:              initial?.last_name              ?? "",
@@ -34,8 +36,20 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
     qualification:          initial?.qualification          ?? "",
     joining_date:           initial?.joining_date           ?? "",
   });
+  const [empPreview, setEmpPreview]       = useState("");
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
+
+  useEffect(() => {
+    if (!isEdit) {
+      setLoadingPreview(true);
+      getNextEmployeeNo()
+        .then((no) => setEmpPreview(no))
+        .catch(() => setEmpPreview(""))
+        .finally(() => setLoadingPreview(false));
+    }
+  }, [isEdit]);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -49,14 +63,15 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
     try {
       const payload = {
         ...form,
-        phone:                  form.phone                  || null,
-        email:                  form.email                  || null,
-        subject_specialization: form.subject_specialization || null,
-        qualification:          form.qualification          || null,
-        joining_date:           form.joining_date           || null,
+        employee_no:            form.employee_no.trim()            || undefined,
+        phone:                  form.phone                         || null,
+        email:                  form.email                         || null,
+        subject_specialization: form.subject_specialization        || null,
+        qualification:          form.qualification                 || null,
+        joining_date:           form.joining_date                  || null,
       };
-      if (initial) {
-        await updateTeacher(initial.id, payload);
+      if (isEdit) {
+        await updateTeacher(initial!.id, payload);
       } else {
         await createTeacher(payload);
       }
@@ -71,7 +86,7 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">{initial ? "Edit Teacher" : "Add Teacher"}</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">{isEdit ? "Edit Teacher" : "Add Teacher"}</h2>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="First Name *">
@@ -80,8 +95,18 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
           <Field label="Last Name *">
             <input className={INPUT} value={form.last_name} onChange={(e) => set("last_name", e.target.value)} />
           </Field>
-          <Field label="Employee No">
-            <input className={INPUT} value={form.employee_no} onChange={(e) => set("employee_no", e.target.value)} />
+          <Field label={isEdit ? "Employee No" : "Employee No (leave blank to auto-generate)"}>
+            <div className="relative">
+              <input
+                className={INPUT + " font-mono"}
+                value={form.employee_no}
+                onChange={(e) => set("employee_no", e.target.value)}
+                placeholder={isEdit ? "" : loadingPreview ? "Loading…" : empPreview}
+              />
+            </div>
+            {!isEdit && (
+              <p className="text-2xs text-gray-400 mt-0.5">Leave blank to auto-assign ({empPreview || "EMP/YYYY/NNNN"})</p>
+            )}
           </Field>
           <Field label="Gender">
             <select className={INPUT} value={form.gender} onChange={(e) => set("gender", e.target.value)}>
@@ -137,7 +162,18 @@ export default function TeachersPage() {
             {loading ? "Loading…" : `${teachers.length} staff members`}
           </p>
         </div>
-        <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Teacher</Button>
+        <div className="flex gap-2">
+          {teachers.length > 0 && (
+            <button
+              onClick={() => downloadCSV("Teachers", ["Emp No","First Name","Last Name","Gender","Specialization","Qualification","Phone","Email","Joined"],
+                teachers.map((t) => [t.employee_no, t.first_name, t.last_name, t.gender, t.subject_specialization ?? "", t.qualification ?? "", t.phone ?? "", t.email ?? "", t.joining_date ?? ""]))}
+              className="flex items-center gap-1.5 h-9 px-3 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Download size={14} /> Export
+            </button>
+          )}
+          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Teacher</Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 mb-5">
@@ -182,7 +218,7 @@ export default function TeachersPage() {
                     <div className="font-medium text-gray-900">{t.first_name} {t.last_name}</div>
                     {t.gender && <div className="text-xs text-gray-400">{t.gender === "M" ? "Male" : "Female"}</div>}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{t.employee_no || "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 font-mono text-xs">{t.employee_no || "—"}</td>
                   <td className="px-4 py-3 text-gray-600">{t.subject_specialization || "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-0.5">

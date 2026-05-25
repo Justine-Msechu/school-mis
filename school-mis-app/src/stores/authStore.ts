@@ -3,52 +3,56 @@ import { persist } from "zustand/middleware";
 import type { User } from "@/api/auth";
 
 // Read persisted auth synchronously before React's first render.
-// Zustand persist rehydrates asynchronously, so without this the
-// store starts with isLoggedIn=false for one render, causing a
-// login-page flash even for already-authenticated users.
-const _readPersisted = (): { isLoggedIn: boolean; user: User | null; token: string | null } => {
+const _readPersisted = (): { isLoggedIn: boolean; user: User | null; token: string | null; mustChangePw: boolean } => {
   try {
     const raw = localStorage.getItem("mis-auth");
-    if (!raw) return { isLoggedIn: false, user: null, token: null };
-    const parsed = JSON.parse(raw) as { state?: { user?: User; token?: string } };
-    const { user, token } = parsed?.state ?? {};
+    if (!raw) return { isLoggedIn: false, user: null, token: null, mustChangePw: false };
+    const parsed = JSON.parse(raw) as { state?: { user?: User; token?: string; mustChangePw?: boolean } };
+    const { user, token, mustChangePw } = parsed?.state ?? {};
     if (token && user) {
       sessionStorage.setItem("mis_token", token);
-      localStorage.setItem("mis_token", token);
-      return { isLoggedIn: true, user, token };
+      return { isLoggedIn: true, user, token, mustChangePw: mustChangePw ?? false };
     }
   } catch { /* storage unavailable or corrupt */ }
-  return { isLoggedIn: false, user: null, token: null };
+  return { isLoggedIn: false, user: null, token: null, mustChangePw: false };
 };
 
 const _initial = _readPersisted();
 
 interface AuthState {
-  isLoggedIn: boolean;
-  user: User | null;
-  token: string | null;
-  login: (user: User, token: string) => void;
-  logout: () => void;
-  can: (permission: string) => boolean;
+  isLoggedIn:   boolean;
+  user:         User | null;
+  token:        string | null;
+  mustChangePw: boolean;
+  login:        (user: User, token: string, mustChangePw?: boolean) => void;
+  logout:       () => void;
+  setMustChangePw: (v: boolean) => void;
+  can:          (permission: string) => boolean;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      isLoggedIn: _initial.isLoggedIn,
-      user: _initial.user,
-      token: _initial.token,
+      isLoggedIn:   _initial.isLoggedIn,
+      user:         _initial.user,
+      token:        _initial.token,
+      mustChangePw: _initial.mustChangePw,
 
-      login(user, token) {
+      login(user, token, mustChangePw = false) {
+        // Store token in sessionStorage only — cleared when browser tab closes.
+        // localStorage is used only by Zustand persist for session restoration.
         sessionStorage.setItem("mis_token", token);
-        localStorage.setItem("mis_token", token);
-        set({ isLoggedIn: true, user, token });
+        set({ isLoggedIn: true, user, token, mustChangePw });
       },
 
       logout() {
         sessionStorage.removeItem("mis_token");
-        localStorage.removeItem("mis_token");
-        set({ isLoggedIn: false, user: null, token: null });
+        localStorage.removeItem("mis-auth");
+        set({ isLoggedIn: false, user: null, token: null, mustChangePw: false });
+      },
+
+      setMustChangePw(v: boolean) {
+        set({ mustChangePw: v });
       },
 
       can(permission: string) {
@@ -60,7 +64,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "mis-auth",
-      partialize: (s) => ({ user: s.user, token: s.token }),
+      partialize: (s) => ({ user: s.user, token: s.token, mustChangePw: s.mustChangePw }),
     }
   )
 );

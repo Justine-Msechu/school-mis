@@ -15,6 +15,7 @@ class EnrollmentService:
         return row
 
     def enroll_student(self, student_id: int, class_id: int, academic_year_id: int, created_by: int) -> dict:
+        from backend.core.db import execute as db_execute, fetch_one as db_fetch_one
         existing = self._repo.get_active(student_id, academic_year_id)
         if existing:
             raise ConflictError(
@@ -26,7 +27,24 @@ class EnrollmentService:
         cls = fetch_one("SELECT id, name FROM classes WHERE id = ? AND deleted_at IS NULL", (class_id,))
         if not cls:
             raise NotFoundError("Class not found")
+        # Re-enroll if a previous withdrawn/transferred record exists for this year
+        prev = fetch_one(
+            "SELECT id FROM enrollments WHERE student_id=? AND academic_year_id=?",
+            (student_id, academic_year_id),
+        )
+        if prev:
+            db_execute(
+                """UPDATE enrollments SET class_id=?, status='active', exit_date=NULL,
+                   transfer_reason=NULL, enrollment_date=date('now'), updated_at=datetime('now')
+                   WHERE id=?""",
+                (class_id, prev["id"]),
+            )
+            db_execute("UPDATE students SET class_id=? WHERE id=?", (class_id, student_id))
+            return {"id": prev["id"], "student_name": student["full_name"], "class_name": cls["name"]}
         eid = self._repo.enroll(student_id, class_id, academic_year_id, created_by)
+        # Keep students.class_id in sync with active enrollment
+        from backend.core.db import execute as db_exec
+        db_exec("UPDATE students SET class_id=? WHERE id=?", (class_id, student_id))
         return {"id": eid, "student_name": student["full_name"], "class_name": cls["name"]}
 
     def transfer_student(self, enrollment_id: int, new_class_id: int, reason: str, created_by: int) -> int:

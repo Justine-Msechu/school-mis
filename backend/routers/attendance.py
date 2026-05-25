@@ -17,7 +17,7 @@ def get_sheet(user: Usr, class_id: int, date: str = Query(default="")):
         (class_id,),
     )
     existing = fetch_all(
-        "SELECT student_id, status, remarks FROM attendance WHERE class_id=? AND date=?",
+        "SELECT student_id, status, notes FROM attendance WHERE class_id=? AND date=?",
         (class_id, d),
     )
     att_map = {r["student_id"]: dict(r) for r in existing}
@@ -27,8 +27,8 @@ def get_sheet(user: Usr, class_id: int, date: str = Query(default="")):
         "rows": [
             {
                 **dict(s),
-                "status":  att_map.get(s["id"], {}).get("status", ""),
-                "remarks": att_map.get(s["id"], {}).get("remarks", ""),
+                "status": att_map.get(s["id"], {}).get("status", ""),
+                "notes":  att_map.get(s["id"], {}).get("notes", ""),
             }
             for s in students
         ],
@@ -37,8 +37,9 @@ def get_sheet(user: Usr, class_id: int, date: str = Query(default="")):
 
 class AttendanceEntry(BaseModel):
     student_id: int
-    status:     str   # present | absent | late | excused
-    remarks:    str = ""
+    status:     str   # Present | Absent | Late | Excused
+    notes:      str = ""
+
 
 class SaveAttendanceBody(BaseModel):
     class_id: int
@@ -50,18 +51,18 @@ class SaveAttendanceBody(BaseModel):
 def save_attendance(body: SaveAttendanceBody, user: Usr):
     for e in body.entries:
         existing = fetch_one(
-            "SELECT id FROM attendance WHERE student_id=? AND class_id=? AND date=?",
-            (e.student_id, body.class_id, body.date),
+            "SELECT id FROM attendance WHERE student_id=? AND date=?",
+            (e.student_id, body.date),
         )
         if existing:
             execute(
-                "UPDATE attendance SET status=?, remarks=? WHERE id=?",
-                (e.status, e.remarks, existing["id"]),
+                "UPDATE attendance SET status=?, notes=?, class_id=? WHERE id=?",
+                (e.status, e.notes, body.class_id, existing["id"]),
             )
         else:
             execute(
-                "INSERT INTO attendance (student_id, class_id, date, status, remarks) VALUES (?,?,?,?,?)",
-                (e.student_id, body.class_id, body.date, e.status, e.remarks),
+                "INSERT INTO attendance (student_id, class_id, date, status, notes) VALUES (?,?,?,?,?)",
+                (e.student_id, body.class_id, body.date, e.status, e.notes),
             )
     return {"saved": len(body.entries)}
 
@@ -75,9 +76,9 @@ def get_summary(user: Usr, class_id: int = Query(None), days: int = Query(30)):
         params.append(class_id)
     rows = fetch_all(
         f"""SELECT a.date,
-                   SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) as present,
-                   SUM(CASE WHEN a.status='absent'  THEN 1 ELSE 0 END) as absent,
-                   SUM(CASE WHEN a.status='late'    THEN 1 ELSE 0 END) as late,
+                   SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END) as present,
+                   SUM(CASE WHEN a.status='Absent'  THEN 1 ELSE 0 END) as absent,
+                   SUM(CASE WHEN a.status='Late'    THEN 1 ELSE 0 END) as late,
                    COUNT(*) as total
             FROM attendance a {where}
             GROUP BY a.date ORDER BY a.date DESC""",
@@ -102,6 +103,7 @@ def get_leave_requests(user: Usr, status: str = Query("pending")):
 class LeaveReviewBody(BaseModel):
     status: str   # approved | rejected
     note:   str = ""
+
 
 @router.post("/leave-requests/{lr_id}/review")
 def review_leave(lr_id: int, body: LeaveReviewBody, user: Usr):

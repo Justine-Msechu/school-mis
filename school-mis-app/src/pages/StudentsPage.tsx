@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Search, Plus, Edit2, UserX } from "lucide-react";
-import { getStudents, createStudent, updateStudent, deactivateStudent, type Student, type StudentList } from "@/api/students";
+import { Search, Plus, Edit2, UserX, Download } from "lucide-react";
+import { downloadCSV } from "@/utils/export";
+import {
+  getStudents, createStudent, updateStudent, deactivateStudent,
+  getNextAdmissionNo, type Student, type StudentList,
+} from "@/api/students";
 import { getClasses, type ClassItem } from "@/api/grades";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
@@ -21,6 +25,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
+const INPUT_MONO = INPUT + " font-mono";
 
 interface StudentDialogProps {
   classes: ClassItem[];
@@ -30,33 +35,60 @@ interface StudentDialogProps {
 }
 
 function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps) {
+  const isEdit = !!initial;
   const [form, setForm] = useState({
-    first_name:     initial?.first_name     ?? "",
-    last_name:      initial?.last_name      ?? "",
-    admission_no:   initial?.admission_no   ?? "",
-    gender:         initial?.gender         ?? "M",
-    class_id:       initial?.class_id       ?? null as number | null,
-    date_of_birth:  initial?.date_of_birth  ?? "",
-    guardian_name:  initial?.guardian_name  ?? "",
-    guardian_phone: initial?.guardian_phone ?? "",
+    first_name:    initial?.first_name    ?? "",
+    last_name:     initial?.last_name     ?? "",
+    admission_no:  initial?.admission_no  ?? "",
+    gender:        initial?.gender        ?? "Male",
+    class_id:      initial?.class_id      ?? null as number | null,
+    date_of_birth: initial?.date_of_birth ?? "",
+    parent_name:   initial?.parent_name   ?? "",
+    parent_phone:  initial?.parent_phone  ?? "",
+    parent_email:  initial?.parent_email  ?? "",
+    address:       initial?.address       ?? "",
+    notes:         initial?.notes         ?? "",
+    student_category: initial?.student_category ?? "regular",
   });
+  const [admPreview, setAdmPreview] = useState("");
+  const [loadingPreview, setLoadingPreview]  = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
+
+  useEffect(() => {
+    if (!isEdit) {
+      setLoadingPreview(true);
+      getNextAdmissionNo()
+        .then((no) => setAdmPreview(no))
+        .catch(() => setAdmPreview(""))
+        .finally(() => setLoadingPreview(false));
+    }
+  }, [isEdit]);
 
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async () => {
-    if (!form.first_name || !form.last_name || !form.admission_no) {
-      setError("First name, last name and admission number are required.");
+    if (!form.first_name || !form.last_name) {
+      setError("First name and last name are required.");
       return;
     }
     setSaving(true);
     setError("");
     try {
-      if (initial) {
-        await updateStudent(initial.id, form);
+      const payload = {
+        ...form,
+        admission_no:  form.admission_no.trim() || undefined,
+        date_of_birth: form.date_of_birth || null,
+        parent_name:   form.parent_name   || null,
+        parent_phone:  form.parent_phone  || null,
+        parent_email:  form.parent_email  || null,
+        address:       form.address       || null,
+        notes:         form.notes         || null,
+      };
+      if (isEdit) {
+        await updateStudent(initial!.id, payload);
       } else {
-        await createStudent(form);
+        await createStudent(payload);
       }
       onSave();
     } catch (e: any) {
@@ -71,10 +103,18 @@ function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps
     ...classes.map((c) => ({ value: c.id, label: c.name })),
   ];
 
+  const categoryOptions = [
+    { value: "regular",     label: "Regular" },
+    { value: "orphan",      label: "Orphan" },
+    { value: "half_orphan", label: "Half Orphan" },
+    { value: "sponsored",   label: "Sponsored" },
+    { value: "vulnerable",  label: "Vulnerable" },
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">{initial ? "Edit Student" : "Add Student"}</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">{isEdit ? "Edit Student" : "Add Student"}</h2>
 
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 
@@ -85,28 +125,66 @@ function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps
           <Field label="Last Name *">
             <input className={INPUT} value={form.last_name} onChange={(e) => set("last_name", e.target.value)} />
           </Field>
-          <Field label="Admission No *">
-            <input className={INPUT} value={form.admission_no} onChange={(e) => set("admission_no", e.target.value)} />
+
+          <Field label={isEdit ? "Admission No" : "Admission No (leave blank to auto-generate)"}>
+            <div className="relative">
+              <input
+                className={INPUT_MONO}
+                value={form.admission_no}
+                onChange={(e) => set("admission_no", e.target.value)}
+                placeholder={isEdit ? "" : loadingPreview ? "Loading…" : admPreview}
+              />
+              {!isEdit && !loadingPreview && admPreview && !form.admission_no && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-gray-400 pointer-events-none">
+                  auto: {admPreview}
+                </span>
+              )}
+            </div>
+            {!isEdit && (
+              <p className="text-2xs text-gray-400 mt-0.5">Leave blank to auto-assign ({admPreview || "ADM/YYYY/NNNN"})</p>
+            )}
           </Field>
+
           <Field label="Gender">
             <select className={INPUT} value={form.gender} onChange={(e) => set("gender", e.target.value)}>
-              <option value="M">Male</option>
-              <option value="F">Female</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
             </select>
           </Field>
+
           <Field label="Class">
             <Select value={form.class_id} onChange={(v) => set("class_id", v as number | null)} options={classOptions} />
           </Field>
           <Field label="Date of Birth">
             <input type="date" className={INPUT} value={form.date_of_birth ?? ""} onChange={(e) => set("date_of_birth", e.target.value)} />
           </Field>
-          <Field label="Guardian Name">
-            <input className={INPUT} value={form.guardian_name ?? ""} onChange={(e) => set("guardian_name", e.target.value)} />
+          <Field label="Category">
+            <select className={INPUT} value={form.student_category} onChange={(e) => set("student_category", e.target.value)}>
+              {categoryOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </Field>
-          <Field label="Guardian Phone">
-            <input className={INPUT} value={form.guardian_phone ?? ""} onChange={(e) => set("guardian_phone", e.target.value)} />
+          <Field label="Parent / Guardian Name">
+            <input className={INPUT} value={form.parent_name ?? ""} onChange={(e) => set("parent_name", e.target.value)} />
+          </Field>
+          <Field label="Parent Phone">
+            <input className={INPUT} value={form.parent_phone ?? ""} onChange={(e) => set("parent_phone", e.target.value)} />
+          </Field>
+          <Field label="Parent Email">
+            <input type="email" className={INPUT} value={form.parent_email ?? ""} onChange={(e) => set("parent_email", e.target.value)} />
+          </Field>
+          <Field label="Address">
+            <input className={INPUT} value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} />
           </Field>
         </div>
+
+        <Field label="Notes">
+          <textarea
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+            rows={2}
+            value={form.notes ?? ""}
+            onChange={(e) => set("notes", e.target.value)}
+          />
+        </Field>
 
         <div className="flex justify-end gap-2 mt-5">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -154,7 +232,18 @@ export default function StudentsPage() {
             {data ? `${data.total.toLocaleString()} students enrolled` : "Loading…"}
           </p>
         </div>
-        <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Student</Button>
+        <div className="flex gap-2">
+          {data && data.items.length > 0 && (
+            <button
+              onClick={() => downloadCSV("Students", ["Adm No","First Name","Last Name","Gender","Class","Parent","Phone","Status"],
+                data.items.map((s) => [s.admission_no, s.first_name, s.last_name, s.gender, s.class_name ?? "", s.parent_name ?? "", s.parent_phone ?? "", s.is_active ? "Active" : "Inactive"]))}
+              className="flex items-center gap-1.5 h-9 px-3 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Download size={14} /> Export
+            </button>
+          )}
+          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Student</Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
@@ -177,7 +266,7 @@ export default function StudentsPage() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Student</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Adm No</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Class</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Guardian</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Parent / Guardian</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Status</th>
               <th className="px-4 py-3 w-24" />
             </tr>
@@ -189,13 +278,13 @@ export default function StudentsPage() {
                 <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-2.5">
                     <p className="font-medium text-gray-900">{s.first_name} {s.last_name}</p>
-                    <p className="text-2xs text-gray-400">{s.gender === "M" ? "Male" : "Female"}</p>
+                    <p className="text-2xs text-gray-400">{s.gender === "Male" || s.gender === "M" ? "Male" : "Female"}</p>
                   </td>
-                  <td className="px-4 py-2.5 text-gray-600 text-xs">{s.admission_no}</td>
+                  <td className="px-4 py-2.5 text-gray-600 text-xs font-mono">{s.admission_no}</td>
                   <td className="px-4 py-2.5 text-gray-600 text-xs">{s.class_name ?? "—"}</td>
                   <td className="px-4 py-2.5">
-                    <p className="text-xs text-gray-700">{s.guardian_name ?? "—"}</p>
-                    <p className="text-2xs text-gray-400">{s.guardian_phone ?? ""}</p>
+                    <p className="text-xs text-gray-700">{s.parent_name ?? "—"}</p>
+                    <p className="text-2xs text-gray-400">{s.parent_phone ?? ""}</p>
                   </td>
                   <td className="px-4 py-2.5">
                     {s.is_active

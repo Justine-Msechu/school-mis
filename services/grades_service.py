@@ -209,14 +209,14 @@ class GradesService(BaseService):
             letter = _letter_grade(float(score), float(max_score))
             execute(
                 """INSERT INTO grades
-                   (student_id, exam_id, subject_id, score, max_score,
+                   (student_id, exam_id, subject_id, class_id, score, max_score,
                     grade_letter, remarks, entered_by, status)
-                   VALUES (?,?,?,?,?,?,?,?,'draft')
+                   VALUES (?,?,?,?,?,?,?,?,?,'draft')
                    ON CONFLICT(student_id, exam_id, subject_id) DO UPDATE SET
                      score=excluded.score, max_score=excluded.max_score,
                      grade_letter=excluded.grade_letter, remarks=excluded.remarks,
                      entered_by=excluded.entered_by, status='draft'""",
-                (entry["student_id"], exam_id, subject_id,
+                (entry["student_id"], exam_id, subject_id, class_id,
                  score, max_score, letter,
                  entry.get("remarks", ""), self._session.user_id),
             )

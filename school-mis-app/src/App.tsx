@@ -23,6 +23,7 @@ import EnrollmentPage from "@/pages/EnrollmentPage";
 import GuardiansPage from "@/pages/GuardiansPage";
 import TimetablePage from "@/pages/TimetablePage";
 import ReportCardsPage from "@/pages/ReportCardsPage";
+import ForceChangePassword from "@/components/ui/ForceChangePassword";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuthStore();
@@ -34,6 +35,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ForceChangePassword />
       <Routes>
         <Route path="/login" element={isLoggedIn ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route

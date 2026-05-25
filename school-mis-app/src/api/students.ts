@@ -9,8 +9,12 @@ export interface Student {
   class_name: string | null;
   gender: string;
   date_of_birth: string | null;
-  guardian_name: string | null;
-  guardian_phone: string | null;
+  parent_name: string | null;
+  parent_phone: string | null;
+  parent_email: string | null;
+  address: string | null;
+  notes: string | null;
+  student_category: string;
   is_active: boolean;
 }
 
@@ -41,12 +45,17 @@ export async function getStudents(filters: StudentFilters = {}): Promise<Student
   return data;
 }
 
-export async function createStudent(payload: Partial<Student>): Promise<Student> {
+export async function getNextAdmissionNo(): Promise<string> {
+  const { data } = await api.get("/students/next-admission-no");
+  return data.admission_no;
+}
+
+export async function createStudent(payload: Record<string, unknown>): Promise<Student> {
   const { data } = await api.post("/students", payload);
   return data;
 }
 
-export async function updateStudent(id: number, payload: Partial<Student>): Promise<Student> {
+export async function updateStudent(id: number, payload: Record<string, unknown>): Promise<Student> {
   const { data } = await api.put(`/students/${id}`, payload);
   return data;
 }

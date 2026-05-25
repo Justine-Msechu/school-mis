@@ -20,8 +20,8 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const { token, user } = await login(username.trim(), password);
-      storeLogin(user, token);
+      const { token, user, must_change_pw } = await login(username.trim(), password);
+      storeLogin(user, token, must_change_pw);
       navigate("/");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
