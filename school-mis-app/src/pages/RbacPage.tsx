@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, Plus, Trash2, Save, RefreshCw, UserCheck, Users } from "lucide-react";
+import { ShieldCheck, Plus, Trash2, Save, UserCheck, Users, Key } from "lucide-react";
 import {
   getRbacRoles, listPermissions, setRolePermissions,
   listTeacherAssignments, assignTeacher, removeTeacherAssignment,
   listClassTeacherAssignments, assignClassTeacher, removeClassTeacherAssignment,
   getUserOverrides, addUserOverride, deleteUserOverride,
+  getUserRoles, setUserRoles,
   type RbacRole, type Permission, type TeacherAssignment,
   type ClassTeacherAssignment, type PermissionOverride,
 } from "@/api/rbac";
@@ -13,10 +14,9 @@ import { getClassList, type ClassRecord } from "@/api/classes";
 import api from "@/api/client";
 import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
-import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
 
-type Tab = "roles" | "assignments" | "overrides";
+type Tab = "roles" | "userroles" | "assignments" | "overrides";
 
 const INPUT =
   "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
@@ -445,6 +445,221 @@ function AssignmentsTab() {
   );
 }
 
+// ── Tab: User Roles ───────────────────────────────────────────────────────────
+
+function UserRolesTab() {
+  const { can } = useAuthStore();
+  const canManage = can("settings.users.manage");
+
+  const [users, setUsers]       = useState<AppUser[]>([]);
+  const [allRoles, setAllRoles] = useState<RbacRole[]>([]);
+  const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
+  const [userRoles, setUserRoles_] = useState<{ id: number; name: string; label: string; color: string }[]>([]);
+  const [search, setSearch]     = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  const [addRoleId, setAddRoleId] = useState<number | "">("");
+  const [saving, setSaving]     = useState(false);
+
+  useEffect(() => {
+    Promise.all([getUsers(), getRbacRoles()])
+      .then(([u, r]) => { setUsers(u); setAllRoles(r); })
+      .catch(() => setError("Failed to load data"));
+  }, []);
+
+  async function selectUser(u: AppUser) {
+    setSelectedUser(u);
+    setAddRoleId("");
+    setLoading(true);
+    setError("");
+    try {
+      const data = await getUserRoles(u.id);
+      setUserRoles_(data.roles);
+    } catch {
+      setError("Failed to load user roles");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshRoles(uid: number) {
+    const data = await getUserRoles(uid);
+    setUserRoles_(data.roles);
+  }
+
+  async function addRole() {
+    if (!selectedUser || !addRoleId) return;
+    const newIds = [...userRoles.map((r) => r.id), +addRoleId];
+    setSaving(true);
+    setError("");
+    try {
+      await setUserRoles(selectedUser.id, newIds);
+      await refreshRoles(selectedUser.id);
+      setAddRoleId("");
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? "Failed to add role");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeRole(roleId: number) {
+    if (!selectedUser) return;
+    const newIds = userRoles.filter((r) => r.id !== roleId).map((r) => r.id);
+    setSaving(true);
+    setError("");
+    try {
+      await setUserRoles(selectedUser.id, newIds);
+      await refreshRoles(selectedUser.id);
+    } catch {
+      setError("Failed to remove role");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const assignedIds = new Set(userRoles.map((r) => r.id));
+  const availableRoles = allRoles.filter((r) => !assignedIds.has(r.id));
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      u.username.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="flex gap-4 h-full">
+      {/* Left: user list */}
+      <div className="w-64 flex-shrink-0 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+        <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+          <input
+            className={INPUT}
+            placeholder="Search users…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {filteredUsers.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => selectUser(u)}
+              className={`w-full text-left px-3 py-2.5 border-b border-gray-100 transition-colors ${
+                selectedUser?.id === u.id
+                  ? "bg-violet-50 text-violet-700"
+                  : "hover:bg-gray-50 text-gray-700"
+              }`}
+            >
+              <p className="text-sm font-medium truncate">{u.full_name}</p>
+              <p className="text-xs text-gray-400">{u.username}</p>
+            </button>
+          ))}
+          {filteredUsers.length === 0 && (
+            <p className="text-center py-6 text-sm text-gray-400">No users found</p>
+          )}
+        </div>
+      </div>
+
+      {/* Right: roles panel */}
+      <div className="flex-1 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+        {!selectedUser ? (
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+            Select a user to view and manage their roles
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-gray-800">{selectedUser.full_name}</span>
+                <span className="ml-2 text-xs text-gray-400">{selectedUser.username}</span>
+              </div>
+              <span className="text-xs text-gray-500">
+                {userRoles.length} role{userRoles.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {error && <p className="px-4 py-2 text-sm text-red-600">{error}</p>}
+
+            {loading ? (
+              <div className="p-4"><SkeletonRow /></div>
+            ) : (
+              <>
+                {/* Current roles */}
+                <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+                  {userRoles.length === 0 ? (
+                    <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
+                      No roles assigned to this user
+                    </div>
+                  ) : (
+                    userRoles.map((role) => (
+                      <div
+                        key={role.id}
+                        className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ background: role.color }}
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{role.label}</p>
+                            <p className="text-xs font-mono text-gray-400">{role.name}</p>
+                          </div>
+                        </div>
+                        {canManage && (
+                          <button
+                            onClick={() => removeRole(role.id)}
+                            disabled={saving}
+                            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-40"
+                            title="Remove role"
+                          >
+                            <Trash2 size={13} />
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Add role */}
+                {canManage && (
+                  <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-end gap-2">
+                    <Field label="Add role">
+                      <select
+                        className={SELECT}
+                        value={addRoleId}
+                        onChange={(e) => setAddRoleId(+e.target.value || "")}
+                        disabled={availableRoles.length === 0}
+                      >
+                        <option value="">
+                          {availableRoles.length === 0 ? "All roles already assigned" : "Select role to add…"}
+                        </option>
+                        {availableRoles.map((r) => (
+                          <option key={r.id} value={r.id}>{r.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Button
+                      size="sm"
+                      onClick={addRole}
+                      disabled={!addRoleId || saving}
+                    >
+                      <Plus size={13} className="mr-1" />
+                      {saving ? "Saving…" : "Add"}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Tab: User Overrides ────────────────────────────────────────────────────────
 
 function OverridesTab() {
@@ -690,21 +905,20 @@ function OverridesTab() {
 
 export default function RbacPage() {
   const { can } = useAuthStore();
-  const [tab, setTab] = useState<Tab>("roles");
 
-  // Determine which tabs to show
-  const showRoles   = can("settings.roles.manage");
-  const showAssign  = can("teachers.manage");
+  const showRoles     = can("settings.roles.manage");
+  const showUserRoles = can("settings.users.manage") || can("settings.roles.manage");
+  const showAssign    = can("teachers.manage");
   const showOverrides = can("settings.users.manage");
 
-  // Pick default visible tab
-  const defaultTab: Tab = showRoles ? "roles" : showAssign ? "assignments" : "overrides";
+  const defaultTab: Tab = showRoles ? "roles" : showUserRoles ? "userroles" : showAssign ? "assignments" : "overrides";
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; visible: boolean }[] = [
-    { id: "roles",       label: "Roles & Permissions", icon: <ShieldCheck size={15} />, visible: showRoles },
-    { id: "assignments", label: "Teacher Assignments",  icon: <UserCheck size={15} />,  visible: showAssign },
-    { id: "overrides",   label: "User Overrides",       icon: <Users size={15} />,       visible: showOverrides },
+    { id: "roles",      label: "Roles & Permissions", icon: <ShieldCheck size={15} />, visible: showRoles },
+    { id: "userroles",  label: "User Roles",           icon: <Key size={15} />,         visible: showUserRoles },
+    { id: "assignments",label: "Teacher Assignments",  icon: <UserCheck size={15} />,   visible: showAssign },
+    { id: "overrides",  label: "Permission Overrides", icon: <Users size={15} />,        visible: showOverrides },
   ];
 
   return (
@@ -716,17 +930,17 @@ export default function RbacPage() {
         </div>
         <div>
           <h1 className="text-lg font-bold text-gray-900">Roles & Access</h1>
-          <p className="text-xs text-gray-500">Manage roles, permissions, teacher assignments and overrides</p>
+          <p className="text-xs text-gray-500">Manage roles, permissions, user role assignments and overrides</p>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200 gap-0.5">
+      <div className="flex border-b border-gray-200 gap-0.5 overflow-x-auto">
         {tabs.filter((t) => t.visible).map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
               activeTab === t.id
                 ? "border-violet-600 text-violet-700"
                 : "border-transparent text-gray-500 hover:text-gray-700"
@@ -741,6 +955,7 @@ export default function RbacPage() {
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === "roles"       && <RolesTab />}
+        {activeTab === "userroles"   && <UserRolesTab />}
         {activeTab === "assignments" && <AssignmentsTab />}
         {activeTab === "overrides"   && <OverridesTab />}
       </div>
