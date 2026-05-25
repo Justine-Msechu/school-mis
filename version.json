@@ -1,7 +1,7 @@
 {
-  "version": "4.10.0",
+  "version": "4.10.1",
   "release_date": "2026-05-25",
-  "release_notes": "Add dynamic RBAC: DB-driven roles/permissions, per-user overrides (ALLOW/DENY with expiry), teacher subject and class assignments, single authorize() entry point replacing all hardcoded role checks, Roles & Access management UI",
+  "release_notes": "Add User Roles tab: view and manage role assignments per-user from the Roles & Access page",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -186,7 +186,7 @@
     "school-mis-app/src/pages/ClassesPage.tsx": "06a792c52bcbaf6269f527e2527a0a8f796afd4f98e5014b942096cf323cf8a8",
     "school-mis-app/src/pages/TimetablePage.tsx": "eca4b5d8555943ad135ccece0f024ef68da9ae7b0b122cb8092b4e3c28a46628",
     "school-mis-app/src/pages/SettingsPage.tsx": "761ed72cbb8cd4fdffd75b61a087cd6e3e9e52a253da289278d86dea5fb0c466",
-    "school-mis-app/src/pages/RbacPage.tsx": "e083e20dd64dc86d360a6ca23396a2cd79e44ffa7987fdb0d2509772e615c067",
+    "school-mis-app/src/pages/RbacPage.tsx": "f6ace452625901584065514078dca969c905b74082ea18e0cdbc92aa6fc10d96",
     "school-mis-app/src/pages/grades/ApprovalsTab.tsx": "f8b28c257db44fdc39dceb73ea4f890b1e8879ad609aaa74ac05fea35b14e695",
     "school-mis-app/src/pages/grades/ExamManagementTab.tsx": "a1739643bf7bf6393d9c67a2048c8e69a0f394e515e57662bb06f102d7a855d5",
     "school-mis-app/src/pages/grades/HomeworkTab.tsx": "52fc1e69e0523a9a207edb62ed3fb3203d2bce29a441a058fce3785ae7594f4b",
