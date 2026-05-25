@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, Plus, Edit2, UserX, Download } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
+import { useAuthStore } from "@/stores/authStore";
 import {
   getStudents, createStudent, updateStudent, deactivateStudent,
   getNextAdmissionNo, type Student, type StudentList,
@@ -194,6 +195,7 @@ function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps
 }
 
 export default function StudentsPage() {
+  const { can } = useAuthStore();
   const [data, setData]         = useState<StudentList | null>(null);
   const [classes, setClasses]   = useState<ClassItem[]>([]);
   const [search, setSearch]     = useState("");
@@ -240,7 +242,9 @@ export default function StudentsPage() {
               <Download size={14} /> Export
             </button>
           )}
-          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Student</Button>
+          {can("student.create") && (
+            <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Student</Button>
+          )}
         </div>
       </div>
 
@@ -291,10 +295,12 @@ export default function StudentsPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setDialog(s)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors">
-                        <Edit2 size={13} />
-                      </button>
-                      {s.is_active && (
+                      {can("student.edit") && (
+                        <button onClick={() => setDialog(s)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors">
+                          <Edit2 size={13} />
+                        </button>
+                      )}
+                      {s.is_active && can("student.deactivate") && (
                         <button onClick={() => handleDeactivate(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
                           <UserX size={13} />
                         </button>

@@ -295,7 +295,7 @@ export default function GradeEntryPage() {
 
                           {/* Actions */}
                           <td className="px-4 py-2.5 text-right">
-                            {locked && row.grade_id && can("grades.change_request") && (
+                            {locked && row.grade_id && can("grades.change_request.create") && (
                               <button
                                 onClick={() => {
                                   setChangeTarget(row);

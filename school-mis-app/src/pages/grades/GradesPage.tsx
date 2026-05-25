@@ -9,17 +9,24 @@ import ChangeRequestsTab from "./ChangeRequestsTab";
 import HomeworkTab from "./HomeworkTab";
 
 const tabs = [
-  { label: "Grade Entry",       path: "",          perm: "grades.enter"          },
-  { label: "Approvals",         path: "approvals", perm: "grades.approve"        },
-  { label: "Results & Reports", path: "results",   perm: "grades.view"           },
-  { label: "Exam Management",   path: "exams",     perm: "grades.approve"        },
-  { label: "Change Requests",   path: "changes",   perm: "grades.change_request" },
-  { label: "Homework",          path: "homework",  perm: "homework.view"         },
+  { label: "Grade Entry",       path: "",          perm: "grades.write"                  },
+  { label: "Approvals",         path: "approvals", perm: "grades.approve"                },
+  { label: "Results & Reports", path: "results",   perm: "grades.view"                   },
+  { label: "Exam Management",   path: "exams",     perm: "grades.approve"                },
+  {
+    label: "Change Requests", path: "changes",
+    // Teachers can see their submitted requests; academic can review them
+    perms: ["grades.change_request.create", "grades.change_request.review"],
+  },
+  { label: "Homework",          path: "homework",  perm: "homework.view"                 },
 ];
 
 export default function GradesPage() {
   const { can } = useAuthStore();
-  const visibleTabs = tabs.filter((t) => !t.perm || can(t.perm) || can("grades.view"));
+  const visibleTabs = tabs.filter((t) => {
+    if ((t as any).perms) return (t as any).perms.some((p: string) => can(p));
+    return !t.perm || can(t.perm);
+  });
 
   return (
     <div className="flex flex-col h-full">

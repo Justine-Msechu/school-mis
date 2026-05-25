@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Clock } from "lucide-react";
 import api from "@/api/client";
+import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Select from "@/components/ui/Select";
@@ -28,6 +29,8 @@ const STATUS_OPTIONS = [
 ];
 
 export default function ChangeRequestsTab() {
+  const { can } = useAuthStore();
+  const canReview = can("grades.change_request.review");
   const [requests, setRequests] = useState<ChangeRequest[]>([]);
   const [status, setStatus]     = useState("pending");
   const [loading, setLoading]   = useState(true);
@@ -102,7 +105,7 @@ export default function ChangeRequestsTab() {
                   <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{r.reason}</td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.created_at?.slice(0, 10)}</td>
                   <td className="px-4 py-3">
-                    {r.status === "pending" ? (
+                    {r.status === "pending" && canReview ? (
                       <div className="flex items-center gap-1.5">
                         <Button
                           variant="primary"
@@ -124,7 +127,7 @@ export default function ChangeRequestsTab() {
                         </Button>
                       </div>
                     ) : (
-                      <Badge variant={r.status === "approved" ? "green" : "red"}>
+                      <Badge variant={r.status === "pending" ? "amber" : r.status === "approved" ? "green" : "red"}>
                         {r.status}
                       </Badge>
                     )}

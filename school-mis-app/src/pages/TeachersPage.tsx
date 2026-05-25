@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, Plus, Edit2, Mail, Phone, Users, Download, UserX } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
 import { getTeachers, createTeacher, updateTeacher, deactivateTeacher, getNextEmployeeNo, type Teacher } from "@/api/teachers";
+import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
@@ -140,6 +141,7 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
 }
 
 export default function TeachersPage() {
+  const { can } = useAuthStore();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [search, setSearch]     = useState("");
   const [loading, setLoading]   = useState(true);
@@ -178,7 +180,9 @@ export default function TeachersPage() {
               <Download size={14} /> Export
             </button>
           )}
-          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Teacher</Button>
+          {can("teachers.manage") && (
+            <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Teacher</Button>
+          )}
         </div>
       </div>
 
@@ -245,18 +249,22 @@ export default function TeachersPage() {
                   <td className="px-4 py-3 text-gray-600">{t.joining_date || "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setDialog(t)}
-                        className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDeactivate(t.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      >
-                        <UserX size={13} />
-                      </button>
+                      {can("teachers.manage") && (
+                        <button
+                          onClick={() => setDialog(t)}
+                          className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                      )}
+                      {can("teachers.manage") && (
+                        <button
+                          onClick={() => handleDeactivate(t.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        >
+                          <UserX size={13} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

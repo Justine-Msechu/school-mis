@@ -17,11 +17,14 @@ ROLES = {
     "head_teacher": {
         "label": "Head Teacher", "color": "#059669",
         "permissions": [
-            "student.view", "student.promote",
+            "student.view", "student.create", "student.edit", "student.deactivate",
+            "student.promote",
             "teachers.view", "teachers.manage",
             "classes.view", "classes.manage",
-            "attendance.view",
-            "grades.view", "grades.approve", "grades.publish",
+            "timetable.view",
+            "attendance.view", "attendance.mark",
+            "grades.view", "grades.write", "grades.submit",
+            "grades.approve", "grades.publish",
             "grades.change_request.review",
             # Finance: VIEW + billing + waiver approval only — cannot record payments
             # or create/edit fee structures
@@ -46,11 +49,13 @@ ROLES = {
     "academic": {
         "label": "Academic Officer", "color": "#0891B2",
         "permissions": [
-            "student.view", "student.create", "student.edit",
+            "student.view", "student.create", "student.edit", "student.deactivate",
             "teachers.view",
             "classes.view", "classes.manage",
+            "timetable.view",
             "attendance.view", "attendance.mark",
-            "grades.view", "grades.approve", "grades.publish",
+            "grades.view", "grades.write", "grades.submit",
+            "grades.approve", "grades.publish",
             "grades.change_request.review",
             "welfare.view",
             "transport.view",
@@ -105,23 +110,35 @@ ROLES = {
     "class_teacher": {
         "label": "Class Teacher", "color": "#2563EB",
         "permissions": [
-            "student.view",       # data scoped to own class in service layer
-            "attendance.view", "attendance.mark",  # scoped to own class
-            "grades.view", "grades.change_request",
+            "student.view", "student.edit",   # view + edit own class students only
+            "attendance.view", "attendance.mark",
+            # Can enter/submit grades; approval is done by academic officer
+            "grades.view", "grades.write", "grades.submit",
+            "grades.change_request.create",   # can REQUEST a correction, not approve
             "classes.view",
+            "timetable.view",
+            "enrollment.view",
+            "report_cards.view",
             "homework.view", "homework.assign", "homework.grade",
             "leave.review",
+            "welfare.view",
+            "reports.view", "reports.academic",
         ],
     },
     # ── Subject Teacher: own subjects/class only ───────────────────────────────
     "subject_teacher": {
         "label": "Subject Teacher", "color": "#0891B2",
         "permissions": [
-            "student.view",       # data scoped to own class in service layer
-            "grades.view", "grades.enter", "grades.change_request",
-            "attendance.view",
+            "student.view",       # view only — no edit/deactivate
+            "attendance.view", "attendance.mark",
+            # Can enter/submit grades; approval is done by academic officer
+            "grades.view", "grades.write", "grades.submit",
+            "grades.change_request.create",   # can REQUEST a correction, not approve
             "classes.view",
+            "timetable.view",
+            "report_cards.view",
             "homework.view", "homework.assign", "homework.grade",
+            "reports.view",
         ],
     },
     # ── Librarian: library catalogue, checkout/return ─────────────────────────

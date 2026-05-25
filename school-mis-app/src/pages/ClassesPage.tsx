@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { LayoutGrid, Plus, Edit2, Users, X } from "lucide-react";
 import { getClassList, createClass, updateClass, getClassStudents, type ClassRecord, type ClassStudent } from "@/api/classes";
 import { getTeachers, type Teacher } from "@/api/teachers";
+import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 
@@ -145,6 +146,7 @@ function StudentsModal({ cls, onClose }: { cls: ClassRecord; onClose: () => void
 }
 
 export default function ClassesPage() {
+  const { can } = useAuthStore();
   const [classes, setClasses]   = useState<ClassRecord[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -170,7 +172,9 @@ export default function ClassesPage() {
             {loading ? "Loading…" : `${classes.length} classes`}
           </p>
         </div>
-        <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Class</Button>
+        {can("classes.manage") && (
+          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog("new")}>Add Class</Button>
+        )}
       </div>
 
       {loading ? (
@@ -190,14 +194,16 @@ export default function ClassesPage() {
                   <div className="text-base font-bold text-gray-900 truncate">{c.name}</div>
                   {c.grade_level && <div className="text-xs text-gray-500 mt-0.5">Grade {c.grade_level}</div>}
                 </div>
-                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => setDialog(c)}
-                    className="p-1 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded"
-                  >
-                    <Edit2 size={12} />
-                  </button>
-                </div>
+                {can("classes.manage") && (
+                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => setDialog(c)}
+                      className="p-1 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
