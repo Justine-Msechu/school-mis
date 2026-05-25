@@ -7,191 +7,124 @@ import sqlite3, os, hashlib, secrets
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "school_mis.db")
 
+# Roles are pure display labels — no logic, no permissions.
+# All permission assignments live in the `role_permissions` DB table
+# and are managed exclusively through the Roles & Access UI.
 ROLES = {
-    # ── Administrator: unrestricted ────────────────────────────────────────────
-    "admin": {
-        "label": "Administrator", "color": "#7C3AED",
-        "permissions": ["*"],
-    },
-    # ── Head Teacher: view-all + academic/welfare management, NO finance writes ─
-    "head_teacher": {
-        "label": "Head Teacher", "color": "#059669",
-        "permissions": [
-            "student.view", "student.create", "student.edit", "student.deactivate",
-            "student.promote",
-            "teachers.view", "teachers.manage",
-            "classes.view", "classes.manage",
-            "timetable.view", "timetable.manage",
-            "attendance.view", "attendance.mark",
-            "grades.view", "grades.write", "grades.submit",
-            "grades.approve", "grades.publish",
-            "grades.change_request.review",
-            # Finance: VIEW + billing + waiver approval only — cannot record payments
-            # or create/edit fee structures
-            "finance.view", "finance.structure.view", "finance.billing.generate",
-            "finance.waiver.approve", "finance.report",
-            "welfare.view", "welfare.classify", "welfare.edit",
-            "welfare.verify", "welfare.sponsor.manage",
-            "accounting.view", "accounting.report",
-            "reports.view", "reports.academic", "reports.finance",
-            "reports.welfare", "reports.inventory",
-            "settings.view", "settings.school.manage",
-            "settings.years.manage", "settings.users.manage",
-            "library.view",
-            "transport.view", "transport.manage", "transport.assign",
-            "health.view", "health.record", "health.report",
-            "homework.view",
-            "leave.review",
-            "audit.view",
-            "enrollment.view", "enrollment.manage",
-            "guardian.view", "guardian.manage",
-            "report_cards.view", "report_cards.generate",
-            "report_cards.publish", "report_cards.comment",
-        ],
-    },
-    # ── Academic Officer: full academic lifecycle, teacher accounts only ──────
-    "academic": {
-        "label": "Academic Officer", "color": "#0891B2",
-        "permissions": [
-            # Students — review performance & promotions; no enrolment or deactivation
-            "student.view", "student.edit", "student.promote",
-            # Teachers — supervise + subject allocation + create teacher accounts
-            "teachers.view", "teachers.manage",
-            # Classes + timetable — manage exam timetables & class structure
-            "classes.view", "classes.manage",
-            "timetable.view", "timetable.manage",
-            # Attendance — monitor trends
-            "attendance.view", "attendance.mark", "attendance.report",
-            # Grades — approve, publish and review change requests
-            "grades.view", "grades.write", "grades.submit",
-            "grades.approve", "grades.publish",
-            "grades.change_request.review",
-            # Homework & leave
-            "homework.view", "homework.assign",
-            "leave.review",
-            # Reports
-            "reports.view", "reports.academic",
-            # Enrollment, guardians, report cards
-            "enrollment.view", "enrollment.manage",
-            "guardian.view", "guardian.manage",
-            "report_cards.view", "report_cards.generate",
-            "report_cards.publish", "report_cards.comment",
-            # Settings — ONLY teacher user accounts + academic calendars
-            "settings.view",
-            "settings.teachers.manage",
-            "settings.years.manage",
-        ],
-    },
-    # ── Accountant: record payments and expenses, view finance — NOT fee setup ─
-    "accountant": {
-        "label": "Accountant", "color": "#DC2626",
-        "permissions": [
-            "student.view",
-            # Finance: payment recording and reports only
-            # CANNOT: create/edit fee structures (finance.structure.manage)
-            "finance.view", "finance.structure.view",
-            "finance.payment.record", "finance.payment.void",
-            "finance.billing.generate",
-            "finance.waiver.create",
-            "finance.report",
-            "accounting.view", "accounting.expense.record", "accounting.report",
-            "transport.view",
-            "reports.view", "reports.finance",
-        ],
-    },
-    # ── Welfare Officer: welfare + waiver creation, no finance data ────────────
-    "welfare_officer": {
-        "label": "Welfare Officer", "color": "#9333EA",
-        "permissions": [
-            "student.view",
-            "welfare.view", "welfare.classify", "welfare.edit",
-            "welfare.verify", "welfare.sponsor.manage",
-            "finance.waiver.create",
-            "health.view",
-            "reports.view", "reports.welfare",
-        ],
-    },
-    # ── Store Keeper: inventory only — eligibility flag for students, no finance
-    "storekeeper": {
-        "label": "Store Keeper", "color": "#D97706",
-        "permissions": [
-            # STRICTLY limited student data: name + class + eligible YES/NO only
-            "student.view.eligibility",
-            "inventory.view", "inventory.stock.add", "inventory.stock.adjust",
-            "inventory.stock.manage", "inventory.issue", "inventory.return",
-            "inventory.report",
-            "reports.view", "reports.inventory",
-        ],
-    },
-    # ── Class Teacher: own class only (scoped at service layer) ───────────────
-    "class_teacher": {
-        "label": "Class Teacher", "color": "#2563EB",
-        "permissions": [
-            "student.view", "student.edit",   # view + edit own class students only
-            "attendance.view", "attendance.mark",
-            # Can enter/submit grades; approval is done by academic officer
-            "grades.view", "grades.write", "grades.submit",
-            "grades.change_request.create",   # can REQUEST a correction, not approve
-            "classes.view",
-            "timetable.view",
-            "enrollment.view",
-            "guardian.view",
-            "report_cards.view", "report_cards.comment",
-            "homework.view", "homework.assign", "homework.grade",
-            "leave.review",
-            "welfare.view",
-            "reports.view", "reports.academic",
-        ],
-    },
-    # ── Subject Teacher: own subjects/class only ───────────────────────────────
-    "subject_teacher": {
-        "label": "Subject Teacher", "color": "#0891B2",
-        "permissions": [
-            "student.view",       # view only — no edit/deactivate
-            "attendance.view", "attendance.mark",
-            # Can enter/submit grades; approval is done by academic officer
-            "grades.view", "grades.write", "grades.submit",
-            "grades.change_request.create",   # can REQUEST a correction, not approve
-            "classes.view",
-            "timetable.view",
-            "report_cards.view",
-            "homework.view", "homework.assign", "homework.grade",
-            "reports.view",
-        ],
-    },
-    # ── Librarian: library catalogue, checkout/return ─────────────────────────
-    "librarian": {
-        "label": "Librarian", "color": "#F59E0B",
-        "permissions": [
-            "student.view",
-            "library.view", "library.checkout", "library.manage",
-        ],
-    },
-    # ── Nurse / Health Worker ─────────────────────────────────────────────────
-    "nurse": {
-        "label": "Nurse", "color": "#EC4899",
-        "permissions": [
-            "student.view",
-            "health.view", "health.record", "health.report",
-        ],
-    },
-    # ── Student Portal: strictly own record, read-only except homework submit ──
-    "student_portal": {
-        "label": "Student", "color": "#6366F1",
-        "permissions": [
-            "portal.student.grades",
-            "portal.student.homework",
-        ],
-    },
-    # ── Parent Portal: own children's records, read-only except leave requests
-    "parent_portal": {
-        "label": "Parent / Guardian", "color": "#10B981",
-        "permissions": [
-            "portal.parent.grades",
-            "portal.parent.fees",
-            "portal.parent.leave",
-        ],
-    },
+    "admin":          {"label": "Administrator",    "color": "#7C3AED"},
+    "head_teacher":   {"label": "Head Teacher",     "color": "#059669"},
+    "academic":       {"label": "Academic Officer", "color": "#0891B2"},
+    "accountant":     {"label": "Accountant",       "color": "#DC2626"},
+    "welfare_officer":{"label": "Welfare Officer",  "color": "#9333EA"},
+    "storekeeper":    {"label": "Store Keeper",     "color": "#D97706"},
+    "class_teacher":  {"label": "Class Teacher",    "color": "#2563EB"},
+    "subject_teacher":{"label": "Subject Teacher",  "color": "#7C3AED"},
+    "librarian":      {"label": "Librarian",        "color": "#F59E0B"},
+    "nurse":          {"label": "Nurse",            "color": "#EC4899"},
+    "student_portal": {"label": "Student",          "color": "#6366F1"},
+    "parent_portal":  {"label": "Parent / Guardian","color": "#10B981"},
+}
+
+# Default role→permission mapping used ONLY for the initial DB seed.
+# After first run the DB is the sole source of truth — edit via
+# Roles & Access UI, never by changing this dict.
+_DEFAULT_ROLE_PERMISSIONS = {
+    "admin": ["*"],
+    "head_teacher": [
+        "student.view", "student.create", "student.edit", "student.promote",
+        "teachers.view", "teachers.manage",
+        "classes.view", "classes.manage",
+        "timetable.view", "timetable.manage",
+        "attendance.view", "attendance.mark",
+        "grades.view", "grades.write", "grades.submit",
+        "grades.approve", "grades.publish", "grades.change_request.review",
+        "finance.view", "finance.structure.view", "finance.billing.generate",
+        "finance.waiver.approve", "finance.report",
+        "welfare.view", "welfare.classify", "welfare.edit",
+        "welfare.verify", "welfare.sponsor.manage",
+        "accounting.view", "accounting.report",
+        "reports.view", "reports.academic", "reports.finance",
+        "reports.welfare", "reports.inventory",
+        "settings.view", "settings.school.manage",
+        "settings.years.manage", "settings.users.manage",
+        "library.view",
+        "transport.view", "transport.manage", "transport.assign",
+        "health.view", "health.record", "health.report",
+        "homework.view", "leave.review", "audit.view",
+        "enrollment.view", "enrollment.manage",
+        "guardian.view", "guardian.manage",
+        "report_cards.view", "report_cards.generate",
+        "report_cards.publish", "report_cards.comment",
+    ],
+    "academic": [
+        "student.view", "student.edit", "student.promote",
+        "teachers.view", "teachers.manage",
+        "classes.view", "classes.manage",
+        "timetable.view", "timetable.manage",
+        "attendance.view", "attendance.mark", "attendance.report",
+        "grades.view", "grades.write", "grades.submit",
+        "grades.approve", "grades.publish", "grades.change_request.review",
+        "homework.view", "homework.assign", "leave.review",
+        "reports.view", "reports.academic",
+        "enrollment.view", "enrollment.manage",
+        "guardian.view", "guardian.manage",
+        "report_cards.view", "report_cards.generate",
+        "report_cards.publish", "report_cards.comment",
+        "settings.view", "settings.teachers.manage", "settings.years.manage",
+    ],
+    "accountant": [
+        "student.view",
+        "finance.view", "finance.structure.view",
+        "finance.payment.record", "finance.payment.void",
+        "finance.billing.generate", "finance.waiver.create", "finance.report",
+        "accounting.view", "accounting.expense.record", "accounting.report",
+        "transport.view",
+        "reports.view", "reports.finance",
+    ],
+    "welfare_officer": [
+        "student.view",
+        "welfare.view", "welfare.classify", "welfare.edit",
+        "welfare.verify", "welfare.sponsor.manage",
+        "finance.waiver.create",
+        "health.view", "reports.view", "reports.welfare",
+    ],
+    "storekeeper": [
+        "student.view.eligibility",
+        "inventory.view", "inventory.stock.add", "inventory.stock.adjust",
+        "inventory.stock.manage", "inventory.issue", "inventory.return",
+        "inventory.report", "reports.view", "reports.inventory",
+    ],
+    "class_teacher": [
+        "student.view", "student.edit",
+        "attendance.view", "attendance.mark",
+        "grades.view", "grades.write", "grades.submit",
+        "grades.change_request.create",
+        "classes.view", "timetable.view",
+        "enrollment.view", "guardian.view",
+        "report_cards.view", "report_cards.comment",
+        "homework.view", "homework.assign", "homework.grade",
+        "leave.review", "welfare.view",
+        "reports.view", "reports.academic",
+    ],
+    "subject_teacher": [
+        "student.view",
+        "attendance.view", "attendance.mark",
+        "grades.view", "grades.write", "grades.submit",
+        "grades.change_request.create",
+        "classes.view", "timetable.view", "report_cards.view",
+        "homework.view", "homework.assign", "homework.grade",
+        "reports.view",
+    ],
+    "librarian": [
+        "student.view",
+        "library.view", "library.checkout", "library.manage",
+    ],
+    "nurse": [
+        "student.view",
+        "health.view", "health.record", "health.report",
+    ],
+    "student_portal":  ["portal.student.grades", "portal.student.homework"],
+    "parent_portal":   ["portal.parent.grades", "portal.parent.fees", "portal.parent.leave"],
 }
 
 
@@ -944,7 +877,7 @@ def initialize_database():
         _ALL_PERMISSIONS
     )
 
-    # Upsert roles (update label/color if they change)
+    # Upsert role display info (label/color only — no permissions here)
     for role_name, info in ROLES.items():
         cur.execute(
             "INSERT OR IGNORE INTO roles(name,label,color) VALUES(?,?,?)",
@@ -955,25 +888,27 @@ def initialize_database():
             (info["label"], info["color"], role_name)
         )
 
-    # Always rebuild role_permissions from ROLES dict (ensures strict enforcement)
-    cur.execute("DELETE FROM role_permissions")
-    for role_name, info in ROLES.items():
-        role_row = cur.execute(
-            "SELECT id FROM roles WHERE name=?", (role_name,)
-        ).fetchone()
-        if not role_row:
-            continue
-        role_id = role_row[0]
-        for perm_code in info.get("permissions", []):
-            perm_row = cur.execute(
-                "SELECT id FROM permissions WHERE code=?", (perm_code,)
+    # Seed role_permissions ONCE from _DEFAULT_ROLE_PERMISSIONS.
+    # After the first run the DB is the sole source of truth — all further
+    # changes must be made through the Roles & Access UI.
+    if cur.execute("SELECT COUNT(*) FROM role_permissions").fetchone()[0] == 0:
+        for role_name, perm_codes in _DEFAULT_ROLE_PERMISSIONS.items():
+            role_row = cur.execute(
+                "SELECT id FROM roles WHERE name=?", (role_name,)
             ).fetchone()
-            if perm_row:
-                cur.execute(
-                    "INSERT OR IGNORE INTO role_permissions(role_id,permission_id)"
-                    " VALUES(?,?)",
-                    (role_id, perm_row[0])
-                )
+            if not role_row:
+                continue
+            role_id = role_row[0]
+            for perm_code in perm_codes:
+                perm_row = cur.execute(
+                    "SELECT id FROM permissions WHERE code=?", (perm_code,)
+                ).fetchone()
+                if perm_row:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO role_permissions(role_id,permission_id)"
+                        " VALUES(?,?)",
+                        (role_id, perm_row[0])
+                    )
 
     # NOTE: user_roles are intentionally NOT auto-seeded.
     # Roles are assigned explicitly via the Roles & Access page.

@@ -13,7 +13,7 @@ from pathlib import Path
 # Allow importing from project root
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from database.db import ROLES, get_connection
+from database.db import ROLES, _DEFAULT_ROLE_PERMISSIONS, get_connection
 
 
 def run():
@@ -200,7 +200,7 @@ def run():
         _ALL_PERMISSIONS,
     )
 
-    # ── Seed roles from ROLES dict ─────────────────────────────────────────────
+    # ── Seed role display info (label/color only) ─────────────────────────────
     for role_name, info in ROLES.items():
         cur.execute(
             "INSERT OR IGNORE INTO roles(name,label,color) VALUES(?,?,?)",
@@ -211,20 +211,22 @@ def run():
             (info["label"], info["color"], role_name),
         )
 
-    # ── Rebuild role_permissions from ROLES dict ───────────────────────────────
-    cur.execute("DELETE FROM role_permissions")
-    for role_name, info in ROLES.items():
-        role_row = cur.execute("SELECT id FROM roles WHERE name=?", (role_name,)).fetchone()
-        if not role_row:
-            continue
-        role_id = role_row[0]
-        for perm_code in info.get("permissions", []):
-            perm_row = cur.execute("SELECT id FROM permissions WHERE code=?", (perm_code,)).fetchone()
-            if perm_row:
-                cur.execute(
-                    "INSERT OR IGNORE INTO role_permissions(role_id,permission_id) VALUES(?,?)",
-                    (role_id, perm_row[0]),
-                )
+    # ── Seed role_permissions ONCE from _DEFAULT_ROLE_PERMISSIONS ─────────────
+    # After first run the DB is the sole source of truth.
+    # All further changes must be made through the Roles & Access UI.
+    if cur.execute("SELECT COUNT(*) FROM role_permissions").fetchone()[0] == 0:
+        for role_name, perm_codes in _DEFAULT_ROLE_PERMISSIONS.items():
+            role_row = cur.execute("SELECT id FROM roles WHERE name=?", (role_name,)).fetchone()
+            if not role_row:
+                continue
+            role_id = role_row[0]
+            for perm_code in perm_codes:
+                perm_row = cur.execute("SELECT id FROM permissions WHERE code=?", (perm_code,)).fetchone()
+                if perm_row:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO role_permissions(role_id,permission_id) VALUES(?,?)",
+                        (role_id, perm_row[0]),
+                    )
 
     # NOTE: user_roles are intentionally NOT auto-seeded here.
     # Roles are assigned explicitly via the Roles & Access page.

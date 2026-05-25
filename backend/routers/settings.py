@@ -58,11 +58,13 @@ def get_roles(user: Usr):
     can_manage_all = authorize(user, "settings.users.manage")
     can_manage_teachers = authorize(user, "settings.teachers.manage")
 
-    all_roles = [
-        {"key": k, "label": v["label"], "color": v.get("color", "#94A3B8")}
-        for k, v in ROLES.items()
-        if k not in ("student_portal", "parent_portal")
-    ]
+    # Read from DB — roles are owned by the database, not the code
+    rows = fetch_all(
+        """SELECT name AS key, label, color FROM roles
+           WHERE name NOT IN ('student_portal','parent_portal')
+           ORDER BY label"""
+    )
+    all_roles = [dict(r) for r in rows]
     if can_manage_all:
         return all_roles
     if can_manage_teachers:

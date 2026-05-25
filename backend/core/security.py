@@ -1,13 +1,13 @@
 """
-ABAC (Attribute-Based Access Control) for the FastAPI layer.
+Authorization helpers for the FastAPI layer.
 
-Authorization is now fully delegated to backend.core.authz.authorize().
-require_permission() is kept as a convenience wrapper so existing callers
+All runtime authorization decisions go through backend.core.authz.authorize().
+The ROLE_PERMISSIONS and ROLE_CONDITIONS dicts below are LEGACY — they are NOT
+used for any runtime checks. All permissions live in the database and are
+managed through the Roles & Access UI.
+
+require_permission() and role_filter_sql() are kept so existing callers
 continue to work without modification.
-
-Usage in routers:
-    require_permission(actor, "grades.write")
-    require_permission(actor, "attendance.write", context={"class_id": 5})
 """
 
 from __future__ import annotations
