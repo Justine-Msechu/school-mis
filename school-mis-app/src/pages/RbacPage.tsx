@@ -1,21 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, Plus, Trash2, Save, UserCheck, Users, Key } from "lucide-react";
+import { ShieldCheck, Plus, Trash2, Save, Users, Key } from "lucide-react";
 import {
   getRbacRoles, listPermissions, setRolePermissions,
-  listTeacherAssignments, assignTeacher, removeTeacherAssignment,
-  listClassTeacherAssignments, assignClassTeacher, removeClassTeacherAssignment,
   getUserOverrides, addUserOverride, deleteUserOverride,
   getUserRoles, setUserRoles,
-  type RbacRole, type Permission, type TeacherAssignment,
-  type ClassTeacherAssignment, type PermissionOverride,
+  type RbacRole, type Permission, type PermissionOverride,
 } from "@/api/rbac";
 import { getUsers, type AppUser } from "@/api/settings";
-import { getClassList, type ClassRecord } from "@/api/classes";
 import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import SkeletonRow from "@/components/ui/SkeletonRow";
 
-type Tab = "roles" | "userroles" | "assignments" | "overrides";
+type Tab = "roles" | "userroles" | "overrides";
 
 const INPUT =
   "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
@@ -31,32 +27,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// ── Subject interface (minimal) ────────────────────────────────────────────────
-interface Subject { id: number; name: string; code: string | null }
-
-function useSubjects() {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  useEffect(() => {
-    import("@/api/client").then(({ default: api }) =>
-      api.get<Subject[]>("/grades/subjects").then((r) => setSubjects(r.data))
-    ).catch(() => {});
-  }, []);
-  return subjects;
-}
-
 // ── Tab: Roles & Permissions ──────────────────────────────────────────────────
 
 function RolesTab() {
   const { can } = useAuthStore();
   const canManage = can("settings.roles.manage");
 
-  const [roles, setRoles]     = useState<RbacRole[]>([]);
-  const [perms, setPerms]     = useState<Permission[]>([]);
-  const [selected, setSelected] = useState<RbacRole | null>(null);
+  const [roles, setRoles]         = useState<RbacRole[]>([]);
+  const [perms, setPerms]         = useState<Permission[]>([]);
+  const [selected, setSelected]   = useState<RbacRole | null>(null);
   const [rolePerms, setRolePerms] = useState<Set<string>>(new Set());
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState("");
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -96,7 +79,6 @@ function RolesTab() {
     }
   }
 
-  // Group permissions by domain
   const domains = [...new Set(perms.map((p) => p.domain))].sort();
 
   if (loading) return <div className="p-6"><SkeletonRow /></div>;
@@ -119,10 +101,7 @@ function RolesTab() {
                   : "hover:bg-gray-50 text-gray-700"
               }`}
             >
-              <span
-                className="inline-block w-2 h-2 rounded-full mr-2"
-                style={{ background: role.color }}
-              />
+              <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ background: role.color }} />
               {role.label}
             </button>
           ))}
@@ -157,15 +136,10 @@ function RolesTab() {
                 const domainPerms = perms.filter((p) => p.domain === domain);
                 return (
                   <div key={domain}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
-                      {domain}
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{domain}</p>
                     <div className="grid grid-cols-1 gap-1">
                       {domainPerms.map((p) => (
-                        <label
-                          key={p.code}
-                          className="flex items-center gap-2 text-sm cursor-pointer group"
-                        >
+                        <label key={p.code} className="flex items-center gap-2 text-sm cursor-pointer group">
                           <input
                             type="checkbox"
                             checked={rolePerms.has(p.code)}
@@ -173,9 +147,7 @@ function RolesTab() {
                             disabled={!canManage}
                             className="accent-violet-600 w-4 h-4"
                           />
-                          <span className="font-mono text-xs text-violet-700 bg-violet-50 px-1.5 rounded">
-                            {p.code}
-                          </span>
+                          <span className="font-mono text-xs text-violet-700 bg-violet-50 px-1.5 rounded">{p.code}</span>
                           <span className="text-gray-600 text-xs">{p.description}</span>
                         </label>
                       ))}
@@ -191,274 +163,21 @@ function RolesTab() {
   );
 }
 
-// ── Tab: Teacher Assignments ───────────────────────────────────────────────────
-
-function AssignmentsTab() {
-  const { can } = useAuthStore();
-  const canManage = can("teachers.manage");
-
-  const [subjectAssignments, setSubjectAssignments] = useState<TeacherAssignment[]>([]);
-  const [classAssignments, setClassAssignments]     = useState<ClassTeacherAssignment[]>([]);
-  const [users, setUsers]     = useState<AppUser[]>([]);
-  const [classes, setClasses] = useState<ClassRecord[]>([]);
-  const subjects = useSubjects();
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
-
-  // New subject assignment form
-  const [sUserId, setSUserId]   = useState<number | "">("");
-  const [sClassId, setSClassId] = useState<number | "">("");
-  const [sSubjId, setSSubjId]   = useState<number | "">("");
-  const [sAdding, setSAdding]   = useState(false);
-
-  // New class teacher form
-  const [ctUserId, setCtUserId]   = useState<number | "">("");
-  const [ctClassId, setCtClassId] = useState<number | "">("");
-  const [ctAdding, setCtAdding]   = useState(false);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    Promise.all([
-      listTeacherAssignments(),
-      listClassTeacherAssignments(),
-      getUsers(),
-      getClassList(),
-    ])
-      .then(([sa, ca, u, c]) => {
-        setSubjectAssignments(sa);
-        setClassAssignments(ca);
-        setUsers(u.filter((u) => ["class_teacher", "subject_teacher"].includes(u.role)));
-        setClasses(c);
-      })
-      .catch(() => setError("Failed to load assignments"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function addSubjectAssignment() {
-    if (!sUserId || !sClassId || !sSubjId) return;
-    setSAdding(true);
-    setError("");
-    try {
-      await assignTeacher({ user_id: +sUserId, class_id: +sClassId, subject_id: +sSubjId });
-      setSUserId(""); setSClassId(""); setSSubjId("");
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.detail ?? "Failed to add assignment");
-    } finally {
-      setSAdding(false);
-    }
-  }
-
-  async function removeSubj(id: number) {
-    setError("");
-    try { await removeTeacherAssignment(id); await load(); }
-    catch { setError("Failed to remove assignment"); }
-  }
-
-  async function addClassTeacher() {
-    if (!ctUserId || !ctClassId) return;
-    setCtAdding(true);
-    setError("");
-    try {
-      await assignClassTeacher({ user_id: +ctUserId, class_id: +ctClassId });
-      setCtUserId(""); setCtClassId("");
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.detail ?? "Failed to add assignment");
-    } finally {
-      setCtAdding(false);
-    }
-  }
-
-  async function removeCT(id: number) {
-    setError("");
-    try { await removeClassTeacherAssignment(id); await load(); }
-    catch { setError("Failed to remove assignment"); }
-  }
-
-  if (loading) return <div className="p-6"><SkeletonRow /></div>;
-
-  return (
-    <div className="space-y-6">
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {/* Subject assignments */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-800 text-sm">Subject Assignments</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Assign a teacher to a class + subject pair</p>
-        </div>
-
-        {canManage && (
-          <div className="p-4 border-b border-gray-200 bg-white">
-            <div className="flex gap-2 flex-wrap">
-              <Field label="Teacher">
-                <select className={SELECT} value={sUserId} onChange={(e) => setSUserId(+e.target.value || "")}>
-                  <option value="">Select teacher…</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.full_name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Class">
-                <select className={SELECT} value={sClassId} onChange={(e) => setSClassId(+e.target.value || "")}>
-                  <option value="">Select class…</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Subject">
-                <select className={SELECT} value={sSubjId} onChange={(e) => setSSubjId(+e.target.value || "")}>
-                  <option value="">Select subject…</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <div className="flex items-end">
-                <Button size="sm" onClick={addSubjectAssignment} disabled={sAdding || !sUserId || !sClassId || !sSubjId}>
-                  <Plus size={13} className="mr-1" />
-                  {sAdding ? "Adding…" : "Assign"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {["Teacher", "Class", "Subject", "Assigned"].map((h) => (
-                  <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-                {canManage && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {subjectAssignments.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-400 text-sm">No assignments yet</td></tr>
-              ) : (
-                subjectAssignments.map((a) => (
-                  <tr key={a.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium">{a.teacher_name}</td>
-                    <td className="px-4 py-2">{a.class_name}</td>
-                    <td className="px-4 py-2">{a.subject_name}</td>
-                    <td className="px-4 py-2 text-gray-500 text-xs">{a.assigned_at?.slice(0, 10)}</td>
-                    {canManage && (
-                      <td className="px-4 py-2 text-right">
-                        <button
-                          onClick={() => removeSubj(a.id)}
-                          className="text-red-500 hover:text-red-700 p-1 rounded"
-                          title="Remove assignment"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Class teacher assignments */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-800 text-sm">Class Teacher Assignments</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Assign one teacher as responsible for a whole class</p>
-        </div>
-
-        {canManage && (
-          <div className="p-4 border-b border-gray-200 bg-white">
-            <div className="flex gap-2 flex-wrap">
-              <Field label="Teacher">
-                <select className={SELECT} value={ctUserId} onChange={(e) => setCtUserId(+e.target.value || "")}>
-                  <option value="">Select teacher…</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.full_name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Class">
-                <select className={SELECT} value={ctClassId} onChange={(e) => setCtClassId(+e.target.value || "")}>
-                  <option value="">Select class…</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <div className="flex items-end">
-                <Button size="sm" onClick={addClassTeacher} disabled={ctAdding || !ctUserId || !ctClassId}>
-                  <Plus size={13} className="mr-1" />
-                  {ctAdding ? "Adding…" : "Assign"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {["Teacher", "Class", "Assigned"].map((h) => (
-                  <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-                {canManage && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {classAssignments.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">No class teachers assigned yet</td></tr>
-              ) : (
-                classAssignments.map((a) => (
-                  <tr key={a.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium">{a.teacher_name}</td>
-                    <td className="px-4 py-2">{a.class_name}</td>
-                    <td className="px-4 py-2 text-gray-500 text-xs">{a.assigned_at?.slice(0, 10)}</td>
-                    {canManage && (
-                      <td className="px-4 py-2 text-right">
-                        <button
-                          onClick={() => removeCT(a.id)}
-                          className="text-red-500 hover:text-red-700 p-1 rounded"
-                          title="Remove assignment"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Tab: User Roles ───────────────────────────────────────────────────────────
 
 function UserRolesTab() {
   const { can } = useAuthStore();
   const canManage = can("settings.users.manage");
 
-  const [users, setUsers]       = useState<AppUser[]>([]);
-  const [allRoles, setAllRoles] = useState<RbacRole[]>([]);
+  const [users, setUsers]           = useState<AppUser[]>([]);
+  const [allRoles, setAllRoles]     = useState<RbacRole[]>([]);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
-  const [userRoles, setUserRoles_] = useState<{ id: number; name: string; label: string; color: string }[]>([]);
-  const [search, setSearch]     = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
-  const [addRoleId, setAddRoleId] = useState<number | "">("");
-  const [saving, setSaving]     = useState(false);
+  const [userRoles, setUserRoles_]  = useState<{ id: number; name: string; label: string; color: string }[]>([]);
+  const [search, setSearch]         = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
+  const [addRoleId, setAddRoleId]   = useState<number | "">("");
+  const [saving, setSaving]         = useState(false);
 
   useEffect(() => {
     Promise.all([getUsers(), getRbacRoles()])
@@ -517,10 +236,9 @@ function UserRolesTab() {
     }
   }
 
-  const assignedIds = new Set(userRoles.map((r) => r.id));
+  const assignedIds    = new Set(userRoles.map((r) => r.id));
   const availableRoles = allRoles.filter((r) => !assignedIds.has(r.id));
-
-  const filteredUsers = users.filter(
+  const filteredUsers  = users.filter(
     (u) =>
       u.full_name.toLowerCase().includes(search.toLowerCase()) ||
       u.username.toLowerCase().includes(search.toLowerCase())
@@ -528,15 +246,9 @@ function UserRolesTab() {
 
   return (
     <div className="flex gap-4 h-full">
-      {/* Left: user list */}
       <div className="w-64 flex-shrink-0 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
         <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-          <input
-            className={INPUT}
-            placeholder="Search users…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <input className={INPUT} placeholder="Search users…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="overflow-y-auto flex-1">
           {filteredUsers.map((u) => (
@@ -544,22 +256,17 @@ function UserRolesTab() {
               key={u.id}
               onClick={() => selectUser(u)}
               className={`w-full text-left px-3 py-2.5 border-b border-gray-100 transition-colors ${
-                selectedUser?.id === u.id
-                  ? "bg-violet-50 text-violet-700"
-                  : "hover:bg-gray-50 text-gray-700"
+                selectedUser?.id === u.id ? "bg-violet-50 text-violet-700" : "hover:bg-gray-50 text-gray-700"
               }`}
             >
               <p className="text-sm font-medium truncate">{u.full_name}</p>
               <p className="text-xs text-gray-400">{u.username}</p>
             </button>
           ))}
-          {filteredUsers.length === 0 && (
-            <p className="text-center py-6 text-sm text-gray-400">No users found</p>
-          )}
+          {filteredUsers.length === 0 && <p className="text-center py-6 text-sm text-gray-400">No users found</p>}
         </div>
       </div>
 
-      {/* Right: roles panel */}
       <div className="flex-1 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
         {!selectedUser ? (
           <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
@@ -567,15 +274,12 @@ function UserRolesTab() {
           </div>
         ) : (
           <>
-            {/* Header */}
             <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
               <div>
                 <span className="font-semibold text-gray-800">{selectedUser.full_name}</span>
                 <span className="ml-2 text-xs text-gray-400">{selectedUser.username}</span>
               </div>
-              <span className="text-xs text-gray-500">
-                {userRoles.length} role{userRoles.length !== 1 ? "s" : ""}
-              </span>
+              <span className="text-xs text-gray-500">{userRoles.length} role{userRoles.length !== 1 ? "s" : ""}</span>
             </div>
 
             {error && <p className="px-4 py-2 text-sm text-red-600">{error}</p>}
@@ -584,7 +288,6 @@ function UserRolesTab() {
               <div className="p-4"><SkeletonRow /></div>
             ) : (
               <>
-                {/* Current roles */}
                 <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
                   {userRoles.length === 0 ? (
                     <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
@@ -592,15 +295,9 @@ function UserRolesTab() {
                     </div>
                   ) : (
                     userRoles.map((role) => (
-                      <div
-                        key={role.id}
-                        className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
-                      >
+                      <div key={role.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                         <div className="flex items-center gap-3">
-                          <span
-                            className="w-3 h-3 rounded-full flex-shrink-0"
-                            style={{ background: role.color }}
-                          />
+                          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: role.color }} />
                           <div>
                             <p className="text-sm font-medium text-gray-800">{role.label}</p>
                             <p className="text-xs font-mono text-gray-400">{role.name}</p>
@@ -611,10 +308,8 @@ function UserRolesTab() {
                             onClick={() => removeRole(role.id)}
                             disabled={saving}
                             className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-40"
-                            title="Remove role"
                           >
-                            <Trash2 size={13} />
-                            Remove
+                            <Trash2 size={13} /> Remove
                           </button>
                         )}
                       </div>
@@ -622,7 +317,6 @@ function UserRolesTab() {
                   )}
                 </div>
 
-                {/* Add role */}
                 {canManage && (
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-end gap-2">
                     <Field label="Add role">
@@ -640,11 +334,7 @@ function UserRolesTab() {
                         ))}
                       </select>
                     </Field>
-                    <Button
-                      size="sm"
-                      onClick={addRole}
-                      disabled={!addRoleId || saving}
-                    >
+                    <Button size="sm" onClick={addRole} disabled={!addRoleId || saving}>
                       <Plus size={13} className="mr-1" />
                       {saving ? "Saving…" : "Add"}
                     </Button>
@@ -659,26 +349,24 @@ function UserRolesTab() {
   );
 }
 
-// ── Tab: User Overrides ────────────────────────────────────────────────────────
+// ── Tab: Permission Overrides ─────────────────────────────────────────────────
 
 function OverridesTab() {
   const { can } = useAuthStore();
   const canManage = can("settings.users.manage");
 
-  const [users, setUsers]       = useState<AppUser[]>([]);
+  const [users, setUsers]           = useState<AppUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
-  const [overrides, setOverrides] = useState<PermissionOverride[]>([]);
-  const [perms, setPerms]         = useState<Permission[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState("");
-  const [search, setSearch]       = useState("");
-
-  // New override form
-  const [nPerm, setNPerm]       = useState("");
-  const [nEffect, setNEffect]   = useState<"ALLOW" | "DENY">("ALLOW");
-  const [nReason, setNReason]   = useState("");
-  const [nExpiry, setNExpiry]   = useState("");
-  const [adding, setAdding]     = useState(false);
+  const [overrides, setOverrides]   = useState<PermissionOverride[]>([]);
+  const [perms, setPerms]           = useState<Permission[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
+  const [search, setSearch]         = useState("");
+  const [nPerm, setNPerm]           = useState("");
+  const [nEffect, setNEffect]       = useState<"ALLOW" | "DENY">("ALLOW");
+  const [nReason, setNReason]       = useState("");
+  const [nExpiry, setNExpiry]       = useState("");
+  const [adding, setAdding]         = useState(false);
 
   useEffect(() => {
     Promise.all([getUsers(), listPermissions()])
@@ -705,12 +393,7 @@ function OverridesTab() {
     setAdding(true);
     setError("");
     try {
-      await addUserOverride(selectedUser.id, {
-        permission: nPerm,
-        effect: nEffect,
-        reason: nReason,
-        expires_at: nExpiry || null,
-      });
+      await addUserOverride(selectedUser.id, { permission: nPerm, effect: nEffect, reason: nReason, expires_at: nExpiry || null });
       setNPerm(""); setNReason(""); setNExpiry("");
       const res = await getUserOverrides(selectedUser.id);
       setOverrides(res.overrides);
@@ -741,15 +424,9 @@ function OverridesTab() {
 
   return (
     <div className="flex gap-4 h-full">
-      {/* Left: user picker */}
       <div className="w-64 flex-shrink-0 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
         <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-          <input
-            className={INPUT}
-            placeholder="Search users…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <input className={INPUT} placeholder="Search users…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="overflow-y-auto flex-1">
           {filteredUsers.map((u) => (
@@ -757,9 +434,7 @@ function OverridesTab() {
               key={u.id}
               onClick={() => selectUser(u)}
               className={`w-full text-left px-3 py-2.5 border-b border-gray-100 transition-colors ${
-                selectedUser?.id === u.id
-                  ? "bg-violet-50 text-violet-700"
-                  : "hover:bg-gray-50 text-gray-700"
+                selectedUser?.id === u.id ? "bg-violet-50 text-violet-700" : "hover:bg-gray-50 text-gray-700"
               }`}
             >
               <p className="text-sm font-medium truncate">{u.full_name}</p>
@@ -769,7 +444,6 @@ function OverridesTab() {
         </div>
       </div>
 
-      {/* Right: overrides panel */}
       <div className="flex-1 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
         {!selectedUser ? (
           <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
@@ -784,50 +458,27 @@ function OverridesTab() {
 
             {error && <p className="px-4 py-2 text-sm text-red-600">{error}</p>}
 
-            {/* Add override form */}
             {canManage && (
               <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  Add Override
-                </p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Add Override</p>
                 <div className="flex gap-2 flex-wrap">
                   <Field label="Permission">
-                    <select
-                      className={SELECT}
-                      value={nPerm}
-                      onChange={(e) => setNPerm(e.target.value)}
-                    >
+                    <select className={SELECT} value={nPerm} onChange={(e) => setNPerm(e.target.value)}>
                       <option value="">Select permission…</option>
-                      {perms.map((p) => (
-                        <option key={p.code} value={p.code}>{p.code}</option>
-                      ))}
+                      {perms.map((p) => <option key={p.code} value={p.code}>{p.code}</option>)}
                     </select>
                   </Field>
                   <Field label="Effect">
-                    <select
-                      className={SELECT}
-                      value={nEffect}
-                      onChange={(e) => setNEffect(e.target.value as "ALLOW" | "DENY")}
-                    >
+                    <select className={SELECT} value={nEffect} onChange={(e) => setNEffect(e.target.value as "ALLOW" | "DENY")}>
                       <option value="ALLOW">ALLOW</option>
                       <option value="DENY">DENY</option>
                     </select>
                   </Field>
                   <Field label="Reason">
-                    <input
-                      className={INPUT}
-                      placeholder="Optional reason"
-                      value={nReason}
-                      onChange={(e) => setNReason(e.target.value)}
-                    />
+                    <input className={INPUT} placeholder="Optional reason" value={nReason} onChange={(e) => setNReason(e.target.value)} />
                   </Field>
                   <Field label="Expires (optional)">
-                    <input
-                      type="datetime-local"
-                      className={INPUT}
-                      value={nExpiry}
-                      onChange={(e) => setNExpiry(e.target.value)}
-                    />
+                    <input type="datetime-local" className={INPUT} value={nExpiry} onChange={(e) => setNExpiry(e.target.value)} />
                   </Field>
                   <div className="flex items-end">
                     <Button size="sm" onClick={addOverride} disabled={adding || !nPerm}>
@@ -839,7 +490,6 @@ function OverridesTab() {
               </div>
             )}
 
-            {/* Overrides list */}
             <div className="flex-1 overflow-y-auto">
               {loading ? (
                 <div className="p-4"><SkeletonRow /></div>
@@ -861,13 +511,7 @@ function OverridesTab() {
                       <tr key={ov.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-4 py-2 font-mono text-xs text-violet-700">{ov.permission}</td>
                         <td className="px-4 py-2">
-                          <span
-                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                              ov.effect === "ALLOW"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-red-100 text-red-700"
-                            }`}
-                          >
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${ov.effect === "ALLOW" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                             {ov.effect}
                           </span>
                         </td>
@@ -878,11 +522,7 @@ function OverridesTab() {
                         <td className="px-4 py-2 text-gray-500 text-xs">{ov.granted_by_name ?? "—"}</td>
                         <td className="px-4 py-2 text-right">
                           {canManage && (
-                            <button
-                              onClick={() => removeOverride(ov.id)}
-                              className="text-red-500 hover:text-red-700 p-1 rounded"
-                              title="Remove override"
-                            >
+                            <button onClick={() => removeOverride(ov.id)} className="text-red-500 hover:text-red-700 p-1 rounded">
                               <Trash2 size={14} />
                             </button>
                           )}
@@ -907,33 +547,29 @@ export default function RbacPage() {
 
   const showRoles     = can("settings.roles.manage");
   const showUserRoles = can("settings.users.manage") || can("settings.roles.manage");
-  const showAssign    = can("teachers.manage");
   const showOverrides = can("settings.users.manage");
 
-  const defaultTab: Tab = showRoles ? "roles" : showUserRoles ? "userroles" : showAssign ? "assignments" : "overrides";
+  const defaultTab: Tab = showRoles ? "roles" : showUserRoles ? "userroles" : "overrides";
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; visible: boolean }[] = [
-    { id: "roles",      label: "Roles & Permissions", icon: <ShieldCheck size={15} />, visible: showRoles },
-    { id: "userroles",  label: "User Roles",           icon: <Key size={15} />,         visible: showUserRoles },
-    { id: "assignments",label: "Teacher Assignments",  icon: <UserCheck size={15} />,   visible: showAssign },
-    { id: "overrides",  label: "Permission Overrides", icon: <Users size={15} />,        visible: showOverrides },
+    { id: "roles",     label: "Roles & Permissions",   icon: <ShieldCheck size={15} />, visible: showRoles },
+    { id: "userroles", label: "User Roles",             icon: <Key size={15} />,         visible: showUserRoles },
+    { id: "overrides", label: "Permission Overrides",   icon: <Users size={15} />,       visible: showOverrides },
   ];
 
   return (
     <div className="flex flex-col h-full p-6 gap-4">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
           <ShieldCheck size={18} className="text-violet-600" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-gray-900">Roles & Access</h1>
-          <p className="text-xs text-gray-500">Manage roles, permissions, user role assignments and overrides</p>
+          <p className="text-xs text-gray-500">Manage roles, permissions and user access</p>
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="flex border-b border-gray-200 gap-0.5 overflow-x-auto">
         {tabs.filter((t) => t.visible).map((t) => (
           <button
@@ -951,12 +587,10 @@ export default function RbacPage() {
         ))}
       </div>
 
-      {/* Tab content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "roles"       && <RolesTab />}
-        {activeTab === "userroles"   && <UserRolesTab />}
-        {activeTab === "assignments" && <AssignmentsTab />}
-        {activeTab === "overrides"   && <OverridesTab />}
+        {activeTab === "roles"     && <RolesTab />}
+        {activeTab === "userroles" && <UserRolesTab />}
+        {activeTab === "overrides" && <OverridesTab />}
       </div>
     </div>
   );
