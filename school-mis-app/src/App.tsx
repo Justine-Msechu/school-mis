@@ -25,18 +25,17 @@ import TimetablePage from "@/pages/TimetablePage";
 import ReportCardsPage from "@/pages/ReportCardsPage";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { isLoggedIn, _hasHydrated } = useAuthStore();
-  if (!_hasHydrated) return null;
+  const { isLoggedIn } = useAuthStore();
   return isLoggedIn ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
 export default function App() {
-  const { isLoggedIn, _hasHydrated } = useAuthStore();
+  const { isLoggedIn } = useAuthStore();
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={!_hasHydrated ? null : isLoggedIn ? <Navigate to="/" replace /> : <LoginPage />} />
+        <Route path="/login" element={isLoggedIn ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route
           path="/*"
           element={

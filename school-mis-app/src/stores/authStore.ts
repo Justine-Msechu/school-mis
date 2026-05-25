@@ -2,28 +2,42 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/api/auth";
 
+// Read persisted auth synchronously before React's first render.
+// Zustand persist rehydrates asynchronously, so without this the
+// store starts with isLoggedIn=false for one render, causing a
+// login-page flash even for already-authenticated users.
+const _readPersisted = (): { isLoggedIn: boolean; user: User | null; token: string | null } => {
+  try {
+    const raw = localStorage.getItem("mis-auth");
+    if (!raw) return { isLoggedIn: false, user: null, token: null };
+    const parsed = JSON.parse(raw) as { state?: { user?: User; token?: string } };
+    const { user, token } = parsed?.state ?? {};
+    if (token && user) {
+      sessionStorage.setItem("mis_token", token);
+      localStorage.setItem("mis_token", token);
+      return { isLoggedIn: true, user, token };
+    }
+  } catch { /* storage unavailable or corrupt */ }
+  return { isLoggedIn: false, user: null, token: null };
+};
+
+const _initial = _readPersisted();
+
 interface AuthState {
   isLoggedIn: boolean;
   user: User | null;
   token: string | null;
-  _hasHydrated: boolean;
   login: (user: User, token: string) => void;
   logout: () => void;
   can: (permission: string) => boolean;
-  setHasHydrated: (v: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      isLoggedIn: false,
-      user: null,
-      token: null,
-      _hasHydrated: false,
-
-      setHasHydrated(v) {
-        set({ _hasHydrated: v });
-      },
+      isLoggedIn: _initial.isLoggedIn,
+      user: _initial.user,
+      token: _initial.token,
 
       login(user, token) {
         sessionStorage.setItem("mis_token", token);
@@ -47,14 +61,6 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "mis-auth",
       partialize: (s) => ({ user: s.user, token: s.token }),
-      onRehydrateStorage: () => (state) => {
-        if (state?.token) {
-          sessionStorage.setItem("mis_token", state.token);
-          localStorage.setItem("mis_token", state.token);
-          state.isLoggedIn = true;
-        }
-        state?.setHasHydrated(true);
-      },
     }
   )
 );
