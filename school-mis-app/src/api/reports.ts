@@ -71,6 +71,7 @@ export interface MissingMark {
   student_name: string;
   admission_no: string;
   subject: string;
+  class?: string;
 }
 
 // ── API functions ─────────────────────────────────────────────────────────────
@@ -101,3 +102,55 @@ export const getMyClassAttendanceTrend = () =>
 
 export const getMyClassMissingMarks = (exam_id?: number | null) =>
   api.get<MissingMark[]>("/reports/my-class/missing-marks", { params: { exam_id } }).then((r) => r.data);
+
+// ── My Subject types ──────────────────────────────────────────────────────────
+
+export interface SubjectAssignment {
+  subject_id:   number;
+  subject_name: string;
+  class_id:     number;
+  class_name:   string;
+}
+
+export interface MySubjectInfo {
+  assignments: SubjectAssignment[];
+  subjects:    { id: number; name: string }[];
+  exams:       { id: number; name: string; term: number; status: string }[];
+}
+
+export interface SubjectClassAverage {
+  subject:        string;
+  class:          string;
+  avg_pct:        number;
+  total_students: number;
+  a: number; b: number; c: number; d: number; f: number;
+}
+
+export interface SubjectTermRow {
+  label:  string;
+  term1?: number;
+  term2?: number;
+  term3?: number;
+}
+
+export interface GradeDist {
+  name:  string;
+  value: number;
+}
+
+// ── My Subject API functions ──────────────────────────────────────────────────
+
+export const getMySubjectInfo = () =>
+  api.get<MySubjectInfo>("/reports/my-subject/info").then((r) => r.data);
+
+export const getMySubjectAverages = (exam_id?: number | null, subject_id?: number | null) =>
+  api.get<SubjectClassAverage[]>("/reports/my-subject/averages", { params: { exam_id, subject_id } }).then((r) => r.data);
+
+export const getMySubjectTermComparison = (subject_id?: number | null) =>
+  api.get<SubjectTermRow[]>("/reports/my-subject/term-comparison", { params: { subject_id } }).then((r) => r.data);
+
+export const getMySubjectGradeDist = (exam_id?: number | null, subject_id?: number | null) =>
+  api.get<GradeDist[]>("/reports/my-subject/grade-distribution", { params: { exam_id, subject_id } }).then((r) => r.data);
+
+export const getMySubjectMissingMarks = (exam_id?: number | null, subject_id?: number | null) =>
+  api.get<MissingMark[]>("/reports/my-subject/missing-marks", { params: { exam_id, subject_id } }).then((r) => r.data);

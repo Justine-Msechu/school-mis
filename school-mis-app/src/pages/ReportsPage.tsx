@@ -9,8 +9,9 @@ import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
 import { useAuthStore } from "@/stores/authStore";
 import MyClassTab from "@/components/reports/MyClassTab";
+import MySubjectTab from "@/components/reports/MySubjectTab";
 
-type Tab = "overview" | "attendance" | "grades" | "my-class";
+type Tab = "overview" | "attendance" | "grades" | "my-class" | "my-subject";
 
 const fmt = (n: number) => `TZS ${(n ?? 0).toLocaleString()}`;
 
@@ -42,13 +43,15 @@ export default function ReportsPage() {
     }
   }, [tab, examId]);
 
-  const showMyClass = can("report_cards.view") && can("attendance.view");
+  const showMyClass   = can("report_cards.view") && can("attendance.view");
+  const showMySubject = can("grades.view") && can("grades.write");
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "overview",   label: "Overview" },
-    { key: "attendance", label: "Attendance" },
-    { key: "grades",     label: "Grade Summary" },
-    ...(showMyClass ? [{ key: "my-class" as Tab, label: "My Class" }] : []),
+    { key: "overview",    label: "Overview" },
+    { key: "attendance",  label: "Attendance" },
+    { key: "grades",      label: "Grade Summary" },
+    ...(showMyClass   ? [{ key: "my-class"   as Tab, label: "My Class" }]   : []),
+    ...(showMySubject ? [{ key: "my-subject" as Tab, label: "My Subject" }] : []),
   ];
 
   return (
@@ -193,7 +196,8 @@ export default function ReportsPage() {
         </>
       )}
 
-      {tab === "my-class" && <MyClassTab />}
+      {tab === "my-class"   && <MyClassTab />}
+      {tab === "my-subject" && <MySubjectTab />}
     </div>
   );
 }

@@ -108,6 +108,213 @@ def overview(user: Usr):
     return result
 
 
+# ── My Subject endpoints (subject teacher scoped) ─────────────────────────────
+
+def _get_subject_assignments(user_id: int) -> list[dict]:
+    """Return list of {subject_id, subject_name, class_id, class_name} for the teacher."""
+    rows = fetch_all(
+        """SELECT ta.subject_id, s.name AS subject_name, ta.class_id, c.name AS class_name
+           FROM teacher_assignments ta
+           JOIN subjects s ON s.id=ta.subject_id
+           JOIN classes  c ON c.id=ta.class_id
+           WHERE ta.user_id=? AND ta.is_active=1
+           ORDER BY s.name, c.name""",
+        (user_id,),
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/my-subject/info")
+def my_subject_info(user: Usr):
+    """Return the subjects + classes this teacher is assigned to, plus available exams."""
+    assignments = _get_subject_assignments(user["id"])
+    if not assignments:
+        raise HTTPException(404, "No subject assignments found")
+
+    subject_ids = list({a["subject_id"] for a in assignments})
+    class_ids   = list({a["class_id"]   for a in assignments})
+
+    ph_s = ",".join("?" * len(subject_ids))
+    ph_c = ",".join("?" * len(class_ids))
+
+    exams = fetch_all(
+        f"""SELECT DISTINCT e.id, e.name, e.term, e.status
+            FROM exams e
+            JOIN grades g ON g.exam_id=e.id
+            WHERE g.subject_id IN ({ph_s}) AND g.class_id IN ({ph_c})
+            ORDER BY e.term, e.start_date""",
+        [*subject_ids, *class_ids],
+    )
+
+    # Unique subjects list
+    subjects_seen: dict[int, str] = {}
+    for a in assignments:
+        subjects_seen[a["subject_id"]] = a["subject_name"]
+
+    return {
+        "assignments": assignments,
+        "subjects": [{"id": sid, "name": sname} for sid, sname in subjects_seen.items()],
+        "exams": [dict(r) for r in exams],
+    }
+
+
+@router.get("/my-subject/averages")
+def my_subject_averages(user: Usr, exam_id: int = Query(None), subject_id: int = Query(None)):
+    """Per-class average for each assigned subject (optionally filtered by exam/subject)."""
+    assignments = _get_subject_assignments(user["id"])
+    if not assignments:
+        raise HTTPException(404, "No subject assignments found")
+
+    if subject_id:
+        assignments = [a for a in assignments if a["subject_id"] == subject_id]
+
+    if not assignments:
+        return []
+
+    results = []
+    for a in assignments:
+        params: list = [a["subject_id"], a["class_id"]]
+        exam_filter = ""
+        if exam_id:
+            exam_filter = "AND g.exam_id=?"
+            params.append(exam_id)
+
+        row = fetch_one(
+            f"""SELECT ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100),1) AS avg_pct,
+                       COUNT(g.id) AS total_students,
+                       SUM(CASE WHEN g.grade_letter='A' THEN 1 ELSE 0 END) AS a,
+                       SUM(CASE WHEN g.grade_letter='B' THEN 1 ELSE 0 END) AS b,
+                       SUM(CASE WHEN g.grade_letter='C' THEN 1 ELSE 0 END) AS c,
+                       SUM(CASE WHEN g.grade_letter='D' THEN 1 ELSE 0 END) AS d,
+                       SUM(CASE WHEN g.grade_letter='F' THEN 1 ELSE 0 END) AS f
+                FROM grades g
+                WHERE g.subject_id=? AND g.class_id=? {exam_filter}""",
+            params,
+        )
+        if row:
+            d = dict(row)
+            d["subject"] = a["subject_name"]
+            d["class"]   = a["class_name"]
+            if d["avg_pct"] is not None:
+                results.append(d)
+
+    return results
+
+
+@router.get("/my-subject/term-comparison")
+def my_subject_term_comparison(user: Usr, subject_id: int = Query(None)):
+    """Per-class averages grouped by term for the teacher's subject(s)."""
+    assignments = _get_subject_assignments(user["id"])
+    if not assignments:
+        raise HTTPException(404, "No subject assignments found")
+
+    if subject_id:
+        assignments = [a for a in assignments if a["subject_id"] == subject_id]
+
+    pivot: dict[str, dict] = {}
+    for a in assignments:
+        rows = fetch_all(
+            """SELECT e.term,
+                      ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100),1) AS avg_pct
+               FROM grades g
+               JOIN exams e ON e.id=g.exam_id
+               WHERE g.subject_id=? AND g.class_id=?
+               GROUP BY e.term ORDER BY e.term""",
+            (a["subject_id"], a["class_id"]),
+        )
+        key = f"{a['subject_name']} – {a['class_name']}"
+        if key not in pivot:
+            pivot[key] = {"label": key}
+        for r in rows:
+            rd = dict(r)
+            pivot[key][f"term{rd['term']}"] = rd["avg_pct"]
+
+    return list(pivot.values())
+
+
+@router.get("/my-subject/grade-distribution")
+def my_subject_grade_distribution(user: Usr, exam_id: int = Query(None), subject_id: int = Query(None)):
+    """Aggregated A/B/C/D/F counts across all the teacher's assigned classes for a subject."""
+    assignments = _get_subject_assignments(user["id"])
+    if not assignments:
+        raise HTTPException(404, "No subject assignments found")
+
+    if subject_id:
+        assignments = [a for a in assignments if a["subject_id"] == subject_id]
+
+    totals = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+    for a in assignments:
+        params: list = [a["subject_id"], a["class_id"]]
+        exam_filter = ""
+        if exam_id:
+            exam_filter = "AND exam_id=?"
+            params.append(exam_id)
+        row = fetch_one(
+            f"""SELECT SUM(CASE WHEN grade_letter='A' THEN 1 ELSE 0 END) AS a,
+                       SUM(CASE WHEN grade_letter='B' THEN 1 ELSE 0 END) AS b,
+                       SUM(CASE WHEN grade_letter='C' THEN 1 ELSE 0 END) AS c,
+                       SUM(CASE WHEN grade_letter='D' THEN 1 ELSE 0 END) AS d,
+                       SUM(CASE WHEN grade_letter='F' THEN 1 ELSE 0 END) AS f
+                FROM grades WHERE subject_id=? AND class_id=? {exam_filter}""",
+            params,
+        )
+        if row:
+            rd = dict(row)
+            for letter in ("A","B","C","D","F"):
+                totals[letter] += rd.get(letter.lower(), 0) or 0
+
+    return [{"name": k, "value": v} for k, v in totals.items() if v > 0]
+
+
+@router.get("/my-subject/missing-marks")
+def my_subject_missing_marks(user: Usr, exam_id: int = Query(None), subject_id: int = Query(None)):
+    """Students missing grades for the teacher's subject(s) in the given exam."""
+    assignments = _get_subject_assignments(user["id"])
+    if not assignments:
+        raise HTTPException(404, "No subject assignments found")
+
+    if subject_id:
+        assignments = [a for a in assignments if a["subject_id"] == subject_id]
+
+    # Default to latest exam that has any grade for these assignments
+    if not exam_id:
+        subject_ids = list({a["subject_id"] for a in assignments})
+        class_ids   = list({a["class_id"]   for a in assignments})
+        ph_s = ",".join("?" * len(subject_ids))
+        ph_c = ",".join("?" * len(class_ids))
+        row = fetch_one(
+            f"""SELECT e.id FROM exams e
+                JOIN grades g ON g.exam_id=e.id
+                WHERE g.subject_id IN ({ph_s}) AND g.class_id IN ({ph_c})
+                ORDER BY e.term DESC, e.start_date DESC LIMIT 1""",
+            [*subject_ids, *class_ids],
+        )
+        if row:
+            exam_id = dict(row)["id"]
+        else:
+            return []
+
+    missing = []
+    for a in assignments:
+        rows = fetch_all(
+            """SELECT st.first_name||' '||st.last_name AS student_name,
+                      st.admission_no,
+                      ? AS subject,
+                      ? AS class
+               FROM students st
+               WHERE st.class_id=? AND st.is_active=1
+                 AND NOT EXISTS (
+                     SELECT 1 FROM grades g
+                     WHERE g.student_id=st.id AND g.subject_id=? AND g.exam_id=?
+                 )
+               ORDER BY st.last_name""",
+            (a["subject_name"], a["class_name"], a["class_id"], a["subject_id"], exam_id),
+        )
+        missing.extend([dict(r) for r in rows])
+
+    return missing
+
+
 # ── My Class endpoints (class teacher scoped) ─────────────────────────────────
 
 @router.get("/my-class/info")
