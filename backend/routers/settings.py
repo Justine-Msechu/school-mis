@@ -36,6 +36,9 @@ def list_users(user: Usr):
         d = dict(r)
         if actor_role == "head_teacher" and d["role"] in _ELEVATED_ROLES:
             continue
+        # Academic officers only see teacher accounts
+        if actor_role == "academic" and d["role"] not in _ACADEMIC_ASSIGNABLE:
+            continue
         d["role_label"] = ROLES.get(d["role"], {}).get("label", d["role"])
         result.append(d)
     return result
@@ -43,6 +46,7 @@ def list_users(user: Usr):
 
 _ELEVATED_ROLES = {"admin", "head_teacher", "academic", "accountant", "welfare_officer"}
 _HEAD_TEACHER_ASSIGNABLE = {"class_teacher", "subject_teacher"}
+_ACADEMIC_ASSIGNABLE     = {"class_teacher", "subject_teacher"}
 
 
 @router.get("/roles")
@@ -55,6 +59,8 @@ def get_roles(user: Usr):
     ]
     if actor_role == "head_teacher":
         return [r for r in all_roles if r["key"] in _HEAD_TEACHER_ASSIGNABLE]
+    if actor_role == "academic":
+        return [r for r in all_roles if r["key"] in _ACADEMIC_ASSIGNABLE]
     return all_roles
 
 
@@ -71,8 +77,10 @@ def create_user(body: UserPayload, user: Usr):
     actor_role = user.get("role", "")
     if actor_role == "head_teacher" and body.role not in _HEAD_TEACHER_ASSIGNABLE:
         raise HTTPException(403, "Head teachers may only create class_teacher or subject_teacher accounts")
-    if actor_role not in ("admin", "head_teacher"):
-        raise HTTPException(403, "Only admin or head teacher can create users")
+    if actor_role == "academic" and body.role not in _ACADEMIC_ASSIGNABLE:
+        raise HTTPException(403, "Academic officers may only create class_teacher or subject_teacher accounts")
+    if actor_role not in ("admin", "head_teacher", "academic"):
+        raise HTTPException(403, "Insufficient permissions to create users")
     if not body.password:
         raise HTTPException(400, "Password required for new users")
     if len(body.password) < 8:
@@ -119,8 +127,13 @@ def edit_user(uid: int, body: EditUserPayload, user: Usr):
             raise HTTPException(403, "Head teachers cannot edit elevated accounts")
         if body.role not in _HEAD_TEACHER_ASSIGNABLE:
             raise HTTPException(403, "Head teachers may only assign class_teacher or subject_teacher roles")
+    elif actor_role == "academic":
+        if target_role not in _ACADEMIC_ASSIGNABLE:
+            raise HTTPException(403, "Academic officers can only edit teacher accounts")
+        if body.role not in _ACADEMIC_ASSIGNABLE:
+            raise HTTPException(403, "Academic officers may only assign teacher roles")
     elif actor_role != "admin":
-        raise HTTPException(403, "Only admin or head teacher can edit users")
+        raise HTTPException(403, "Insufficient permissions to edit users")
     if body.password:
         if len(body.password) < 8:
             raise HTTPException(400, "Password must be at least 8 characters")
@@ -156,7 +169,9 @@ def toggle_active(uid: int, user: Usr):
         raise HTTPException(404, "User not found")
     if actor_role == "head_teacher" and target["role"] in _ELEVATED_ROLES:
         raise HTTPException(403, "Head teachers cannot deactivate elevated accounts")
-    if actor_role not in ("admin", "head_teacher"):
+    if actor_role == "academic" and target["role"] not in _ACADEMIC_ASSIGNABLE:
+        raise HTTPException(403, "Academic officers can only toggle teacher accounts")
+    if actor_role not in ("admin", "head_teacher", "academic"):
         raise HTTPException(403, "Insufficient permissions")
     execute("UPDATE users SET is_active = 1 - is_active WHERE id=?", (uid,))
     return {"ok": True}

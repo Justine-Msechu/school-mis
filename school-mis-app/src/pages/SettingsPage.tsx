@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star } from "lucide-react";
 import { getUsers, getRoles, createUser, updateUser, toggleUserActive, getConfig, setConfig, getAcademicYears, createAcademicYear, setCurrentYear, type AppUser, type Role, type AcademicYear } from "@/api/settings";
 import { getTeachers, type Teacher } from "@/api/teachers";
+import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -302,7 +303,16 @@ function AcademicYearsTab() {
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const [tab, setTab]       = useState<Tab>("users");
+  const { can } = useAuthStore();
+  const canAllUsers    = can("settings.users.manage");
+  const canTeachers    = can("settings.teachers.manage");
+  const canSchool      = can("settings.school.manage");
+  const canYears       = can("settings.years.manage") || canAllUsers;
+  const canUsers       = canAllUsers || canTeachers;
+
+  const defaultTab: Tab = canUsers ? "users" : canSchool ? "school" : "years";
+
+  const [tab, setTab]       = useState<Tab>(defaultTab);
   const [users, setUsers]   = useState<AppUser[]>([]);
   const [roles, setRoles]   = useState<Role[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -337,20 +347,24 @@ export default function SettingsPage() {
   const roleMap = Object.fromEntries(roles.map((r) => [r.key, r]));
 
   const TABS = [
-    { key: "users"  as Tab, label: "Users" },
-    { key: "school" as Tab, label: "School Info" },
-    { key: "years"  as Tab, label: "Academic Years" },
-  ];
+    canUsers && { key: "users"  as Tab, label: canAllUsers ? "Users" : "Teacher Accounts" },
+    canSchool && { key: "school" as Tab, label: "School Info" },
+    canYears  && { key: "years"  as Tab, label: "Academic Years" },
+  ].filter(Boolean) as Array<{ key: Tab; label: string }>;
 
   return (
     <div className="p-8 max-w-screen-xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Users, school info and academic year configuration</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {canAllUsers ? "Users, school info and academic year configuration" : "Teacher accounts and academic calendar"}
+          </p>
         </div>
-        {tab === "users" && (
-          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setEditUser("new")}>Add User</Button>
+        {tab === "users" && canUsers && (
+          <Button variant="primary" icon={<Plus size={15} />} onClick={() => setEditUser("new")}>
+            {canAllUsers ? "Add User" : "Add Teacher Account"}
+          </Button>
         )}
       </div>
 

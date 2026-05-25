@@ -45,24 +45,32 @@ ROLES = {
             "audit.view",
         ],
     },
-    # ── Academic Officer: student + academic records, no finance or inventory ──
+    # ── Academic Officer: full academic lifecycle, teacher accounts only ──────
     "academic": {
         "label": "Academic Officer", "color": "#0891B2",
         "permissions": [
-            "student.view", "student.create", "student.edit", "student.deactivate",
-            "teachers.view",
+            # Students — review performance & promotions; no enrolment or deactivation
+            "student.view", "student.edit", "student.promote",
+            # Teachers — supervise + subject allocation + create teacher accounts
+            "teachers.view", "teachers.manage",
+            # Classes + timetable — manage exam timetables & class structure
             "classes.view", "classes.manage",
             "timetable.view", "timetable.manage",
-            "attendance.view", "attendance.mark",
+            # Attendance — monitor trends
+            "attendance.view", "attendance.mark", "attendance.report",
+            # Grades — approve, publish and review change requests
             "grades.view", "grades.write", "grades.submit",
             "grades.approve", "grades.publish",
             "grades.change_request.review",
-            "welfare.view",
-            "transport.view",
-            "homework.view",
+            # Homework & leave
+            "homework.view", "homework.assign",
             "leave.review",
-            "reports.view", "reports.academic", "reports.welfare",
+            # Reports
+            "reports.view", "reports.academic",
+            # Settings — ONLY teacher user accounts + academic calendars
             "settings.view",
+            "settings.teachers.manage",
+            "settings.years.manage",
         ],
     },
     # ── Accountant: record payments and expenses, view finance — NOT fee setup ─
@@ -856,7 +864,8 @@ def initialize_database():
         ("settings.view",               "settings",   "view",          "View settings",                     "GLOBAL"),
         ("settings.school.manage",      "settings",   "school",        "Manage school info",                "GLOBAL"),
         ("settings.years.manage",       "settings",   "years",         "Manage academic years",             "GLOBAL"),
-        ("settings.users.manage",       "settings",   "users",         "Manage user accounts",              "GLOBAL"),
+        ("settings.users.manage",       "settings",   "users",         "Manage all user accounts",          "GLOBAL"),
+        ("settings.teachers.manage",    "settings",   "teachers",      "Create and manage teacher accounts","GLOBAL"),
         ("settings.roles.manage",       "settings",   "roles",         "Manage roles and permissions",      "GLOBAL"),
         # Library
         ("library.view",                "library",    "view",          "View library catalogue and loans",  "GLOBAL"),
