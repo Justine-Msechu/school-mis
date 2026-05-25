@@ -11,19 +11,17 @@ Usr = Annotated[dict, Depends(require_auth)]
 @router.get("/class-status")
 def class_status(class_id: int, academic_year_id: int, user: Usr):
     rows = fetch_all(
-        """SELECT s.id AS student_id,
-                  (s.first_name || ' ' || s.last_name) AS student_name,
+        """SELECT s.id,
+                  s.first_name,
+                  s.last_name,
                   s.admission_no,
-                  e.status AS enrollment_status,
-                  sp.action AS promotion_action,
-                  sp.to_class_id,
-                  c2.name AS to_class_name
+                  CASE WHEN sp.action IS NOT NULL THEN 1 ELSE 0 END AS promoted,
+                  sp.to_class_id AS promoted_to_class_id
            FROM students s
            JOIN enrollments e ON e.student_id=s.id
                              AND e.class_id=? AND e.academic_year_id=?
            LEFT JOIN student_promotions sp ON sp.student_id=s.id
                                           AND sp.academic_year_id=?
-           LEFT JOIN classes c2 ON c2.id=sp.to_class_id
            WHERE s.deleted_at IS NULL
            ORDER BY s.first_name, s.last_name""",
         (class_id, academic_year_id, academic_year_id),

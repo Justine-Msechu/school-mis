@@ -27,8 +27,8 @@ def get_sheet(user: Usr, class_id: int, date: str = Query(default="")):
         "rows": [
             {
                 **dict(s),
-                "status": att_map.get(s["id"], {}).get("status", ""),
-                "notes":  att_map.get(s["id"], {}).get("notes", ""),
+                "status": (att_map.get(s["id"], {}).get("status", "") or "").lower(),
+                "notes":  att_map.get(s["id"], {}).get("notes", "") or "",
             }
             for s in students
         ],
@@ -50,19 +50,20 @@ class SaveAttendanceBody(BaseModel):
 @router.post("/save")
 def save_attendance(body: SaveAttendanceBody, user: Usr):
     for e in body.entries:
+        status = e.status.capitalize()  # normalize: present→Present, ABSENT→Absent
         existing = fetch_one(
             "SELECT id FROM attendance WHERE student_id=? AND date=?",
             (e.student_id, body.date),
         )
         if existing:
             execute(
-                "UPDATE attendance SET status=?, notes=?, class_id=? WHERE id=?",
-                (e.status, e.notes, body.class_id, existing["id"]),
+                "UPDATE attendance SET status=?, notes=?, class_id=?, recorded_by=? WHERE id=?",
+                (status, e.notes, body.class_id, user.get("id"), existing["id"]),
             )
         else:
             execute(
-                "INSERT INTO attendance (student_id, class_id, date, status, notes) VALUES (?,?,?,?,?)",
-                (e.student_id, body.class_id, body.date, e.status, e.notes),
+                "INSERT INTO attendance (student_id, class_id, date, status, notes, recorded_by) VALUES (?,?,?,?,?,?)",
+                (e.student_id, body.class_id, body.date, status, e.notes, user.get("id")),
             )
     return {"saved": len(body.entries)}
 
