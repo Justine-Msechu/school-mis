@@ -51,6 +51,11 @@ async def lifespan(app: FastAPI):
         _mod4 = importlib.util.module_from_spec(_spec4)
         _spec4.loader.exec_module(_mod4)
         _mod4.run()
+        _mig5_path = os.path.join(os.path.dirname(__file__), "migrations", "005_rbac_tables.py")
+        _spec5 = importlib.util.spec_from_file_location("migration_005", _mig5_path)
+        _mod5 = importlib.util.module_from_spec(_spec5)
+        _spec5.loader.exec_module(_mod5)
+        _mod5.run()
     except Exception as e:
         log.warning("Migration warning (may already be applied): %s", e)
 

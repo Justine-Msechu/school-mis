@@ -11,7 +11,6 @@ import {
 } from "@/api/rbac";
 import { getUsers, type AppUser } from "@/api/settings";
 import { getClassList, type ClassRecord } from "@/api/classes";
-import api from "@/api/client";
 import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import SkeletonRow from "@/components/ui/SkeletonRow";
@@ -38,9 +37,9 @@ interface Subject { id: number; name: string; code: string | null }
 function useSubjects() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   useEffect(() => {
-    api.get<Subject[]>("/classes/subjects").catch(() =>
-      api.get<Subject[]>("/subjects")
-    ).then((r) => setSubjects(r.data)).catch(() => {});
+    import("@/api/client").then(({ default: api }) =>
+      api.get<Subject[]>("/grades/subjects").then((r) => setSubjects(r.data))
+    ).catch(() => {});
   }, []);
   return subjects;
 }
