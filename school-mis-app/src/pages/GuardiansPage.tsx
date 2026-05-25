@@ -7,6 +7,7 @@ import FormField from "@/components/ui/FormField";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { DataTable, type Column } from "@/components/data/DataTable";
 import { useToast } from "@/components/ui/Toast";
+import { useAuthStore } from "@/stores/authStore";
 import {
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
   getGuardian, type Guardian,
@@ -14,6 +15,8 @@ import {
 
 export default function GuardiansPage() {
   const toast = useToast();
+  const { can } = useAuthStore();
+  const canManage = can("guardian.manage");
   const firstLoad = useRef(true);
   const [loading, setLoading] = useState(true);
   const [guardians, setGuardians] = useState<Guardian[]>([]);
@@ -97,8 +100,8 @@ export default function GuardiansPage() {
     { key: "is_emergency_contact", header: "Emergency", render: (row) => row.is_emergency_contact ? (
       <span className="px-2 py-0.5 bg-red-50 text-red-700 rounded-full text-xs">Yes</span>
     ) : null },
-    {
-      key: "id", header: "", render: (row) => (
+    ...(canManage ? [{
+      key: "id" as keyof Guardian, header: "", render: (row: Guardian) => (
         <div className="flex gap-1">
           <button onClick={(e) => { e.stopPropagation(); openEdit(row); }}
             className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50">Edit</button>
@@ -106,7 +109,7 @@ export default function GuardiansPage() {
             className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50">Delete</button>
         </div>
       )
-    },
+    }] : []),
   ];
 
   const field = (label: string, key: keyof Guardian, type = "text", required = false) => (
@@ -125,11 +128,11 @@ export default function GuardiansPage() {
       <PageHeader
         title="Guardians & Parents"
         subtitle="Manage parent and guardian contacts"
-        actions={
+        actions={canManage ? (
           <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
             <UserPlus size={15} /> Add Guardian
           </button>
-        }
+        ) : undefined}
       />
 
       <div className="mb-5">
@@ -141,7 +144,7 @@ export default function GuardiansPage() {
           columns={columns}
           rows={guardians}
           loading={loading}
-          onRowClick={openEdit}
+          onRowClick={canManage ? openEdit : undefined}
         />
       </div>
 
