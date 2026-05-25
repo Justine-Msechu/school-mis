@@ -1,6 +1,7 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from backend.deps import require_auth
+from backend.core.authz import compute_effective_permissions
 from database.db import fetch_all, fetch_one
 
 router = APIRouter(tags=["reports"])
@@ -79,14 +80,20 @@ def grade_summary(user: Usr, exam_id: int = Query(None)):
 
 @router.get("/overview")
 def overview(user: Usr):
-    students  = dict(fetch_one("SELECT COUNT(*) as n FROM students WHERE is_active=1") or {}).get("n", 0)
-    teachers  = dict(fetch_one("SELECT COUNT(*) as n FROM teachers") or {}).get("n", 0)
-    books     = dict(fetch_one("SELECT COUNT(*) as n FROM library_books WHERE is_active=1") or {}).get("n", 0)
-    loans_out = dict(fetch_one("SELECT COUNT(*) as n FROM library_loans WHERE status='active'") or {}).get("n", 0)
-    expenses  = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM expenses") or {}).get("n", 0)
-    revenue   = dict(fetch_one("SELECT COALESCE(SUM(amount_paid),0) as n FROM fee_payments") or {}).get("n", 0)
-    return {
-        "students": students, "teachers": teachers,
-        "books": books,       "active_loans": loans_out,
-        "total_expenses": expenses, "total_revenue": revenue,
-    }
+    perms  = compute_effective_permissions(user["id"])
+    is_all = "*" in perms
+    def can(p: str) -> bool:
+        return is_all or p in perms
+
+    result: dict = {}
+    if can("student.view"):
+        result["students"] = dict(fetch_one("SELECT COUNT(*) as n FROM students WHERE is_active=1") or {}).get("n", 0)
+    if can("teachers.view"):
+        result["teachers"] = dict(fetch_one("SELECT COUNT(*) as n FROM teachers") or {}).get("n", 0)
+    if can("library.view"):
+        result["books"]        = dict(fetch_one("SELECT COUNT(*) as n FROM library_books WHERE is_active=1") or {}).get("n", 0)
+        result["active_loans"] = dict(fetch_one("SELECT COUNT(*) as n FROM library_loans WHERE status='active'") or {}).get("n", 0)
+    if can("reports.finance") or can("finance.view"):
+        result["total_expenses"] = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM expenses") or {}).get("n", 0)
+        result["total_revenue"]  = dict(fetch_one("SELECT COALESCE(SUM(amount_paid),0) as n FROM fee_payments") or {}).get("n", 0)
+    return result

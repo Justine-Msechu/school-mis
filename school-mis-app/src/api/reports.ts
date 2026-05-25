@@ -29,12 +29,12 @@ export interface GradeSummaryRow {
 }
 
 export interface ReportsOverview {
-  students: number;
-  teachers: number;
-  books: number;
-  active_loans: number;
-  total_expenses: number;
-  total_revenue: number;
+  students?:      number;
+  teachers?:      number;
+  books?:         number;
+  active_loans?:  number;
+  total_expenses?: number;
+  total_revenue?:  number;
 }
 
 export const getAttendanceSummaryReport = (class_id?: number | null, month?: string) =>

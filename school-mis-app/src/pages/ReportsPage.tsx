@@ -7,12 +7,14 @@ import StatCard from "@/components/ui/StatCard";
 import Select from "@/components/ui/Select";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
+import { useAuthStore } from "@/stores/authStore";
 
 type Tab = "overview" | "attendance" | "grades";
 
 const fmt = (n: number) => `TZS ${(n ?? 0).toLocaleString()}`;
 
 export default function ReportsPage() {
+  const { can } = useAuthStore();
   const [tab, setTab]             = useState<Tab>("overview");
   const [overview, setOverview]   = useState<ReportsOverview | null>(null);
   const [attRows, setAttRows]     = useState<AttendanceSummaryRow[]>([]);
@@ -87,12 +89,12 @@ export default function ReportsPage() {
 
       {tab === "overview" && overview && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard title="Students"       value={overview.students}                icon={Users}    color="#7C3AED" />
-          <StatCard title="Teachers"       value={overview.teachers}                icon={Users}    color="#0891B2" />
-          <StatCard title="Library Books"  value={overview.books}                   icon={BookOpen} color="#059669" />
-          <StatCard title="Active Loans"   value={overview.active_loans}            icon={BookOpen} color="#D97706" />
-          <StatCard title="Total Revenue"  value={fmt(overview.total_revenue)}      icon={DollarSign} color="#059669" />
-          <StatCard title="Total Expenses" value={fmt(overview.total_expenses)}     icon={DollarSign} color="#E11D48" />
+          {overview.students    != null && <StatCard title="Students"       value={overview.students}            icon={Users}      color="#7C3AED" />}
+          {overview.teachers    != null && <StatCard title="Teachers"       value={overview.teachers}            icon={Users}      color="#0891B2" />}
+          {can("library.view") && overview.books        != null && <StatCard title="Library Books"  value={overview.books}           icon={BookOpen}   color="#059669" />}
+          {can("library.view") && overview.active_loans != null && <StatCard title="Active Loans"   value={overview.active_loans}    icon={BookOpen}   color="#D97706" />}
+          {(can("reports.finance") || can("finance.view")) && overview.total_revenue  != null && <StatCard title="Total Revenue"  value={fmt(overview.total_revenue)}  icon={DollarSign} color="#059669" />}
+          {(can("reports.finance") || can("finance.view")) && overview.total_expenses != null && <StatCard title="Total Expenses" value={fmt(overview.total_expenses)} icon={DollarSign} color="#E11D48" />}
         </div>
       )}
 
