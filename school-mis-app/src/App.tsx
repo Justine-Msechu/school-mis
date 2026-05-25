@@ -21,7 +21,6 @@ import SettingsPage from "@/pages/SettingsPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import EnrollmentPage from "@/pages/EnrollmentPage";
 import GuardiansPage from "@/pages/GuardiansPage";
-import TimetablePage from "@/pages/TimetablePage";
 import ReportCardsPage from "@/pages/ReportCardsPage";
 import ForceChangePassword from "@/components/ui/ForceChangePassword";
 
@@ -68,7 +67,6 @@ export default function App() {
                   <Route path="/audit"       element={<PermRoute perm="audit.view"><AuditLogPage /></PermRoute>} />
                   <Route path="/enrollment"  element={<PermRoute perm="enrollment.view"><EnrollmentPage /></PermRoute>} />
                   <Route path="/guardians"   element={<PermRoute perm="guardian.view"><GuardiansPage /></PermRoute>} />
-                  <Route path="/timetable"   element={<PermRoute perm="timetable.view"><TimetablePage /></PermRoute>} />
                   <Route path="/report-cards" element={<PermRoute perm="report_cards.view"><ReportCardsPage /></PermRoute>} />
                 </Routes>
               </AppShell>

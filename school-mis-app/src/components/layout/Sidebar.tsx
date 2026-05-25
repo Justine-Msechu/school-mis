@@ -6,7 +6,7 @@ import {
   Award, Calendar, Library, DollarSign, Building2,
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
-  UserCheck, FileText, Clock, UsersRound,
+  UserCheck, FileText, UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -35,7 +35,6 @@ const NAV_GROUPS: NavGroupDef[] = [
       { icon: Award,      label: "Grades",        to: "/grades",        perm: "grades.view" },
       { icon: Calendar,   label: "Attendance",    to: "/attendance",    perm: "attendance.view" },
       { icon: UserCheck,  label: "Enrollment",    to: "/enrollment",    perm: "enrollment.view" },
-      { icon: Clock,      label: "Timetable",     to: "/timetable",     perm: "timetable.view" },
       { icon: FileText,   label: "Report Cards",  to: "/report-cards",  perm: "report_cards.view" },
       { icon: Library,    label: "Library",       to: "/library",       perm: "library.view" },
     ],

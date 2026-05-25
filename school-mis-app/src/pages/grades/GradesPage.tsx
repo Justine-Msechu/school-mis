@@ -7,18 +7,19 @@ import ApprovalsTab from "./ApprovalsTab";
 import ExamManagementTab from "./ExamManagementTab";
 import ChangeRequestsTab from "./ChangeRequestsTab";
 import HomeworkTab from "./HomeworkTab";
+import TimetablePage from "@/pages/TimetablePage";
 
 const tabs = [
-  { label: "Grade Entry",       path: "",          perm: "grades.write"                  },
-  { label: "Approvals",         path: "approvals", perm: "grades.approve"                },
-  { label: "Results & Reports", path: "results",   perm: "grades.view"                   },
-  { label: "Exam Management",   path: "exams",     perm: "grades.approve"                },
+  { label: "Grade Entry",       path: "",            perm: "grades.write"                  },
+  { label: "Approvals",         path: "approvals",   perm: "grades.approve"                },
+  { label: "Results & Reports", path: "results",     perm: "grades.view"                   },
+  { label: "Exam Management",   path: "exams",       perm: "grades.approve"                },
   {
     label: "Change Requests", path: "changes",
-    // Teachers can see their submitted requests; academic can review them
     perms: ["grades.change_request.create", "grades.change_request.review"],
   },
-  { label: "Homework",          path: "homework",  perm: "homework.view"                 },
+  { label: "Timetable",         path: "timetable",   perm: "timetable.view"                },
+  { label: "Homework",          path: "homework",    perm: "homework.view"                 },
 ];
 
 export default function GradesPage() {
@@ -60,7 +61,8 @@ export default function GradesPage() {
           <Route path="results"   element={<ResultsPage />} />
           <Route path="approvals" element={<ApprovalsTab />} />
           <Route path="exams"     element={<ExamManagementTab />} />
-          <Route path="changes"   element={<ChangeRequestsTab />} />
+          <Route path="changes"    element={<ChangeRequestsTab />} />
+          <Route path="timetable" element={<TimetablePage />} />
           <Route path="homework"  element={<HomeworkTab />} />
         </Routes>
       </div>
