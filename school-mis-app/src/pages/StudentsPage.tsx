@@ -104,11 +104,9 @@ function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps
   ];
 
   const categoryOptions = [
-    { value: "regular",     label: "Regular" },
-    { value: "orphan",      label: "Orphan" },
-    { value: "half_orphan", label: "Half Orphan" },
-    { value: "sponsored",   label: "Sponsored" },
-    { value: "vulnerable",  label: "Vulnerable" },
+    { value: "regular",   label: "Regular" },
+    { value: "orphan",    label: "Orphan" },
+    { value: "sponsored", label: "Sponsored" },
   ];
 
   return (

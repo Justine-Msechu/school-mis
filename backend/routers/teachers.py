@@ -31,17 +31,19 @@ def _audit(user_id: int, action: str, record_id: int, detail: str):
 
 
 @router.get("")
-def list_teachers(user: Usr, search: str = Query("")):
+def list_teachers(user: Usr, search: str = Query(""), include_inactive: bool = Query(False)):
+    where = ["t.deleted_at IS NULL"]
     params: list = []
-    where = ""
+    if not include_inactive:
+        where.append("t.is_active = 1")
     if search:
-        where = "WHERE (t.first_name || ' ' || t.last_name LIKE ? OR t.employee_no LIKE ? OR t.subject_specialization LIKE ?)"
-        params = [f"%{search}%", f"%{search}%", f"%{search}%"]
+        where.append("(t.first_name || ' ' || t.last_name LIKE ? OR t.employee_no LIKE ? OR t.subject_specialization LIKE ?)")
+        params += [f"%{search}%", f"%{search}%", f"%{search}%"]
     rows = fetch_all(
         f"""SELECT t.*, u.username, u.role, u.is_active as user_active
             FROM teachers t
             LEFT JOIN users u ON u.teacher_id = t.id
-            {where}
+            WHERE {' AND '.join(where)}
             ORDER BY t.last_name, t.first_name""",
         params,
     )
@@ -60,7 +62,7 @@ class TeacherPayload(BaseModel):
     first_name:             str
     last_name:              str
     employee_no:            str | None = None   # auto-generated if omitted
-    gender:                 str = "M"
+    gender:                 str = "Male"
     date_of_birth:          str | None = None
     phone:                  str | None = None
     email:                  str | None = None
@@ -108,6 +110,20 @@ def update_teacher(teacher_id: int, body: TeacherPayload, user: Usr):
     )
     _audit(user["id"], "teacher_update", teacher_id, f"Updated teacher {body.first_name} {body.last_name}")
     return dict(fetch_one("SELECT * FROM teachers WHERE id=?", (teacher_id,)))
+
+
+@router.delete("/{teacher_id}")
+def deactivate_teacher(teacher_id: int, user: Usr):
+    row = fetch_one("SELECT id, first_name, last_name FROM teachers WHERE id=? AND deleted_at IS NULL", (teacher_id,))
+    if not row:
+        raise HTTPException(404, "Teacher not found")
+    execute(
+        "UPDATE teachers SET is_active=0, deleted_at=datetime('now') WHERE id=?",
+        (teacher_id,),
+    )
+    _audit(user["id"], "teacher_delete", teacher_id,
+           f"Deactivated {row['first_name']} {row['last_name']}")
+    return {"ok": True}
 
 
 @router.get("/{teacher_id}/subjects")

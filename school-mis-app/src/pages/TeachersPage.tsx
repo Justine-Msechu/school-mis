@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Search, Plus, Edit2, Mail, Phone, Users, Download } from "lucide-react";
+import { Search, Plus, Edit2, Mail, Phone, Users, Download, UserX } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
-import { getTeachers, createTeacher, updateTeacher, getNextEmployeeNo, type Teacher } from "@/api/teachers";
+import { getTeachers, createTeacher, updateTeacher, deactivateTeacher, getNextEmployeeNo, type Teacher } from "@/api/teachers";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
@@ -29,7 +29,7 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
     first_name:             initial?.first_name             ?? "",
     last_name:              initial?.last_name              ?? "",
     employee_no:            initial?.employee_no            ?? "",
-    gender:                 initial?.gender                 ?? "M",
+    gender:                 initial?.gender                 ?? "Male",
     phone:                  initial?.phone                  ?? "",
     email:                  initial?.email                  ?? "",
     subject_specialization: initial?.subject_specialization ?? "",
@@ -110,8 +110,8 @@ function TeacherDialog({ initial, onSave, onClose }: TeacherDialogProps) {
           </Field>
           <Field label="Gender">
             <select className={INPUT} value={form.gender} onChange={(e) => set("gender", e.target.value)}>
-              <option value="M">Male</option>
-              <option value="F">Female</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
             </select>
           </Field>
           <Field label="Phone">
@@ -150,6 +150,12 @@ export default function TeachersPage() {
     if (firstLoad.current) setLoading(true);
     getTeachers(search).then(setTeachers).catch(() => {}).finally(() => { setLoading(false); firstLoad.current = false; });
   }, [search]);
+
+  const handleDeactivate = async (id: number) => {
+    if (!confirm("Deactivate this teacher? They will no longer appear in the list.")) return;
+    await deactivateTeacher(id).catch(() => {});
+    load();
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -216,7 +222,7 @@ export default function TeachersPage() {
                 <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{t.first_name} {t.last_name}</div>
-                    {t.gender && <div className="text-xs text-gray-400">{t.gender === "M" ? "Male" : "Female"}</div>}
+                    {t.gender && <div className="text-xs text-gray-400">{t.gender}</div>}
                   </td>
                   <td className="px-4 py-3 text-gray-600 font-mono text-xs">{t.employee_no || "—"}</td>
                   <td className="px-4 py-3 text-gray-600">{t.subject_specialization || "—"}</td>
@@ -238,12 +244,20 @@ export default function TeachersPage() {
                   <td className="px-4 py-3 text-gray-600">{t.qualification || "—"}</td>
                   <td className="px-4 py-3 text-gray-600">{t.joining_date || "—"}</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => setDialog(t)}
-                      className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors"
-                    >
-                      <Edit2 size={13} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => setDialog(t)}
+                        className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDeactivate(t.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      >
+                        <UserX size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

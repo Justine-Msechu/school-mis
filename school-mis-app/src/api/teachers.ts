@@ -11,6 +11,7 @@ export interface Teacher {
   subject_specialization: string | null;
   qualification: string | null;
   joining_date: string | null;
+  is_active: number;
   username?: string;
   role?: string;
   user_active?: number;
@@ -43,3 +44,6 @@ export const createTeacher = (body: TeacherPayload) =>
 
 export const updateTeacher = (id: number, body: TeacherPayload) =>
   api.put<Teacher>(`/teachers/${id}`, body).then((r) => r.data);
+
+export const deactivateTeacher = (id: number) =>
+  api.delete(`/teachers/${id}`).then((r) => r.data);

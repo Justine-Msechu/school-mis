@@ -13,10 +13,10 @@ import api from "@/api/client";
 
 const DAYS = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-interface AcademicYear { id: number; name: string; is_current: number; }
+interface AcademicYear { id: number; label: string; is_current: number; }
 interface ClassRow { id: number; name: string; }
 interface SubjectRow { id: number; name: string; }
-interface TeacherRow { id: number; full_name: string; }
+interface TeacherRow { id: number; first_name: string; last_name: string; }
 
 export default function TimetablePage() {
   const toast = useToast();
@@ -50,7 +50,7 @@ export default function TimetablePage() {
       setSubjects(subs.items || subs);
       setTeachers(tchs.items || tchs);
       setPeriods(pds);
-      const cur = yrs.find((y: AcademicYear) => y.is_current);
+      const cur = yrs.find((y: AcademicYear) => y.is_current === 1);
       if (cur) setYear(cur.id);
     });
   }, []);
@@ -155,7 +155,7 @@ export default function TimetablePage() {
         <select value={year} onChange={(e) => setYear(Number(e.target.value))}
           className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none">
           <option value="">Year</option>
-          {years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
+          {years.map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
         </select>
         <select value={version} onChange={(e) => setVersion(Number(e.target.value))}
           className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none">
@@ -274,7 +274,7 @@ export default function TimetablePage() {
             <select value={slotForm.teacher_id || ""} onChange={(e) => setSlotForm((f: any) => ({ ...f, teacher_id: e.target.value }))}
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none">
               <option value="">No teacher assigned</option>
-              {teachers.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              {teachers.map((t) => <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>)}
             </select>
           </FormField>
           <FormField label="Room">

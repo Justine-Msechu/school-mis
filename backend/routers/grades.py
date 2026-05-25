@@ -48,7 +48,7 @@ def get_classes(user: Usr):
 
 
 @router.get("/subjects")
-def get_subjects(class_id: int, user: Usr):
+def get_subjects(user: Usr, class_id: int = None):
     _hydrate(user)
     return _repo().list_subjects(class_id)
 
