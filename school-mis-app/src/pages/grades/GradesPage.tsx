@@ -31,8 +31,8 @@ export default function GradesPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      <div className="bg-white border-b border-gray-200 px-8">
-        <div className="flex gap-1">
+      <div className="bg-white border-b border-gray-200 overflow-x-auto">
+        <div className="flex gap-1 px-4 min-w-max">
           {visibleTabs.map((t) => (
             <NavLink
               key={t.path}

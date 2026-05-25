@@ -31,6 +31,7 @@ const STATUS_OPTIONS = [
 export default function ChangeRequestsTab() {
   const { can } = useAuthStore();
   const canReview = can("grades.change_request.review");
+  const canCreate = can("grades.change_request.create");
   const [requests, setRequests] = useState<ChangeRequest[]>([]);
   const [status, setStatus]     = useState("pending");
   const [loading, setLoading]   = useState(true);
@@ -60,11 +61,22 @@ export default function ChangeRequestsTab() {
     <div className="p-8 max-w-screen-xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Grade Change Requests</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Review requested grade corrections</p>
+          <h2 className="text-xl font-bold text-gray-900">
+            {canReview ? "Grade Change Requests" : "My Change Requests"}
+          </h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {canReview ? "Review requested grade corrections" : "Track your submitted grade change requests"}
+          </p>
         </div>
         <Select value={status} onChange={(v) => setStatus(v as string)} options={STATUS_OPTIONS} className="w-36" />
       </div>
+
+      {!canReview && canCreate && (
+        <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <strong>How to request a grade change:</strong> Go to <em>Grade Entry</em>, load the sheet for the exam, and click{" "}
+          <strong>"Request Change ↗"</strong> next to any locked grade row.
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">

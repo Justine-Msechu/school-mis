@@ -207,7 +207,11 @@ def pending_approval(user: Usr):
 @router.get("/change-requests")
 def list_change_requests(user: Usr, status: str = Query("pending")):
     require_permission(user, "grades.view")
-    return _repo().list_change_requests(status)
+    perms = user.get("permissions", [])
+    # Reviewers (academic/head_teacher) see all requests; teachers see only their own
+    can_review = "grades.change_request.review" in perms
+    requested_by = None if can_review else user.get("id")
+    return _repo().list_change_requests(status, requested_by=requested_by)
 
 
 class ChangeRequestBody(BaseModel):

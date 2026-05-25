@@ -168,9 +168,16 @@ class GradesRepository(BaseRepository):
 
     # ── Change requests ───────────────────────────────────────────────────────
 
-    def list_change_requests(self, status: str = "pending") -> list[dict]:
+    def list_change_requests(
+        self, status: str = "pending", requested_by: int | None = None
+    ) -> list[dict]:
+        params: list = [status]
+        extra = ""
+        if requested_by is not None:
+            extra = "AND gcr.requested_by = ?"
+            params.append(requested_by)
         return self._q(
-            """SELECT gcr.*,
+            f"""SELECT gcr.*,
                       s.first_name || ' ' || s.last_name AS student_name,
                       s.admission_no,
                       subj.name AS subject_name,
@@ -180,9 +187,9 @@ class GradesRepository(BaseRepository):
                JOIN students s   ON s.id   = g.student_id
                JOIN subjects subj ON subj.id = g.subject_id
                JOIN exams e      ON e.id   = g.exam_id
-               WHERE gcr.status = ?
+               WHERE gcr.status = ? {extra}
                ORDER BY gcr.created_at DESC""",
-            (status,),
+            params,
         )
 
     def get_change_request(self, cr_id: int) -> dict | None:

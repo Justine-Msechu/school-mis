@@ -175,6 +175,28 @@ export default function GradeEntryPage() {
               <p className="text-sm text-gray-500 mt-0.5">Select an exam, class, and subject to load the grade sheet.</p>
             </div>
 
+            {/* Open exams banner */}
+            {exams.filter((e) => e.status === "open").length > 0 && (
+              <div className="mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <p className="text-xs font-semibold text-emerald-700 mb-2">Open for grade entry:</p>
+                <div className="flex flex-wrap gap-2">
+                  {exams.filter((e) => e.status === "open").map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={() => setExamId(e.id)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        examId === e.id
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                      }`}
+                    >
+                      {e.name} {e.term ? `(T${e.term})` : ""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Selector card */}
             <Card className="mb-6">
               <div className="flex items-end gap-3 flex-wrap">
