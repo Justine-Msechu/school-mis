@@ -100,10 +100,10 @@ _DEFAULT_ROLE_PERMISSIONS = {
         "grades.view", "grades.write", "grades.submit",
         "grades.change_request.create",
         "classes.view", "timetable.view",
-        "enrollment.view", "guardian.view",
+        "guardian.view",
         "report_cards.view", "report_cards.comment",
         "homework.view", "homework.assign", "homework.grade",
-        "leave.review", "welfare.view",
+        "leave.review",
         "reports.view", "reports.academic",
     ],
     "subject_teacher": [
