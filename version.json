@@ -1,7 +1,7 @@
 {
-  "version": "4.10.4",
+  "version": "4.11.0",
   "release_date": "2026-05-25",
-  "release_notes": "Fix module visibility: all sidebar modules now correctly gated by role permissions. head_teacher and academic officer gained enrollment, guardians, and report cards access.",
+  "release_notes": "RBAC fully database-driven: roles are pure labels, permissions seeded once and owned by DB, no more code-resets on restart. Edit roles/permissions via Roles & Access UI only.",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -73,7 +73,7 @@
     "modules/parent_portal/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/parent_portal/main.py": "10a846d61cb02ae8191e3de4bd1f5e189b8b921d5994aa86d41efbe13054c974",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-    "database/db.py": "cebe6dc1cb2fad1ed41891c986455270cd89493815a6e825518c0dc4b167f260",
+    "database/db.py": "605cf72b6f745d595dee1692f430540a594f6fea38b8a57e194049d97ec74296",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
     "ui/main_window.py": "f8fa17f03124a99f9d198308ac90206aa24462b2b46f5c66cfd8c077a30706a0",
@@ -8040,17 +8040,17 @@
     "backend/routers/attendance.py": "bd795705b804c1a1d46adae3a177824134a78cc1318ccc19a41e7aaf638e4c67",
     "backend/routers/promotion.py": "0bf4d38461c3a7ce94e2f9059a56e8619095a1551ac51ee6ad97a240e353cb19",
     "backend/routers/grades.py": "c34644764f1d5dee39637a899d031c0b4d970bf4dcc780cffa35bdaa9706f853",
-    "backend/routers/settings.py": "77a0fedba1bdeff7e0924d8cda7e7a4dd7a457d1485cf9128fd7b49ba98a739c",
     "backend/routers/rbac.py": "33e47eb3a36dfc50e838110bc90b3e7ede2fb8f9ff9fecdd084cae9fd1afafdc",
     "backend/routers/auth.py": "78612217a32543555c94dfc65358b85750ff74312b13b5a996a9f036db1397fb",
+    "backend/routers/settings.py": "5fc004b834b0d53d09b5612e34888faf04f9e173424732cb84d2b02027eaf6cf",
     "backend/core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "backend/core/exceptions.py": "e941b7209720d514e16dfa305e2d2f3a72118389e2bffa11fbe290b58c9c7617",
     "backend/core/events.py": "e5444c08f04c420c450e858ac35e64a37a6c79717a1d4a97910b9744fb3799cc",
     "backend/core/db.py": "563bea04642ef67e4f4f790ecab40e65928360a3fe9bb48ec971da1108098531",
     "backend/core/audit.py": "aa78b3ba5663904b14077d01cb98f5b39113228d1a37c67f2158467a628b5392",
     "backend/core/id_generator.py": "c9ea13405b9946322971199c41250d9db1c4d6b3e240959b8a6a2b14b7fb767b",
-    "backend/core/security.py": "c1b324cdb7698bf7d48b4e5150f3b5eb70e0445f71cbb899f068f7fbbfd6b997",
     "backend/core/authz.py": "1211d61353a0168aefb40d134d63bf642cbacfcb7e81013435ef79e674f2fc83",
+    "backend/core/security.py": "fd32b9066b7bf763fba5e414031c7190892870c78fee8bca98487db4f5786eca",
     "backend/domain/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "backend/domain/finance/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "backend/domain/finance/ledger.py": "4736037e496729e13ee4654fee47f3b9ab9428f306e30c9c1373983be61d1163",
@@ -8079,6 +8079,6 @@
     "backend/migrations/002_phase2.py": "20fdceeb572bc08120fa7d29ccda1bfd6f005ea10d0883305db902d667fcff04",
     "backend/migrations/003_structural_fixes.py": "42ffca841ba842e4da828b56e557228cab9756cf529f6e1dc7a86ea96aae64ac",
     "backend/migrations/004_id_generation.py": "eabbde458ff13f1d427aa2baa7c7cbf854b42496ea88aea0ed5e38855c334727",
-    "backend/migrations/005_rbac_tables.py": "81cedb0411266eaba1663956cccb29751c433d2f2426e743565075f31f8779f3"
+    "backend/migrations/005_rbac_tables.py": "bf841c005bf703a61cc306d8c1691f3fd8cbee5b59222354cd4b8742671ed1da"
   }
 }
