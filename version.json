@@ -1,7 +1,7 @@
 {
-  "version": "4.10.3",
+  "version": "4.10.4",
   "release_date": "2026-05-25",
-  "release_notes": "Roles & Access: revoked roles take effect immediately \u2014 no re-login needed. authorize() re-reads DB on every request; AppShell refreshes permissions on page load.",
+  "release_notes": "Fix module visibility: all sidebar modules now correctly gated by role permissions. head_teacher and academic officer gained enrollment, guardians, and report cards access.",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -73,7 +73,7 @@
     "modules/parent_portal/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "modules/parent_portal/main.py": "10a846d61cb02ae8191e3de4bd1f5e189b8b921d5994aa86d41efbe13054c974",
     "database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-    "database/db.py": "55c406dab335878aaa3089251c562addfe72cee3d0e80d890a008edec5da2178",
+    "database/db.py": "cebe6dc1cb2fad1ed41891c986455270cd89493815a6e825518c0dc4b167f260",
     "ui/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "ui/theme.py": "3ff872d30d14af7571296ae4b2042598a3851a151ff56f55450fed03d9b790e8",
     "ui/main_window.py": "f8fa17f03124a99f9d198308ac90206aa24462b2b46f5c66cfd8c077a30706a0",
