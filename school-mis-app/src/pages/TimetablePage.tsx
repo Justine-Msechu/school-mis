@@ -10,6 +10,7 @@ import {
   type TimetablePeriod, type TimetableVersion,
 } from "@/api/timetable";
 import api from "@/api/client";
+import { useAuthStore } from "@/stores/authStore";
 
 const DAYS = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -20,6 +21,8 @@ interface TeacherRow { id: number; first_name: string; last_name: string; }
 
 export default function TimetablePage() {
   const toast = useToast();
+  const { can } = useAuthStore();
+  const canManage = can("timetable.manage");
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
@@ -144,10 +147,12 @@ export default function TimetablePage() {
         title="Timetable"
         subtitle="Manage school schedule and class timetables"
         actions={
-          <button onClick={() => setNewVerOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-            <Plus size={15} /> New Version
-          </button>
+          canManage ? (
+            <button onClick={() => setNewVerOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+              <Plus size={15} /> New Version
+            </button>
+          ) : undefined
         }
       />
 
@@ -162,7 +167,7 @@ export default function TimetablePage() {
           <option value="">Version</option>
           {versions.map((v) => <option key={v.id} value={v.id}>{v.name} ({v.status})</option>)}
         </select>
-        {version && (
+        {version && canManage && (
           <button onClick={handleActivate}
             className="px-3 py-2 text-sm border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-50">
             Activate
@@ -173,7 +178,7 @@ export default function TimetablePage() {
           <option value="">Select class</option>
           {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        {version && classId && (
+        {version && classId && canManage && (
           <button onClick={() => { setSlotForm({ day_of_week: 1 }); setSlotOpen(true); }}
             className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">
             <Plus size={13} /> Add Slot
@@ -211,17 +216,19 @@ export default function TimetablePage() {
                             <div className="font-medium text-violet-800 text-xs">{slot.subject_name}</div>
                             {slot.teacher_name && <div className="text-violet-600 text-xs">{slot.teacher_name}</div>}
                             {slot.room && <div className="text-violet-400 text-xs">{slot.room}</div>}
-                            <button
-                              onClick={() => handleDeleteSlot(slot.id)}
-                              className="absolute top-1 right-1 hidden group-hover:block text-red-400 hover:text-red-600 text-xs leading-none"
-                            >✕</button>
+                            {canManage && (
+                              <button
+                                onClick={() => handleDeleteSlot(slot.id)}
+                                className="absolute top-1 right-1 hidden group-hover:block text-red-400 hover:text-red-600 text-xs leading-none"
+                              >✕</button>
+                            )}
                           </div>
-                        ) : (
+                        ) : canManage ? (
                           <button
                             onClick={() => { setSlotForm({ day_of_week: d, period_id: String(p.id) }); setSlotOpen(true); }}
                             className="w-full h-8 border border-dashed border-gray-200 rounded-lg hover:border-violet-300 hover:bg-violet-50/50 transition-colors text-gray-300 hover:text-violet-400 text-xs"
                           >+</button>
-                        )}
+                        ) : null}
                       </td>
                     );
                   })}

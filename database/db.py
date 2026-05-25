@@ -21,7 +21,7 @@ ROLES = {
             "student.promote",
             "teachers.view", "teachers.manage",
             "classes.view", "classes.manage",
-            "timetable.view",
+            "timetable.view", "timetable.manage",
             "attendance.view", "attendance.mark",
             "grades.view", "grades.write", "grades.submit",
             "grades.approve", "grades.publish",
@@ -52,7 +52,7 @@ ROLES = {
             "student.view", "student.create", "student.edit", "student.deactivate",
             "teachers.view",
             "classes.view", "classes.manage",
-            "timetable.view",
+            "timetable.view", "timetable.manage",
             "attendance.view", "attendance.mark",
             "grades.view", "grades.write", "grades.submit",
             "grades.approve", "grades.publish",
@@ -258,6 +258,40 @@ def initialize_database():
         day_of_week TEXT CHECK(day_of_week IN ('Mon','Tue','Wed','Thu','Fri')),
         start_time TEXT, end_time TEXT)""")
 
+    # ── Structured timetable (versions + periods + slots) ──────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS timetable_periods (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        period_no   INTEGER NOT NULL DEFAULT 0,
+        start_time  TEXT NOT NULL,
+        end_time    TEXT NOT NULL,
+        is_break    INTEGER NOT NULL DEFAULT 0,
+        sort_order  INTEGER NOT NULL DEFAULT 0)""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS timetable_versions (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        academic_year_id INTEGER NOT NULL REFERENCES academic_years(id),
+        term_id          INTEGER,
+        name             TEXT NOT NULL,
+        status           TEXT NOT NULL DEFAULT 'draft'
+                         CHECK(status IN ('draft','active','archived')),
+        effective_from   TEXT,
+        effective_to     TEXT,
+        created_by       INTEGER REFERENCES users(id),
+        created_at       TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS timetable_slots (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        version_id  INTEGER NOT NULL REFERENCES timetable_versions(id),
+        class_id    INTEGER NOT NULL REFERENCES classes(id),
+        subject_id  INTEGER NOT NULL REFERENCES subjects(id),
+        teacher_id  INTEGER REFERENCES teachers(id),
+        period_id   INTEGER NOT NULL REFERENCES timetable_periods(id),
+        day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 1 AND 7),
+        room        TEXT,
+        notes       TEXT,
+        UNIQUE(version_id, class_id, period_id, day_of_week))""")
+
     cur.execute("""CREATE TABLE IF NOT EXISTS attendance (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL REFERENCES students(id),
@@ -303,6 +337,25 @@ def initialize_database():
         review_note     TEXT,
         reviewed_at     TEXT,
         created_at      TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS result_approval_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        grade_id    INTEGER NOT NULL REFERENCES grades(id),
+        from_status TEXT,
+        to_status   TEXT,
+        action      TEXT,
+        actor_id    INTEGER REFERENCES users(id),
+        comment     TEXT DEFAULT '',
+        created_at  TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS grade_scales (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        academic_year_id INTEGER NOT NULL REFERENCES academic_years(id),
+        grade_letter     TEXT NOT NULL,
+        min_pct          REAL NOT NULL,
+        max_pct          REAL NOT NULL,
+        remarks          TEXT,
+        UNIQUE(academic_year_id, grade_letter))""")
 
     # Period-based attendance for secondary schools
     cur.execute("""CREATE TABLE IF NOT EXISTS period_attendance (
@@ -701,6 +754,25 @@ def initialize_database():
         "INSERT OR IGNORE INTO school_config(key,value) VALUES('school_type','primary')"
     )
 
+    # Seed default timetable periods (idempotent)
+    cur.execute("SELECT COUNT(*) FROM timetable_periods")
+    if cur.fetchone()[0] == 0:
+        cur.executemany(
+            "INSERT INTO timetable_periods(name,period_no,start_time,end_time,is_break,sort_order) VALUES(?,?,?,?,?,?)",
+            [
+                ("Period 1",  1, "07:30", "08:10", 0, 1),
+                ("Period 2",  2, "08:10", "08:50", 0, 2),
+                ("Period 3",  3, "08:50", "09:30", 0, 3),
+                ("Break",     0, "09:30", "09:50", 1, 4),
+                ("Period 4",  4, "09:50", "10:30", 0, 5),
+                ("Period 5",  5, "10:30", "11:10", 0, 6),
+                ("Period 6",  6, "11:10", "11:50", 0, 7),
+                ("Lunch",     0, "11:50", "12:30", 1, 8),
+                ("Period 7",  7, "12:30", "13:10", 0, 9),
+                ("Period 8",  8, "13:10", "13:50", 0, 10),
+            ],
+        )
+
     # Seed defaults on first run
     cur.execute("SELECT COUNT(*) FROM academic_years")
     if cur.fetchone()[0] == 0:
@@ -731,6 +803,9 @@ def initialize_database():
         # Classes
         ("classes.view",                "classes",    "view",          "View class information",            "GLOBAL"),
         ("classes.manage",              "classes",    "manage",        "Create and edit classes",           "GLOBAL"),
+        # Timetable
+        ("timetable.view",              "timetable",  "view",          "View class timetables",             "GLOBAL"),
+        ("timetable.manage",            "timetable",  "manage",        "Create and edit timetable slots",   "GLOBAL"),
         # Attendance
         ("attendance.view",             "attendance", "view",          "View attendance records",           "CLASS"),
         ("attendance.mark",             "attendance", "mark",          "Mark student attendance",           "CLASS"),
