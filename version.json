@@ -1,7 +1,7 @@
 {
-  "version": "4.10.1",
+  "version": "4.10.2",
   "release_date": "2026-05-25",
-  "release_notes": "Add User Roles tab: view and manage role assignments per-user from the Roles & Access page",
+  "release_notes": "Fix Roles & Access page: create RBAC tables on server startup (migration 005), fix subjects API path in Teacher Assignments tab",
   "min_python": "3.10",
   "files": {
     "github_config.py": "2716da4c42bf75713cb95ca12daad1328dd8cf72c4e867b980296e6b5ae5bc0d",
@@ -186,7 +186,7 @@
     "school-mis-app/src/pages/ClassesPage.tsx": "06a792c52bcbaf6269f527e2527a0a8f796afd4f98e5014b942096cf323cf8a8",
     "school-mis-app/src/pages/TimetablePage.tsx": "eca4b5d8555943ad135ccece0f024ef68da9ae7b0b122cb8092b4e3c28a46628",
     "school-mis-app/src/pages/SettingsPage.tsx": "761ed72cbb8cd4fdffd75b61a087cd6e3e9e52a253da289278d86dea5fb0c466",
-    "school-mis-app/src/pages/RbacPage.tsx": "f6ace452625901584065514078dca969c905b74082ea18e0cdbc92aa6fc10d96",
+    "school-mis-app/src/pages/RbacPage.tsx": "04c1e3e0915bc5cb0c958795bc99a9f3eb8b1a624b6174e8fb9d9f29cecbb1bb",
     "school-mis-app/src/pages/grades/ApprovalsTab.tsx": "f8b28c257db44fdc39dceb73ea4f890b1e8879ad609aaa74ac05fea35b14e695",
     "school-mis-app/src/pages/grades/ExamManagementTab.tsx": "a1739643bf7bf6393d9c67a2048c8e69a0f394e515e57662bb06f102d7a855d5",
     "school-mis-app/src/pages/grades/HomeworkTab.tsx": "52fc1e69e0523a9a207edb62ed3fb3203d2bce29a441a058fce3785ae7594f4b",
@@ -8017,7 +8017,7 @@
     "school-mis-app/dist/index.html": "bdb9bb7bfc80a39f61f987dfc760a7d27e6d1f44b204ab17e7177f2f695dfa5d",
     "backend/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "backend/deps.py": "bdaede4b143b33f05dc6cbf4e71102037bc282f2ffd17e6bfbad7ca73a60cad1",
-    "backend/main.py": "5e0ee3481c5b40ff4bc9e8ff79c1a6c9be0c569a5d9f4ea2ff574996afa6345d",
+    "backend/main.py": "0f7846c5df578e18c4a9a3d21dc87c8b0d123c6e4432fadab9aa770470114c30",
     "backend/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "backend/routers/dashboard.py": "a40d4ed7872dcfffd0e00c38de89af287a496646b4a0f3df2d5ebb53c3f76594",
     "backend/routers/transport.py": "29dbbf164f736930d8f238399bc88e46707a4fff73b63f549f4f0c86023feba8",
@@ -8078,6 +8078,7 @@
     "backend/migrations/001_architecture_v2.py": "c8270126fee334f6e07b64c5908f104a7a9b414ffa5d26f669fa113a7283bc37",
     "backend/migrations/002_phase2.py": "20fdceeb572bc08120fa7d29ccda1bfd6f005ea10d0883305db902d667fcff04",
     "backend/migrations/003_structural_fixes.py": "42ffca841ba842e4da828b56e557228cab9756cf529f6e1dc7a86ea96aae64ac",
-    "backend/migrations/004_id_generation.py": "eabbde458ff13f1d427aa2baa7c7cbf854b42496ea88aea0ed5e38855c334727"
+    "backend/migrations/004_id_generation.py": "eabbde458ff13f1d427aa2baa7c7cbf854b42496ea88aea0ed5e38855c334727",
+    "backend/migrations/005_rbac_tables.py": "1bc83706fc9ed7de80849b189211e3d4cb69a68955ca33fbe8d59f49762faad9"
   }
 }
