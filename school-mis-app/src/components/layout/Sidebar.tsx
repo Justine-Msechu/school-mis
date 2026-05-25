@@ -6,6 +6,7 @@ import {
   Award, Calendar, Library, DollarSign, Building2,
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
+  UserCheck, FileText, Clock, UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -29,19 +30,23 @@ const NAV_GROUPS: NavGroupDef[] = [
     items: [{ icon: LayoutDashboard, label: "Dashboard", to: "/" }],
   },
   {
-    label: "People",
+    label: "Academics",
     items: [
-      { icon: Users,          label: "Students",   to: "/students",   perm: "student.view" },
-      { icon: GraduationCap,  label: "Teachers",   to: "/teachers",   perm: "teachers.view" },
-      { icon: BookOpen,       label: "Classes",    to: "/classes",    perm: "classes.view" },
+      { icon: Award,      label: "Grades",        to: "/grades",        perm: "grades.view" },
+      { icon: Calendar,   label: "Attendance",    to: "/attendance",    perm: "attendance.view" },
+      { icon: UserCheck,  label: "Enrollment",    to: "/enrollment",    perm: "enrollment.view" },
+      { icon: Clock,      label: "Timetable",     to: "/timetable",     perm: "timetable.view" },
+      { icon: FileText,   label: "Report Cards",  to: "/report-cards",  perm: "report_cards.view" },
+      { icon: Library,    label: "Library",       to: "/library",       perm: "library.view" },
     ],
   },
   {
-    label: "Academics",
+    label: "People",
     items: [
-      { icon: Award,    label: "Grades",     to: "/grades",     perm: "grades.view" },
-      { icon: Calendar, label: "Attendance", to: "/attendance", perm: "attendance.view" },
-      { icon: Library,  label: "Library",    to: "/library",    perm: "library.view" },
+      { icon: Users,       label: "Students",   to: "/students",   perm: "student.view" },
+      { icon: GraduationCap, label: "Teachers", to: "/teachers",   perm: "teachers.view" },
+      { icon: UsersRound,  label: "Guardians",  to: "/guardians",  perm: "guardian.view" },
+      { icon: BookOpen,    label: "Classes",    to: "/classes",    perm: "classes.view" },
     ],
   },
   {

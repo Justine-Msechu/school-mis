@@ -38,6 +38,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "health.view", "health.record", "health.report",
         "homework.view", "leave.review",
         "audit.view",
+        "enrollment.view", "enrollment.manage",
+        "guardian.view", "guardian.manage",
+        "timetable.view", "timetable.manage",
+        "report_cards.view", "report_cards.generate", "report_cards.publish", "report_cards.comment",
     },
     "academic": {
         "student.view", "student.create", "student.edit",
@@ -50,6 +54,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "homework.view", "leave.review",
         "reports.view", "reports.academic", "reports.welfare",
         "settings.view",
+        "enrollment.view", "enrollment.manage",
+        "guardian.view", "guardian.manage",
+        "timetable.view", "timetable.manage",
+        "report_cards.view", "report_cards.generate", "report_cards.publish", "report_cards.comment",
     },
     "accountant": {
         "student.view",
@@ -78,6 +86,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "homework.view",
         "leave.review",
         "reports.view", "reports.academic",
+        "enrollment.view",
+        "timetable.view",
+        "report_cards.view", "report_cards.comment",
+        "guardian.view",
     },
     "subject_teacher": {
         "student.view",
@@ -86,6 +98,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "grades.change_request.create",
         "homework.view", "homework.write",
         "reports.view", "reports.academic",
+        "timetable.view",
+        "report_cards.view",
     },
 }
 

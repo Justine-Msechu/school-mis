@@ -20,6 +20,7 @@ from backend.routers import (
     reports, settings,
 )
 from backend.routers import notifications, audit
+from backend.routers import enrollments, guardians, timetable, report_cards
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,11 @@ async def lifespan(app: FastAPI):
         _mod = importlib.util.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
         _mod.run()
+        _mig2_path = os.path.join(os.path.dirname(__file__), "migrations", "002_phase2.py")
+        _spec2 = importlib.util.spec_from_file_location("migration_002", _mig2_path)
+        _mod2 = importlib.util.module_from_spec(_spec2)
+        _spec2.loader.exec_module(_mod2)
+        _mod2.run()
     except Exception as e:
         log.warning("Migration warning (may already be applied): %s", e)
 
@@ -104,6 +110,10 @@ app.include_router(reports.router,       prefix="/api/reports")
 app.include_router(settings.router,      prefix="/api/settings")
 app.include_router(notifications.router, prefix="/api/notifications")
 app.include_router(audit.router,         prefix="/api/audit")
+app.include_router(enrollments.router,   prefix="/api/enrollments")
+app.include_router(guardians.router,     prefix="/api/guardians")
+app.include_router(timetable.router,     prefix="/api/timetable")
+app.include_router(report_cards.router,  prefix="/api/report-cards")
 
 
 @app.get("/api/health")
