@@ -43,6 +43,10 @@ ROLES = {
             "homework.view",
             "leave.review",
             "audit.view",
+            "enrollment.view", "enrollment.manage",
+            "guardian.view", "guardian.manage",
+            "report_cards.view", "report_cards.generate",
+            "report_cards.publish", "report_cards.comment",
         ],
     },
     # ── Academic Officer: full academic lifecycle, teacher accounts only ──────
@@ -67,6 +71,11 @@ ROLES = {
             "leave.review",
             # Reports
             "reports.view", "reports.academic",
+            # Enrollment, guardians, report cards
+            "enrollment.view", "enrollment.manage",
+            "guardian.view", "guardian.manage",
+            "report_cards.view", "report_cards.generate",
+            "report_cards.publish", "report_cards.comment",
             # Settings — ONLY teacher user accounts + academic calendars
             "settings.view",
             "settings.teachers.manage",
@@ -126,7 +135,8 @@ ROLES = {
             "classes.view",
             "timetable.view",
             "enrollment.view",
-            "report_cards.view",
+            "guardian.view",
+            "report_cards.view", "report_cards.comment",
             "homework.view", "homework.assign", "homework.grade",
             "leave.review",
             "welfare.view",
