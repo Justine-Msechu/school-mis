@@ -29,13 +29,51 @@ export interface GradeSummaryRow {
 }
 
 export interface ReportsOverview {
-  students?:      number;
-  teachers?:      number;
-  books?:         number;
-  active_loans?:  number;
+  students?:       number;
+  teachers?:       number;
+  books?:          number;
+  active_loans?:   number;
   total_expenses?: number;
   total_revenue?:  number;
 }
+
+// ── My Class types ────────────────────────────────────────────────────────────
+
+export interface MyClassInfo {
+  class: { id: number; name: string; grade_level: number | null };
+  student_count: number;
+  exams: { id: number; name: string; term: number; status: string }[];
+}
+
+export interface SubjectAverage {
+  subject: string;
+  avg_pct: number;
+  total_students: number;
+  a: number; b: number; c: number; d: number; f: number;
+}
+
+export interface TermComparisonRow {
+  subject: string;
+  term1?: number;
+  term2?: number;
+  term3?: number;
+}
+
+export interface AttendanceTrendRow {
+  week: string;
+  week_label: string;
+  total: number;
+  present: number;
+  rate: number;
+}
+
+export interface MissingMark {
+  student_name: string;
+  admission_no: string;
+  subject: string;
+}
+
+// ── API functions ─────────────────────────────────────────────────────────────
 
 export const getAttendanceSummaryReport = (class_id?: number | null, month?: string) =>
   api.get<AttendanceSummaryRow[]>("/reports/attendance-summary", { params: { class_id, month } }).then((r) => r.data);
@@ -48,3 +86,18 @@ export const getGradeSummaryReport = (exam_id?: number) =>
 
 export const getReportsOverview = () =>
   api.get<ReportsOverview>("/reports/overview").then((r) => r.data);
+
+export const getMyClassInfo = () =>
+  api.get<MyClassInfo>("/reports/my-class/info").then((r) => r.data);
+
+export const getMyClassSubjectAverages = (exam_id?: number | null) =>
+  api.get<SubjectAverage[]>("/reports/my-class/subject-averages", { params: { exam_id } }).then((r) => r.data);
+
+export const getMyClassTermComparison = () =>
+  api.get<TermComparisonRow[]>("/reports/my-class/term-comparison").then((r) => r.data);
+
+export const getMyClassAttendanceTrend = () =>
+  api.get<AttendanceTrendRow[]>("/reports/my-class/attendance-trend").then((r) => r.data);
+
+export const getMyClassMissingMarks = (exam_id?: number | null) =>
+  api.get<MissingMark[]>("/reports/my-class/missing-marks", { params: { exam_id } }).then((r) => r.data);

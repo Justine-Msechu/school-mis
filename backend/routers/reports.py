@@ -1,11 +1,20 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from backend.deps import require_auth
 from backend.core.authz import compute_effective_permissions
 from database.db import fetch_all, fetch_one
 
 router = APIRouter(tags=["reports"])
 Usr = Annotated[dict, Depends(require_auth)]
+
+
+def _get_teacher_class(user_id: int) -> int | None:
+    """Return the class_id the user is assigned to as class teacher, or None."""
+    row = fetch_one(
+        "SELECT class_id FROM class_teacher_assignments WHERE user_id=? AND is_active=1 LIMIT 1",
+        (user_id,),
+    )
+    return dict(row)["class_id"] if row else None
 
 
 @router.get("/attendance-summary")
@@ -97,3 +106,162 @@ def overview(user: Usr):
         result["total_expenses"] = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM expenses") or {}).get("n", 0)
         result["total_revenue"]  = dict(fetch_one("SELECT COALESCE(SUM(amount_paid),0) as n FROM fee_payments") or {}).get("n", 0)
     return result
+
+
+# ── My Class endpoints (class teacher scoped) ─────────────────────────────────
+
+@router.get("/my-class/info")
+def my_class_info(user: Usr):
+    """Return basic info about the class teacher's assigned class + available exams."""
+    class_id = _get_teacher_class(user["id"])
+    if not class_id:
+        raise HTTPException(404, "No class assignment found")
+    cls = fetch_one("SELECT id, name, grade_level FROM classes WHERE id=?", (class_id,))
+    student_count = dict(fetch_one(
+        "SELECT COUNT(*) as n FROM students WHERE class_id=? AND is_active=1", (class_id,)
+    ) or {}).get("n", 0)
+    exams = fetch_all(
+        """SELECT e.id, e.name, e.term, e.status
+           FROM exams e
+           WHERE EXISTS (SELECT 1 FROM grades g WHERE g.exam_id=e.id AND g.class_id=?)
+           ORDER BY e.term, e.start_date""",
+        (class_id,),
+    )
+    return {
+        "class": dict(cls) if cls else {},
+        "student_count": student_count,
+        "exams": [dict(r) for r in exams],
+    }
+
+
+@router.get("/my-class/subject-averages")
+def my_class_subject_averages(user: Usr, exam_id: int = Query(None)):
+    """Subject averages + grade distribution for the teacher's class."""
+    class_id = _get_teacher_class(user["id"])
+    if not class_id:
+        raise HTTPException(404, "No class assignment found")
+
+    params: list = [class_id]
+    exam_filter = ""
+    if exam_id:
+        exam_filter = "AND g.exam_id=?"
+        params.append(exam_id)
+
+    rows = fetch_all(
+        f"""SELECT s.name AS subject,
+                   ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100), 1) AS avg_pct,
+                   COUNT(g.id) AS total_students,
+                   SUM(CASE WHEN g.grade_letter='A' THEN 1 ELSE 0 END) AS a,
+                   SUM(CASE WHEN g.grade_letter='B' THEN 1 ELSE 0 END) AS b,
+                   SUM(CASE WHEN g.grade_letter='C' THEN 1 ELSE 0 END) AS c,
+                   SUM(CASE WHEN g.grade_letter='D' THEN 1 ELSE 0 END) AS d,
+                   SUM(CASE WHEN g.grade_letter='F' THEN 1 ELSE 0 END) AS f
+            FROM grades g
+            JOIN subjects s ON s.id=g.subject_id
+            WHERE g.class_id=? {exam_filter}
+            GROUP BY g.subject_id
+            ORDER BY avg_pct DESC""",
+        params,
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/my-class/term-comparison")
+def my_class_term_comparison(user: Usr):
+    """Subject averages grouped by term — used for grouped bar / line chart."""
+    class_id = _get_teacher_class(user["id"])
+    if not class_id:
+        raise HTTPException(404, "No class assignment found")
+
+    rows = fetch_all(
+        """SELECT e.term,
+                  s.name AS subject,
+                  ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100), 1) AS avg_pct
+           FROM grades g
+           JOIN exams e ON e.id=g.exam_id
+           JOIN subjects s ON s.id=g.subject_id
+           WHERE g.class_id=?
+           GROUP BY e.term, g.subject_id
+           ORDER BY s.name, e.term""",
+        (class_id,),
+    )
+    # Pivot: [{subject, term1, term2, term3}, ...]
+    pivot: dict[str, dict] = {}
+    for r in rows:
+        row = dict(r)
+        subj = row["subject"]
+        if subj not in pivot:
+            pivot[subj] = {"subject": subj}
+        pivot[subj][f"term{row['term']}"] = row["avg_pct"]
+    return list(pivot.values())
+
+
+@router.get("/my-class/attendance-trend")
+def my_class_attendance_trend(user: Usr):
+    """Weekly attendance rate for the past 14 weeks for the teacher's class."""
+    class_id = _get_teacher_class(user["id"])
+    if not class_id:
+        raise HTTPException(404, "No class assignment found")
+
+    rows = fetch_all(
+        """SELECT strftime('%Y-W%W', date) AS week,
+                  strftime('%d %b', MIN(date)) AS week_label,
+                  COUNT(*) AS total,
+                  SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,
+                  ROUND(100.0*SUM(CASE WHEN status='present' THEN 1 ELSE 0 END)/COUNT(*), 1) AS rate
+           FROM attendance
+           WHERE class_id=?
+             AND date >= date('now', '-98 days')
+           GROUP BY week
+           ORDER BY week""",
+        (class_id,),
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/my-class/missing-marks")
+def my_class_missing_marks(user: Usr, exam_id: int = Query(None)):
+    """Students who are missing grades for any subject in the given exam."""
+    class_id = _get_teacher_class(user["id"])
+    if not class_id:
+        raise HTTPException(404, "No class assignment found")
+
+    # Default to most recent exam for this class
+    if not exam_id:
+        row = fetch_one(
+            """SELECT e.id FROM exams e
+               WHERE EXISTS (SELECT 1 FROM grades g WHERE g.exam_id=e.id AND g.class_id=?)
+               ORDER BY e.term DESC, e.start_date DESC LIMIT 1""",
+            (class_id,),
+        )
+        if row:
+            exam_id = dict(row)["id"]
+        else:
+            return []
+
+    # Subjects that have at least one grade recorded for this class/exam
+    subjects_in_exam = fetch_all(
+        "SELECT DISTINCT subject_id FROM grades WHERE class_id=? AND exam_id=?",
+        (class_id, exam_id),
+    )
+    subject_ids = [dict(r)["subject_id"] for r in subjects_in_exam]
+    if not subject_ids:
+        return []
+
+    placeholders = ",".join("?" * len(subject_ids))
+    missing = fetch_all(
+        f"""SELECT st.first_name||' '||st.last_name AS student_name,
+                   st.admission_no,
+                   s.name AS subject
+            FROM students st
+            CROSS JOIN subjects s
+            WHERE st.class_id=? AND st.is_active=1
+              AND s.id IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM grades g
+                  WHERE g.student_id=st.id AND g.subject_id=s.id AND g.exam_id=?
+              )
+            ORDER BY st.last_name, s.name""",
+        [class_id, *subject_ids, exam_id],
+    )
+    return [dict(r) for r in missing]

@@ -8,8 +8,9 @@ import Select from "@/components/ui/Select";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
 import { useAuthStore } from "@/stores/authStore";
+import MyClassTab from "@/components/reports/MyClassTab";
 
-type Tab = "overview" | "attendance" | "grades";
+type Tab = "overview" | "attendance" | "grades" | "my-class";
 
 const fmt = (n: number) => `TZS ${(n ?? 0).toLocaleString()}`;
 
@@ -41,10 +42,13 @@ export default function ReportsPage() {
     }
   }, [tab, examId]);
 
+  const showMyClass = can("report_cards.view") && can("attendance.view");
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview",   label: "Overview" },
     { key: "attendance", label: "Attendance" },
     { key: "grades",     label: "Grade Summary" },
+    ...(showMyClass ? [{ key: "my-class" as Tab, label: "My Class" }] : []),
   ];
 
   return (
@@ -188,6 +192,8 @@ export default function ReportsPage() {
           </div>
         </>
       )}
+
+      {tab === "my-class" && <MyClassTab />}
     </div>
   );
 }
