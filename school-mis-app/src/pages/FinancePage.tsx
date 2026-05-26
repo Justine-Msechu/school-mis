@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap, Lock, Unlock, ArrowRightLeft, Clock, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
-import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, createWaiver, deleteWaiver, type Payment, type FinanceSummary, type StudentBill, type DebtorRow, type WaiverRecord } from "@/api/finance";
+import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, createWaiver, deleteWaiver, carryForward, getLockedPeriods, lockPeriod, unlockPeriod, getLateFeeRules, createLateFeeRule, deleteLateFeeRule, applyLateFees, getInstallments, createInstallmentPlan, getPendingApprovals, approveAction, rejectAction, type Payment, type FinanceSummary, type StudentBill, type DebtorRow, type WaiverRecord, type LockedPeriod, type LateFeeRule, type InstallmentRow, type PendingApproval } from "@/api/finance";
 import { getStudents } from "@/api/students";
 import { getFeeStructures, getFeeTypes, createFeeStructure, createFeeType, getAcademicYears, type FeeStructure, type FeeType, type AcademicYear } from "@/api/settings";
 import { getClasses } from "@/api/grades";
@@ -25,7 +25,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-type Tab = "payments" | "fees" | "student-bill" | "outstanding";
+type Tab = "payments" | "fees" | "student-bill" | "outstanding" | "manage" | "approvals";
 
 // ── Payment dialog ──────────────────────────────────────────────────────────
 
@@ -738,6 +738,358 @@ function OutstandingTab() {
   );
 }
 
+// ── Manage tab (period locking, carry-forward, late fees) ──────────────────
+
+function ManageTab({ years }: { years: AcademicYear[] }) {
+  const toast = useToast();
+  const { can } = useAuthStore();
+
+  // Locked periods
+  const [locked, setLocked]           = useState<LockedPeriod[]>([]);
+  const [lockYear, setLockYear]       = useState(years.find((y) => y.is_current)?.id?.toString() ?? "");
+  const [lockTerm, setLockTerm]       = useState("");
+  const [lockNote, setLockNote]       = useState("");
+  const [locking, setLocking]         = useState(false);
+
+  // Carry-forward
+  const [cfFrom, setCfFrom]           = useState(years.find((y) => y.is_current)?.id?.toString() ?? "");
+  const [cfTo, setCfTo]               = useState("");
+  const [cfTerm, setCfTerm]           = useState("");
+  const [carrying, setCarrying]       = useState(false);
+  const [cfResult, setCfResult]       = useState<{ created: number; skipped: number } | null>(null);
+
+  // Late fee rules
+  const [rules, setRules]             = useState<LateFeeRule[]>([]);
+  const [ruleForm, setRuleForm]       = useState({ days_after_due: "7", charge_type: "percent", charge_amount: "", max_charge: "" });
+  const [addingRule, setAddingRule]   = useState(false);
+  const [applying, setApplying]       = useState(false);
+  const [applyResult, setApplyResult] = useState<string>("");
+
+  useEffect(() => {
+    getLockedPeriods().then(setLocked).catch(() => {});
+    getLateFeeRules().then(setRules).catch(() => {});
+  }, []);
+
+  const handleLock = async () => {
+    if (!lockYear) return;
+    setLocking(true);
+    try {
+      await lockPeriod({ academic_year_id: Number(lockYear), term: lockTerm ? Number(lockTerm) : null, note: lockNote || undefined });
+      toast.success("Period locked");
+      setLockNote("");
+      getLockedPeriods().then(setLocked);
+    } catch (e: any) { toast.error(e?.response?.data?.detail ?? "Failed to lock"); }
+    finally { setLocking(false); }
+  };
+
+  const handleUnlock = async (id: number) => {
+    if (!confirm("Unlock this period? Transactions will be allowed again.")) return;
+    await unlockPeriod(id).catch(() => toast.error("Failed to unlock"));
+    getLockedPeriods().then(setLocked);
+    toast.success("Period unlocked");
+  };
+
+  const handleCarryForward = async () => {
+    if (!cfFrom || !cfTo) { toast.error("Select both years"); return; }
+    setCarrying(true); setCfResult(null);
+    try {
+      const r = await carryForward({ from_year_id: Number(cfFrom), to_year_id: Number(cfTo), term: cfTerm ? Number(cfTerm) : null });
+      setCfResult(r);
+      toast.success(`${r.created} balances carried forward`);
+    } catch (e: any) { toast.error(e?.response?.data?.detail ?? "Failed"); }
+    finally { setCarrying(false); }
+  };
+
+  const handleAddRule = async () => {
+    if (!ruleForm.charge_amount) { toast.error("Enter charge amount"); return; }
+    setAddingRule(true);
+    try {
+      await createLateFeeRule({
+        days_after_due: Number(ruleForm.days_after_due),
+        charge_type:    ruleForm.charge_type,
+        charge_amount:  Number(ruleForm.charge_amount),
+        max_charge:     ruleForm.max_charge ? Number(ruleForm.max_charge) : null,
+      });
+      toast.success("Rule added");
+      setRuleForm({ days_after_due: "7", charge_type: "percent", charge_amount: "", max_charge: "" });
+      getLateFeeRules().then(setRules);
+    } catch { toast.error("Failed to add rule"); }
+    finally { setAddingRule(false); }
+  };
+
+  const handleApplyLateFees = async () => {
+    if (!confirm("Apply late fees to all overdue bills now?")) return;
+    setApplying(true); setApplyResult("");
+    try {
+      const r = await applyLateFees(undefined, false);
+      setApplyResult(`${r.applied} late fee bill${r.applied !== 1 ? "s" : ""} created`);
+      toast.success(applyResult);
+    } catch (e: any) { toast.error(e?.response?.data?.detail ?? "Failed"); }
+    finally { setApplying(false); }
+  };
+
+  const canManage = can("finance.structure.manage");
+
+  return (
+    <div className="space-y-8">
+
+      {/* ── Carry-Forward ───────────────────────────────────────── */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <ArrowRightLeft size={15} className="text-violet-600" />
+          <h3 className="text-sm font-semibold text-gray-800">Carry-Forward Balances</h3>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Creates a "Balance B/F" bill in the next year for each student with an outstanding balance.</p>
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <Field label="From Year *">
+            <select className={INPUT} value={cfFrom} onChange={(e) => setCfFrom(e.target.value)}>
+              {years.map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
+            </select>
+          </Field>
+          <Field label="To Year *">
+            <select className={INPUT} value={cfTo} onChange={(e) => setCfTo(e.target.value)}>
+              <option value="">Select…</option>
+              {years.filter((y) => String(y.id) !== cfFrom).map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Term (optional)">
+            <select className={INPUT} value={cfTerm} onChange={(e) => setCfTerm(e.target.value)}>
+              <option value="">All terms</option>
+              <option value="1">Term 1</option>
+              <option value="2">Term 2</option>
+              <option value="3">Term 3</option>
+            </select>
+          </Field>
+        </div>
+        {cfResult && (
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-emerald-700">{cfResult.created}</div>
+              <div className="text-xs text-emerald-600">Balances carried forward</div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-gray-500">{cfResult.skipped}</div>
+              <div className="text-xs text-gray-400">Already existed</div>
+            </div>
+          </div>
+        )}
+        {canManage && (
+          <Button variant="primary" icon={<ArrowRightLeft size={13} />} onClick={handleCarryForward} disabled={carrying || !cfFrom || !cfTo}>
+            {carrying ? "Processing…" : "Carry Forward Balances"}
+          </Button>
+        )}
+      </section>
+
+      {/* ── Locked Periods ──────────────────────────────────────── */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <Lock size={15} className="text-red-500" />
+          <h3 className="text-sm font-semibold text-gray-800">Locked Accounting Periods</h3>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Locked periods prevent new bills, payments, or changes. Use this after closing a term or year.</p>
+        {canManage && (
+          <div className="flex gap-2 items-end mb-4">
+            <Field label="Year">
+              <select className={INPUT} value={lockYear} onChange={(e) => setLockYear(e.target.value)}>
+                {years.map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Term (lock whole year if blank)">
+              <select className={INPUT} value={lockTerm} onChange={(e) => setLockTerm(e.target.value)}>
+                <option value="">Entire Year</option>
+                <option value="1">Term 1</option>
+                <option value="2">Term 2</option>
+                <option value="3">Term 3</option>
+              </select>
+            </Field>
+            <Field label="Note">
+              <input className={INPUT} value={lockNote} onChange={(e) => setLockNote(e.target.value)} placeholder="e.g. End of year audit" />
+            </Field>
+            <button onClick={handleLock} disabled={locking} className="flex items-center gap-1.5 h-9 px-3 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-40 transition-colors whitespace-nowrap">
+              <Lock size={13} /> {locking ? "Locking…" : "Lock Period"}
+            </button>
+          </div>
+        )}
+        {locked.length === 0 ? (
+          <p className="text-xs text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-xl">No locked periods</p>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-2.5">Year</th>
+                <th className="px-4 py-2.5">Term</th>
+                <th className="px-4 py-2.5">Locked By</th>
+                <th className="px-4 py-2.5">Date</th>
+                <th className="px-4 py-2.5">Note</th>
+                <th className="px-4 py-2.5 w-8" />
+              </tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {locked.map((lp) => (
+                  <tr key={lp.id}>
+                    <td className="px-4 py-2.5 font-medium text-gray-800">{lp.year_label}</td>
+                    <td className="px-4 py-2.5"><span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs">{lp.term ? `Term ${lp.term}` : "Full Year"}</span></td>
+                    <td className="px-4 py-2.5 text-gray-500">{lp.locked_by_name}</td>
+                    <td className="px-4 py-2.5 text-gray-400 text-xs">{lp.locked_at?.slice(0, 10)}</td>
+                    <td className="px-4 py-2.5 text-gray-400">{lp.note || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      {canManage && (
+                        <button onClick={() => handleUnlock(lp.id)} className="text-gray-300 hover:text-emerald-600 transition-colors" title="Unlock">
+                          <Unlock size={14} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* ── Late Fee Rules ───────────────────────────────────────── */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <Clock size={15} className="text-amber-500" />
+          <h3 className="text-sm font-semibold text-gray-800">Late Fee Rules</h3>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Automatically add penalty charges to overdue bills. Click "Apply Late Fees" to run them now.</p>
+        {canManage && (
+          <div className="flex gap-2 items-end mb-4">
+            <Field label="After (days)">
+              <input type="number" min="1" className={INPUT} style={{width:90}} value={ruleForm.days_after_due} onChange={(e) => setRuleForm((f) => ({ ...f, days_after_due: e.target.value }))} />
+            </Field>
+            <Field label="Type">
+              <select className={INPUT} style={{width:120}} value={ruleForm.charge_type} onChange={(e) => setRuleForm((f) => ({ ...f, charge_type: e.target.value }))}>
+                <option value="percent">% of balance</option>
+                <option value="fixed">Fixed (TZS)</option>
+              </select>
+            </Field>
+            <Field label="Amount">
+              <input type="number" min="0" className={INPUT} style={{width:100}} value={ruleForm.charge_amount} onChange={(e) => setRuleForm((f) => ({ ...f, charge_amount: e.target.value }))} placeholder={ruleForm.charge_type === "percent" ? "e.g. 5" : "e.g. 5000"} />
+            </Field>
+            <Field label="Max Charge (TZS, optional)">
+              <input type="number" min="0" className={INPUT} style={{width:130}} value={ruleForm.max_charge} onChange={(e) => setRuleForm((f) => ({ ...f, max_charge: e.target.value }))} placeholder="No cap" />
+            </Field>
+            <button onClick={handleAddRule} disabled={addingRule} className="flex items-center gap-1.5 h-9 px-3 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-40 transition-colors">
+              <Plus size={13} /> Add Rule
+            </button>
+          </div>
+        )}
+        {rules.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-3">
+            <table className="w-full text-sm">
+              <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-2.5">After Due</th>
+                <th className="px-4 py-2.5">Charge</th>
+                <th className="px-4 py-2.5">Max</th>
+                <th className="px-4 py-2.5 w-8" />
+              </tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {rules.map((r) => (
+                  <tr key={r.id}>
+                    <td className="px-4 py-2.5 text-gray-700">{r.days_after_due} days late</td>
+                    <td className="px-4 py-2.5 font-medium text-amber-700">
+                      {r.charge_type === "percent" ? `${r.charge_amount}% of outstanding` : fmt(r.charge_amount)}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-400">{r.max_charge ? fmt(r.max_charge) : "No cap"}</td>
+                    <td className="px-4 py-2.5">
+                      {canManage && (
+                        <button onClick={() => deleteLateFeeRule(r.id).then(() => getLateFeeRules().then(setRules))} className="text-gray-300 hover:text-red-500 transition-colors">
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {canManage && rules.length > 0 && (
+          <div className="flex items-center gap-3">
+            <Button variant="outline" icon={<Zap size={13} />} onClick={handleApplyLateFees} disabled={applying}>
+              {applying ? "Applying…" : "Apply Late Fees Now"}
+            </Button>
+            {applyResult && <span className="text-xs text-emerald-600">{applyResult}</span>}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ── Approvals tab (maker/checker) ───────────────────────────────────────────
+
+function ApprovalsTab() {
+  const toast = useToast();
+  const { can } = useAuthStore();
+  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [noteMap, setNoteMap]     = useState<Record<number, string>>({});
+
+  const load = () => {
+    setLoading(true);
+    getPendingApprovals().then(setApprovals).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+
+  const handle = async (id: number, action: "approve" | "reject") => {
+    const note = noteMap[id] || undefined;
+    try {
+      if (action === "approve") await approveAction(id, note);
+      else await rejectAction(id, note);
+      toast.success(action === "approve" ? "Approved" : "Rejected");
+      load();
+    } catch (e: any) { toast.error(e?.response?.data?.detail ?? "Failed"); }
+  };
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-4">Pending requests that require a second person to approve (maker/checker). You cannot approve your own requests.</p>
+      {loading
+        ? <div className="h-24 bg-gray-100 rounded-xl animate-pulse" />
+        : approvals.length === 0
+        ? <EmptyState icon={CheckCircle} title="No pending approvals" description="All requests have been resolved." />
+        : (
+          <div className="space-y-3">
+            {approvals.map((a) => (
+              <div key={a.id} className="bg-white border border-gray-200 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mb-1 ${a.action_type === "waiver" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                      {a.action_type === "waiver" ? "Waiver Request" : "Payment Reversal"}
+                    </span>
+                    <p className="text-sm text-gray-800">{a.description}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Requested by <strong>{a.requester_name}</strong> · {a.created_at?.slice(0, 10)}</p>
+                  </div>
+                  {can("finance.waiver.approve") && (
+                    <div className="flex flex-col gap-2 min-w-[180px]">
+                      <input
+                        className="h-8 px-2 border border-gray-200 rounded text-xs"
+                        placeholder="Note (optional)"
+                        value={noteMap[a.id] ?? ""}
+                        onChange={(e) => setNoteMap((m) => ({ ...m, [a.id]: e.target.value }))}
+                      />
+                      <div className="flex gap-1.5">
+                        <button onClick={() => handle(a.id, "approve")} className="flex-1 flex items-center justify-center gap-1 h-7 text-xs font-medium bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors">
+                          <CheckCircle size={11} /> Approve
+                        </button>
+                        <button onClick={() => handle(a.id, "reject")} className="flex-1 flex items-center justify-center gap-1 h-7 text-xs font-medium bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors">
+                          <XCircle size={11} /> Reject
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function FinancePage() {
@@ -772,8 +1124,8 @@ export default function FinancePage() {
 
   useEffect(() => {
     if (tab === "payments") loadPayments();
-    else if (tab === "fees") loadFees();
-    else setLoading(false); // student-bill and outstanding manage their own loading
+    else if (tab === "fees" || tab === "manage") loadFees();
+    else setLoading(false);
   }, [tab, loadPayments, loadFees]);
 
   const TABS = [
@@ -781,7 +1133,9 @@ export default function FinancePage() {
     { key: "fees" as Tab,         label: "Fee Structures" },
     { key: "student-bill" as Tab, label: "Student Bill" },
     { key: "outstanding" as Tab,  label: "Outstanding Debts" },
-  ];
+    { key: "manage" as Tab,       label: "Period & Rules",   perm: "finance.structure.view" },
+    { key: "approvals" as Tab,    label: "Approvals",        perm: "finance.view" },
+  ].filter((t) => !t.perm || can(t.perm as string));
 
   return (
     <div className="p-8 max-w-screen-xl mx-auto">
@@ -904,6 +1258,8 @@ export default function FinancePage() {
 
       {tab === "student-bill" && <StudentBillPanel />}
       {tab === "outstanding"  && <OutstandingTab />}
+      {tab === "manage"       && <ManageTab years={years} />}
+      {tab === "approvals"    && <ApprovalsTab />}
 
       {paymentDialog && (
         <PaymentDialog onSave={() => { setPaymentDialog(false); loadPayments(); }} onClose={() => setPaymentDialog(false)} />

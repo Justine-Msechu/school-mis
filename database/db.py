@@ -579,8 +579,11 @@ def initialize_database():
         ("subjects",        "credit_hours",     "INTEGER DEFAULT 1"),
         ("subjects",        "subject_type",     "TEXT DEFAULT 'compulsory'"),
         ("fee_structures",  "student_id",       "INTEGER REFERENCES students(id)"),
-        ("fee_structures",  "student_type",     "TEXT"),        # Day / Boarding / NULL = both
+        ("fee_structures",  "student_type",     "TEXT"),
         ("students",        "student_type",     "TEXT DEFAULT 'Day'"),
+        ("fee_payments",    "status",           "TEXT DEFAULT 'confirmed'"),
+        ("fee_payments",    "confirmed_by",     "INTEGER REFERENCES users(id)"),
+        ("fee_payments",    "confirmed_at",     "TEXT"),
     ]
     for table, col, col_type in _migrations:
         try:
@@ -737,6 +740,53 @@ def initialize_database():
         assigned_by      INTEGER REFERENCES users(id),
         assigned_at      TEXT DEFAULT (datetime('now')),
         UNIQUE(user_id, class_id, academic_year_id))""")
+
+    # ── Advanced finance tables ────────────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS locked_periods (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        academic_year_id INTEGER NOT NULL REFERENCES academic_years(id),
+        term             INTEGER,
+        locked_by        INTEGER REFERENCES users(id),
+        locked_at        TEXT DEFAULT (datetime('now')),
+        note             TEXT,
+        UNIQUE(academic_year_id, term))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS late_fee_rules (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        fee_type_id      INTEGER REFERENCES fee_types(id),
+        days_after_due   INTEGER NOT NULL DEFAULT 7,
+        charge_type      TEXT NOT NULL DEFAULT 'percent'
+                         CHECK(charge_type IN ('fixed','percent')),
+        charge_amount    REAL NOT NULL,
+        max_charge       REAL,
+        is_active        INTEGER DEFAULT 1,
+        created_at       TEXT DEFAULT (datetime('now')))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS payment_schedules (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id       INTEGER NOT NULL REFERENCES students(id),
+        bill_id          INTEGER NOT NULL REFERENCES student_bills(id),
+        installment_no   INTEGER NOT NULL,
+        due_date         TEXT NOT NULL,
+        amount_due       REAL NOT NULL,
+        amount_paid      REAL NOT NULL DEFAULT 0,
+        status           TEXT DEFAULT 'unpaid'
+                         CHECK(status IN ('unpaid','partial','paid')),
+        created_at       TEXT DEFAULT (datetime('now')),
+        UNIQUE(bill_id, installment_no))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS pending_approvals (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_type      TEXT NOT NULL,
+        payload          TEXT NOT NULL,
+        description      TEXT,
+        requested_by     INTEGER REFERENCES users(id),
+        approved_by      INTEGER REFERENCES users(id),
+        status           TEXT DEFAULT 'pending'
+                         CHECK(status IN ('pending','approved','rejected')),
+        note             TEXT,
+        created_at       TEXT DEFAULT (datetime('now')),
+        resolved_at      TEXT)""")
 
     # Seed school_type default if not set
     cur.execute(
