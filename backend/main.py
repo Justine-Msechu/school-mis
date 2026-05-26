@@ -81,6 +81,11 @@ async def lifespan(app: FastAPI):
         _mod10 = importlib.util.module_from_spec(_spec10)
         _spec10.loader.exec_module(_mod10)
         _mod10.run()
+        _mig11_path = os.path.join(os.path.dirname(__file__), "migrations", "011_payroll_permissions.py")
+        _spec11 = importlib.util.spec_from_file_location("migration_011", _mig11_path)
+        _mod11 = importlib.util.module_from_spec(_spec11)
+        _spec11.loader.exec_module(_mod11)
+        _mod11.run()
     except Exception as e:
         log.warning("Migration warning (may already be applied): %s", e)
 
