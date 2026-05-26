@@ -158,12 +158,14 @@ def generate_bills(body: BillingGenerateBody, user: Usr):
             if existing:
                 skipped += 1
                 continue
-            # Reserve the row first to get an id, then generate the HMAC-bound control number
+            import secrets as _sec
+            # Unique temp value avoids UNIQUE constraint collision while we get the rowid
+            temp_ctrl = f"TMP-{_sec.token_hex(12)}"
             cur2 = conn.execute(
                 """INSERT INTO student_bills
                    (student_id, fee_structure_id, academic_year_id, control_number, amount_due, due_date)
                    VALUES (?,?,?,?,?,?)""",
-                (s["id"], fs["id"], body.academic_year_id, "PENDING", fs["amount"], fs["due_date"]),
+                (s["id"], fs["id"], body.academic_year_id, temp_ctrl, fs["amount"], fs["due_date"]),
             )
             bill_id = cur2.lastrowid
             control_no = generate_control_number(bill_id, datetime.date.today().year)
@@ -545,10 +547,11 @@ def carry_forward(body: CarryForwardBody, user: Usr):
         if existing:
             skipped += 1
             continue
-        # Insert with placeholder, then generate HMAC-bound control number using the row id
+        import secrets as _sec2
+        temp_ctrl = f"TMP-{_sec2.token_hex(12)}"
         cur2 = conn.execute(
             "INSERT INTO student_bills (student_id, fee_structure_id, academic_year_id, control_number, amount_due) VALUES (?,?,?,?,?)",
-            (r["student_id"], bf_fs_id, body.to_year_id, "PENDING", round(r["balance"], 2)),
+            (r["student_id"], bf_fs_id, body.to_year_id, temp_ctrl, round(r["balance"], 2)),
         )
         ctrl = generate_control_number(cur2.lastrowid, body.to_year_id)
         conn.execute("UPDATE student_bills SET control_number=? WHERE id=?", (ctrl, cur2.lastrowid))

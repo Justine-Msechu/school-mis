@@ -112,7 +112,7 @@ export const getStudentBill = (student_id?: number, admission_no?: string) =>
 export const getPayments = (limit = 50) =>
   api.get<Payment[]>("/finance/payments", { params: { limit } }).then((r) => r.data);
 
-export const recordPayment = (body: { student_id: number; amount: number; payment_date: string; method?: string; reference?: string; notes?: string }) =>
+export const recordPayment = (body: { student_id: number; amount: number; payment_date: string; method?: string; reference_no?: string; notes?: string }) =>
   api.post("/finance/payment", body).then((r) => r.data);
 
 export const getFinanceSummary = () =>

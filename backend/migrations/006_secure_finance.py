@@ -76,6 +76,12 @@ def run():
         )
     """)
 
+    # Add notes column to student_bills (used by late-fee idempotency key)
+    try:
+        conn.execute("ALTER TABLE student_bills ADD COLUMN notes TEXT")
+    except Exception:
+        pass  # already exists
+
     # Prevent duplicate bank/mobile reference numbers (NULL values are exempt
     # from UNIQUE constraints in SQLite, so this only fires on non-empty refs).
     try:

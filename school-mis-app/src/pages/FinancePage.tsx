@@ -28,47 +28,141 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 type Tab = "payments" | "fees" | "student-bill" | "outstanding" | "manage" | "approvals" | "invoices";
 
+// ── Shared student search with name dropdown ────────────────────────────────
+
+interface SelectedStudent { id: number; name: string; admission_no: string; class_name?: string | null }
+
+function StudentSearch({
+  value, onChange, placeholder = "Search by name or admission no…",
+}: {
+  value: SelectedStudent | null;
+  onChange: (s: SelectedStudent | null) => void;
+  placeholder?: string;
+}) {
+  const [query, setQuery]       = useState(value ? `${value.name} (${value.admission_no})` : "");
+  const [results, setResults]   = useState<SelectedStudent[]>([]);
+  const [open, setOpen]         = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const search = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setResults([]); setOpen(false); return; }
+    setLoading(true);
+    try {
+      const res = await getStudents({ search: q.trim(), per_page: 8 });
+      setResults(res.items.map((s) => ({
+        id: s.id,
+        name: `${s.first_name} ${s.last_name}`,
+        admission_no: s.admission_no,
+        class_name: s.class_name ?? null,
+      })));
+      setOpen(true);
+    } catch { setResults([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  // Debounce
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleInput = (q: string) => {
+    setQuery(q);
+    onChange(null);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => search(q), 280);
+  };
+
+  const select = (s: SelectedStudent) => {
+    setQuery(`${s.name} (${s.admission_no})`);
+    onChange(s);
+    setOpen(false);
+    setResults([]);
+  };
+
+  const clear = () => { setQuery(""); onChange(null); setResults([]); setOpen(false); };
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          className={`${INPUT} pl-8 pr-7`}
+          value={query}
+          onChange={(e) => handleInput(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        {loading && (
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs animate-pulse">…</span>
+        )}
+        {!loading && value && (
+          <button onClick={clear} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600 text-base leading-none">×</button>
+        )}
+      </div>
+      {value && (
+        <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
+          {value.name} · {value.admission_no}{value.class_name ? ` · ${value.class_name}` : ""}
+        </p>
+      )}
+      {open && results.length > 0 && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {results.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); select(s); }}
+              className="w-full text-left px-3 py-2 hover:bg-violet-50 transition-colors border-b border-gray-50 last:border-0"
+            >
+              <span className="font-medium text-gray-900 text-sm">{s.name}</span>
+              <span className="text-gray-400 text-xs ml-2">{s.admission_no}</span>
+              {s.class_name && <span className="text-gray-400 text-xs ml-1">· {s.class_name}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && !loading && results.length === 0 && query.trim().length >= 2 && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 text-sm text-gray-400">
+          No students found
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Payment dialog ──────────────────────────────────────────────────────────
 
 function PaymentDialog({ onSave, onClose }: { onSave: () => void; onClose: () => void }) {
-  const [form, setForm] = useState({
-    admission_no:  "",
-    student_id:    null as number | null,
-    student_name:  "",
-    amount:        "",
-    payment_date:  new Date().toISOString().slice(0, 10),
-    method:        "cash",
-    reference:     "",
-    notes:         "",
-  });
-  const [lookupState, setLookupState] = useState<"idle" | "loading" | "found" | "error">("idle");
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState("");
-
-  const lookupStudent = async () => {
-    if (!form.admission_no.trim()) return;
-    setLookupState("loading");
-    try {
-      const res = await getStudents({ search: form.admission_no.trim(), per_page: 10 });
-      const student = res.items.find((s) => s.admission_no === form.admission_no.trim());
-      if (student) {
-        setForm((f) => ({ ...f, student_id: student.id, student_name: `${student.first_name} ${student.last_name}` }));
-        setLookupState("found");
-      } else {
-        setForm((f) => ({ ...f, student_id: null, student_name: "" }));
-        setLookupState("error");
-      }
-    } catch { setLookupState("error"); }
-  };
-
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const [student, setStudent]   = useState<SelectedStudent | null>(null);
+  const [amount, setAmount]     = useState("");
+  const [date, setDate]         = useState(new Date().toISOString().slice(0, 10));
+  const [method, setMethod]     = useState("cash");
+  const [refNo, setRefNo]       = useState("");
+  const [notes, setNotes]       = useState("");
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
 
   const submit = async () => {
-    if (!form.student_id) { setError("Please look up a valid student first."); return; }
-    if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0) { setError("Enter a valid amount."); return; }
+    if (!student) { setError("Please select a student first."); return; }
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { setError("Enter a valid amount."); return; }
     setSaving(true); setError("");
     try {
-      await recordPayment({ student_id: form.student_id, amount: Number(form.amount), payment_date: form.payment_date, method: form.method, reference: form.reference || undefined, notes: form.notes || undefined });
+      await recordPayment({
+        student_id:   student.id,
+        amount:       Number(amount),
+        payment_date: date,
+        method,
+        reference_no: refNo || undefined,
+        notes:        notes || undefined,
+      });
       onSave();
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? "Failed to record payment.");
@@ -81,20 +175,17 @@ function PaymentDialog({ onSave, onClose }: { onSave: () => void; onClose: () =>
         <h2 className="text-lg font-bold text-gray-900 mb-4">Record Payment</h2>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="space-y-3">
-          <Field label="Admission Number *">
-            <div className="flex gap-2">
-              <input className={INPUT} value={form.admission_no} placeholder="e.g. ADM001"
-                onChange={(e) => { setLookupState("idle"); setForm((f) => ({ ...f, admission_no: e.target.value, student_id: null, student_name: "" })); }}
-                onKeyDown={(e) => e.key === "Enter" && lookupStudent()} />
-              <Button variant="outline" size="sm" onClick={lookupStudent} disabled={lookupState === "loading"}>{lookupState === "loading" ? "…" : "Find"}</Button>
-            </div>
-            {lookupState === "found" && <p className="text-xs text-green-600 mt-1">✓ {form.student_name}</p>}
-            {lookupState === "error"  && <p className="text-xs text-red-600 mt-1">Student not found</p>}
+          <Field label="Student *">
+            <StudentSearch value={student} onChange={setStudent} />
           </Field>
-          <Field label="Amount (TZS) *"><input type="number" min="1" className={INPUT} value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0" /></Field>
-          <Field label="Payment Date *"><input type="date" className={INPUT} value={form.payment_date} onChange={(e) => set("payment_date", e.target.value)} /></Field>
+          <Field label="Amount (TZS) *">
+            <input type="number" min="1" className={INPUT} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+          </Field>
+          <Field label="Payment Date *">
+            <input type="date" className={INPUT} value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
           <Field label="Method">
-            <select className={INPUT} value={form.method} onChange={(e) => set("method", e.target.value)}>
+            <select className={INPUT} value={method} onChange={(e) => setMethod(e.target.value)}>
               <option value="cash">Cash</option>
               <option value="mpesa">M-Pesa</option>
               <option value="bank">Bank Transfer</option>
@@ -102,8 +193,12 @@ function PaymentDialog({ onSave, onClose }: { onSave: () => void; onClose: () =>
               <option value="other">Other</option>
             </select>
           </Field>
-          <Field label="Reference"><input className={INPUT} value={form.reference} onChange={(e) => set("reference", e.target.value)} placeholder="Transaction ref…" /></Field>
-          <Field label="Notes"><input className={INPUT} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
+          <Field label="Reference No">
+            <input className={INPUT} value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Transaction ref…" />
+          </Field>
+          <Field label="Notes">
+            <input className={INPUT} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -126,43 +221,25 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
     due_date:         "",
     scope:            "all" as "all" | "class" | "student",
     class_id:         "",
-    student_search:   "",
-    student_id:       "" as string,
-    student_label:    "",
-    student_type:     "" as string,   // "" = both, "Day", "Boarding"
-    term:             "" as string,   // "" = all terms, "1","2","3"
+    student_type:     "" as string,
+    term:             "" as string,
   });
-  const [classes, setClasses]       = useState<{ id: number; name: string }[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<SelectedStudent | null>(null);
+  const [classes, setClasses]   = useState<{ id: number; name: string }[]>([]);
   const [newFeeType, setNewFeeType] = useState("");
-  const [saving, setSaving]         = useState(false);
-  const [error, setError]           = useState("");
-  const [lookupState, setLookupState] = useState<"idle" | "loading" | "found" | "error">("idle");
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
 
   useEffect(() => { getClasses().then(setClasses).catch(() => {}); }, []);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  const lookupStudent = async () => {
-    if (!form.student_search.trim()) return;
-    setLookupState("loading");
-    try {
-      const res = await getStudents({ search: form.student_search.trim(), per_page: 10 });
-      const s = res.items.find((x) => x.admission_no === form.student_search.trim()) ?? res.items[0];
-      if (s) {
-        setForm((f) => ({ ...f, student_id: String(s.id), student_label: `${s.first_name} ${s.last_name} (${s.admission_no})` }));
-        setLookupState("found");
-      } else {
-        setLookupState("error");
-      }
-    } catch { setLookupState("error"); }
-  };
 
   const submit = async () => {
     if (!form.amount || Number(form.amount) <= 0) { setError("Enter a valid amount."); return; }
     if (!form.fee_type_id) { setError("Select a fee type."); return; }
     if (!form.academic_year_id) { setError("Select an academic year."); return; }
     if (form.scope === "class" && !form.class_id) { setError("Select a class."); return; }
-    if (form.scope === "student" && !form.student_id) { setError("Look up a student first."); return; }
+    if (form.scope === "student" && !selectedStudent) { setError("Select a student first."); return; }
     setSaving(true); setError("");
     try {
       let typeId = Number(form.fee_type_id);
@@ -175,8 +252,8 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
         academic_year_id: Number(form.academic_year_id),
         amount:           Number(form.amount),
         due_date:         form.due_date || undefined,
-        class_id:         form.scope === "class"   ? Number(form.class_id)   : null,
-        student_id:       form.scope === "student" ? Number(form.student_id) : null,
+        class_id:         form.scope === "class"   ? Number(form.class_id) : null,
+        student_id:       form.scope === "student" ? selectedStudent!.id   : null,
         student_type:     form.student_type || null,
         term:             form.term ? Number(form.term) : undefined,
       });
@@ -225,19 +302,8 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
             </Field>
           )}
           {form.scope === "student" && (
-            <Field label="Student * (search by admission no or name)">
-              <div className="flex gap-2">
-                <input
-                  className={INPUT}
-                  value={form.student_search}
-                  onChange={(e) => { set("student_search", e.target.value); setLookupState("idle"); }}
-                  onKeyDown={(e) => e.key === "Enter" && lookupStudent()}
-                  placeholder="Admission no or name…"
-                />
-                <Button variant="outline" size="sm" onClick={lookupStudent} disabled={lookupState === "loading"}>{lookupState === "loading" ? "…" : "Find"}</Button>
-              </div>
-              {lookupState === "found" && <p className="text-xs text-green-600 mt-1">✓ {form.student_label}</p>}
-              {lookupState === "error"  && <p className="text-xs text-red-600 mt-1">Student not found</p>}
+            <Field label="Student *">
+              <StudentSearch value={selectedStudent} onChange={setSelectedStudent} />
             </Field>
           )}
           <Field label="Student Type">
@@ -339,49 +405,42 @@ function WaiverDialog({ bill, studentId, onSave, onClose }: {
 }
 
 function StudentBillPanel() {
-  const { can }             = useAuthStore();
-  const toast               = useToast();
-  const [admNo, setAdmNo]   = useState("");
-  const [bill, setBill]     = useState<StudentBill | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState("");
+  const { can }                 = useAuthStore();
+  const toast                   = useToast();
+  const [selected, setSelected] = useState<SelectedStudent | null>(null);
+  const [bill, setBill]         = useState<StudentBill | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
   const [waiverOpen, setWaiverOpen] = useState(false);
 
-  const lookup = async () => {
-    if (!admNo.trim()) return;
+  const lookup = useCallback(async (s: SelectedStudent | null) => {
+    if (!s) { setBill(null); return; }
     setLoading(true); setError(""); setBill(null);
     try {
-      const data = await getStudentBill(undefined, admNo.trim());
+      const data = await getStudentBill(s.id);
       setBill(data);
-    } catch { setError("Student not found or no billing data."); }
+    } catch { setError("No billing data found for this student."); }
     finally { setLoading(false); }
-  };
+  }, []);
+
+  useEffect(() => { lookup(selected); }, [selected, lookup]);
 
   const handleRemoveWaiver = async (id: number) => {
     if (!confirm("Remove this waiver? The discount will be reversed.")) return;
     try {
       await deleteWaiver(id);
       toast.success("Waiver removed");
-      await lookup();
+      lookup(selected);
     } catch { toast.error("Failed to remove waiver"); }
   };
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-5">
-        <div className="relative max-w-xs flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={admNo}
-            onChange={(e) => setAdmNo(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && lookup()}
-            placeholder="Admission number…"
-            className="w-full h-9 pl-8 pr-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-          />
-        </div>
-        <Button variant="primary" onClick={lookup} disabled={loading}>{loading ? "Looking up…" : "Look Up"}</Button>
+      <div className="max-w-sm mb-5">
+        <StudentSearch value={selected} onChange={setSelected} placeholder="Search student by name or admission no…" />
       </div>
 
+      {loading && <div className="h-20 bg-gray-50 rounded-xl animate-pulse mb-4" />}
       {error && <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 
       {bill && (
@@ -521,7 +580,7 @@ function StudentBillPanel() {
         <WaiverDialog
           bill={bill}
           studentId={bill.student_id}
-          onSave={() => { setWaiverOpen(false); lookup(); }}
+          onSave={() => { setWaiverOpen(false); lookup(selected); }}
           onClose={() => setWaiverOpen(false)}
         />
       )}
@@ -1104,29 +1163,10 @@ const STATUS_COLORS: Record<string, string> = {
 
 function CreateInvoiceDialog({ onSave, onClose }: { onSave: () => void; onClose: () => void }) {
   const toast = useToast();
-  const [admNo, setAdmNo]     = useState("");
-  const [studentId, setStudentId] = useState<number | null>(null);
-  const [studentLabel, setStudentLabel] = useState("");
-  const [lookupState, setLookupState] = useState<"idle" | "loading" | "found" | "error">("idle");
-  const [items, setItems]     = useState([{ description: "", amount: "", discount_amount: "0", quantity: "1" }]);
-  const [notes, setNotes]     = useState("");
-  const [saving, setSaving]   = useState(false);
-
-  const lookupStudent = async () => {
-    if (!admNo.trim()) return;
-    setLookupState("loading");
-    try {
-      const res = await getStudents({ search: admNo.trim(), per_page: 10 });
-      const s = res.items.find((x) => x.admission_no === admNo.trim()) ?? res.items[0];
-      if (s) {
-        setStudentId(s.id);
-        setStudentLabel(`${s.first_name} ${s.last_name} (${s.admission_no})`);
-        setLookupState("found");
-      } else {
-        setStudentId(null); setStudentLabel(""); setLookupState("error");
-      }
-    } catch { setStudentId(null); setStudentLabel(""); setLookupState("error"); }
-  };
+  const [student, setStudent]   = useState<SelectedStudent | null>(null);
+  const [items, setItems]       = useState([{ description: "", amount: "", discount_amount: "0", quantity: "1" }]);
+  const [notes, setNotes]       = useState("");
+  const [saving, setSaving]     = useState(false);
 
   const setItem = (i: number, k: string, v: string) =>
     setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
@@ -1142,7 +1182,7 @@ function CreateInvoiceDialog({ onSave, onClose }: { onSave: () => void; onClose:
   }, 0);
 
   const submit = async () => {
-    if (!studentId) { toast.error("Look up a student first"); return; }
+    if (!student) { toast.error("Select a student first"); return; }
     for (const it of items) {
       if (!it.description.trim() || !it.amount || parseFloat(it.amount) <= 0) {
         toast.error("Each line item needs a description and a positive amount"); return;
@@ -1151,7 +1191,7 @@ function CreateInvoiceDialog({ onSave, onClose }: { onSave: () => void; onClose:
     setSaving(true);
     try {
       await createInvoice({
-        student_id: studentId,
+        student_id: student.id,
         notes: notes || undefined,
         items: items.map((it) => ({
           description:     it.description,
@@ -1172,15 +1212,8 @@ function CreateInvoiceDialog({ onSave, onClose }: { onSave: () => void; onClose:
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Create Invoice</h2>
         <div className="space-y-3">
-          <Field label="Student (admission no) *">
-            <div className="flex gap-2">
-              <input className={INPUT} value={admNo} placeholder="e.g. ADM001"
-                onChange={(e) => { setAdmNo(e.target.value); setLookupState("idle"); setStudentId(null); setStudentLabel(""); }}
-                onKeyDown={(e) => e.key === "Enter" && lookupStudent()} />
-              <Button variant="outline" size="sm" onClick={lookupStudent} disabled={lookupState === "loading"}>{lookupState === "loading" ? "…" : "Find"}</Button>
-            </div>
-            {lookupState === "found" && <p className="text-xs text-green-600 mt-1">✓ {studentLabel}</p>}
-            {lookupState === "error"  && <p className="text-xs text-red-600 mt-1">Student not found</p>}
+          <Field label="Student *">
+            <StudentSearch value={student} onChange={setStudent} />
           </Field>
 
           <div>
