@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star, CreditCard, CheckCircle, AlertTriangle, Clock } from "lucide-react";
+import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star, CreditCard, CheckCircle, AlertTriangle, Clock, BookOpen } from "lucide-react";
 import { getUsers, getRoles, createUser, updateUser, toggleUserActive, getConfig, setConfig, getAcademicYears, createAcademicYear, setCurrentYear, type AppUser, type Role, type AcademicYear } from "@/api/settings";
 import { getTeachers, type Teacher } from "@/api/teachers";
 import { getSubscriptionStatus, activateSubscription, type SubscriptionInfo } from "@/api/subscription";
+import { getSubjects, createSubject, updateSubject, toggleSubject, type Subject } from "@/api/subjects";
 import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
 
-type Tab = "users" | "school" | "years" | "subscription";
+type Tab = "users" | "school" | "years" | "subscription" | "subjects";
 
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -475,6 +476,187 @@ function SubscriptionTab() {
   );
 }
 
+// ── Subjects tab ────────────────────────────────────────────────────────────
+
+function SubjectForm({ initial, onSave, onCancel }: {
+  initial?: Subject;
+  onSave: (data: any) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName]               = useState(initial?.name || "");
+  const [code, setCode]               = useState(initial?.code || "");
+  const [gradeLevel, setGradeLevel]   = useState<string>(initial?.grade_level?.toString() || "");
+  const [subjectType, setSubjectType] = useState(initial?.subject_type || "compulsory");
+  const [creditHours, setCreditHours] = useState(initial?.credit_hours?.toString() || "1");
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState("");
+
+  const submit = async () => {
+    setError("");
+    if (!name.trim()) { setError("Subject name is required."); return; }
+    setSaving(true);
+    try {
+      await onSave({
+        name: name.trim(),
+        code: code.trim() || undefined,
+        grade_level: gradeLevel ? parseInt(gradeLevel) : null,
+        subject_type: subjectType,
+        credit_hours: parseInt(creditHours) || 1,
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? "Failed to save subject.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-4">{initial ? "Edit Subject" : "New Subject"}</h2>
+        {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Subject Name *</label>
+            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mathematics" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Code</label>
+              <input className={INPUT} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. MATH" maxLength={10} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Grade Level</label>
+              <input className={INPUT} type="number" min={1} max={13} value={gradeLevel} onChange={(e) => setGradeLevel(e.target.value)} placeholder="All grades" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+              <select className={INPUT} value={subjectType} onChange={(e) => setSubjectType(e.target.value)}>
+                <option value="compulsory">Compulsory</option>
+                <option value="elective">Elective</option>
+                <option value="optional">Optional</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Credit Hours</label>
+              <input className={INPUT} type="number" min={1} max={10} value={creditHours} onChange={(e) => setCreditHours(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-5 justify-end">
+          <button onClick={onCancel} className="h-9 px-4 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+          <button onClick={submit} disabled={saving} className="h-9 px-5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg">
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubjectsTab() {
+  const [subjects, setSubjects]   = useState<Subject[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [showInactive, setShowInactive] = useState(false);
+  const [editSubject, setEditSubject]   = useState<Subject | null | "new">(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getSubjects(showInactive).then(setSubjects).catch(() => {}).finally(() => setLoading(false));
+  }, [showInactive]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSave = async (data: any) => {
+    if (editSubject === "new") await createSubject(data);
+    else if (editSubject)      await updateSubject(editSubject.id, data);
+    setEditSubject(null);
+    load();
+  };
+
+  const handleToggle = async (id: number) => {
+    await toggleSubject(id).catch(() => {});
+    load();
+  };
+
+  const TYPE_COLOR: Record<string, string> = {
+    compulsory: "bg-blue-50 text-blue-700",
+    elective:   "bg-purple-50 text-purple-700",
+    optional:   "bg-gray-100 text-gray-600",
+  };
+
+  return (
+    <div>
+      {editSubject !== null && (
+        <SubjectForm
+          initial={editSubject === "new" ? undefined : editSubject}
+          onSave={handleSave}
+          onCancel={() => setEditSubject(null)}
+        />
+      )}
+      <div className="flex items-center justify-between mb-4">
+        <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded" />
+          Show inactive subjects
+        </label>
+        <Button variant="primary" icon={<Plus size={15} />} onClick={() => setEditSubject("new")}>
+          Add Subject
+        </Button>
+      </div>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="table-scroll">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3">Subject</th>
+                <th className="px-4 py-3">Code</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Grade Level</th>
+                <th className="px-4 py-3">Credits</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading
+                ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
+                : subjects.length === 0
+                ? <tr><td colSpan={7} className="py-16"><EmptyState icon={BookOpen} title="No subjects yet" description="Add the subjects taught at your school" /></td></tr>
+                : subjects.map((s) => (
+                  <tr key={s.id} className={`hover:bg-gray-50 transition-colors ${!s.is_active ? "opacity-50" : ""}`}>
+                    <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{s.code || "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${TYPE_COLOR[s.subject_type] || "bg-gray-100 text-gray-600"}`}>
+                        {s.subject_type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">{s.grade_level ? `Grade ${s.grade_level}` : "All grades"}</td>
+                    <td className="px-4 py-3 text-gray-500">{s.credit_hours}</td>
+                    <td className="px-4 py-3">
+                      {s.is_active ? <Badge variant="green">Active</Badge> : <Badge variant="red">Inactive</Badge>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setEditSubject(s)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => handleToggle(s.id)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title={s.is_active ? "Deactivate" : "Activate"}>
+                          {s.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { can } = useAuthStore();
   const canAllUsers    = can("settings.users.manage");
@@ -482,6 +664,7 @@ export default function SettingsPage() {
   const canSchool      = can("settings.school.manage");
   const canYears       = can("settings.years.manage") || canAllUsers;
   const canUsers       = canAllUsers || canTeachers;
+  const canSubjects    = canAllUsers || can("settings.school.manage");
 
   const defaultTab: Tab = canUsers ? "users" : canSchool ? "school" : "years";
 
@@ -520,10 +703,11 @@ export default function SettingsPage() {
   const roleMap = Object.fromEntries(roles.map((r) => [r.key, r]));
 
   const TABS = [
-    canUsers  && { key: "users"        as Tab, label: canAllUsers ? "Users" : "Teacher Accounts" },
-    canSchool && { key: "school"       as Tab, label: "School Info" },
-    canYears  && { key: "years"        as Tab, label: "Academic Years" },
-    canSchool && { key: "subscription" as Tab, label: "Subscription" },
+    canUsers    && { key: "users"        as Tab, label: canAllUsers ? "Users" : "Teacher Accounts" },
+    canSchool   && { key: "school"       as Tab, label: "School Info" },
+    canYears    && { key: "years"        as Tab, label: "Academic Years" },
+    canSubjects && { key: "subjects"     as Tab, label: "Subjects" },
+    canSchool   && { key: "subscription" as Tab, label: "Subscription" },
   ].filter(Boolean) as Array<{ key: Tab; label: string }>;
 
   return (
@@ -605,6 +789,7 @@ export default function SettingsPage() {
 
       {tab === "school"        && <SchoolInfoTab />}
       {tab === "years"         && <AcademicYearsTab />}
+      {tab === "subjects"      && <SubjectsTab />}
       {tab === "subscription"  && <SubscriptionTab />}
 
       {editUser !== null && (

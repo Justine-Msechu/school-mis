@@ -17,7 +17,7 @@ from backend.routers import (
     auth, grades, students, dashboard, classes,
     teachers, attendance, finance, library, transport,
     inventory, health, welfare, promotion, accounting,
-    reports, settings, rbac, invoices, payroll,
+    reports, settings, rbac, invoices, payroll, subjects,
 )
 from backend.routers import notifications, audit
 from backend.routers import enrollments, guardians, timetable, report_cards
@@ -193,6 +193,7 @@ app.include_router(guardians.router,     prefix="/api/guardians")
 app.include_router(timetable.router,     prefix="/api/timetable")
 app.include_router(report_cards.router,  prefix="/api/report-cards")
 app.include_router(rbac.router,          prefix="/api/rbac")
+app.include_router(subjects.router,      prefix="/api/subjects")
 app.include_router(invoices.router,      prefix="/api/invoices")
 app.include_router(payroll.router,       prefix="/api/payroll")
 app.include_router(ngo.router,           prefix="/api")
