@@ -24,6 +24,7 @@ import GuardiansPage from "@/pages/GuardiansPage";
 import ReportCardsPage from "@/pages/ReportCardsPage";
 import ForceChangePassword from "@/components/ui/ForceChangePassword";
 import RbacPage from "@/pages/RbacPage";
+import PayrollPage from "@/pages/PayrollPage";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuthStore();
@@ -75,6 +76,7 @@ export default function App() {
                   <Route path="/guardians"   element={<PermRoute perm="guardian.view"><GuardiansPage /></PermRoute>} />
                   <Route path="/report-cards" element={<PermRoute perm="report_cards.view"><ReportCardsPage /></PermRoute>} />
                   <Route path="/rbac"         element={<AdminRoute><RbacPage /></AdminRoute>} />
+                  <Route path="/payroll"      element={<PermRoute perm="payroll.view"><PayrollPage /></PermRoute>} />
                 </Routes>
               </AppShell>
             </PrivateRoute>

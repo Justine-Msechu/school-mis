@@ -6,7 +6,7 @@ import {
   Award, Calendar, Library, DollarSign, Building2,
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
-  UserCheck, FileText, UsersRound, ShieldCheck,
+  UserCheck, FileText, UsersRound, ShieldCheck, Banknote,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -53,6 +53,7 @@ const NAV_GROUPS: NavGroupDef[] = [
     label: "Operations",
     items: [
       { icon: DollarSign,  label: "Finance",    to: "/finance",    perm: "finance.view" },
+      { icon: Banknote,    label: "Payroll",    to: "/payroll",    perm: "payroll.view" },
       { icon: Building2,   label: "Accounting", to: "/accounting", perm: "accounting.view" },
       { icon: Bus,         label: "Transport",  to: "/transport",  perm: "transport.view" },
       { icon: Package,     label: "Inventory",  to: "/inventory",  perm: "inventory.view" },
