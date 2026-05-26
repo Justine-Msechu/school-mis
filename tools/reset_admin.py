@@ -4,8 +4,12 @@
 import sys, os, getpass
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# Run migrations first so pw_scheme column exists
-from database.db import fetch_one, execute, fetch_all
+from database.db import DB_PATH, initialize_database, fetch_one, execute, fetch_all
+
+print(f"Database: {DB_PATH}")
+
+# Create tables and run schema migrations if not yet done
+initialize_database()
 
 # Show all active users so we know what's in the DB
 print("\nActive users in database:")
