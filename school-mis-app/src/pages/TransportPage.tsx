@@ -39,15 +39,17 @@ function ClassStudentPicker({
     api.get("/grades/classes").then(({ data }) => setClasses(data)).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!classId) { setStudents([]); onChange(null); return; }
-    setLoadingStudents(true);
+  const handleClassChange = (id: number | "") => {
+    setClassId(id);
+    setStudents([]);
     onChange(null);
-    api.get("/students", { params: { class_id: classId, limit: 200 } })
+    if (!id) return;
+    setLoadingStudents(true);
+    api.get("/students", { params: { class_id: id, limit: 200 } })
       .then(({ data }) => setStudents(data.students ?? data ?? []))
       .catch(() => setStudents([]))
       .finally(() => setLoadingStudents(false));
-  }, [classId]);
+  };
 
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -55,7 +57,7 @@ function ClassStudentPicker({
         <label className="text-xs font-medium text-gray-600 mb-1 block">Class *</label>
         <select
           value={classId}
-          onChange={(e) => setClassId(e.target.value ? Number(e.target.value) : "")}
+          onChange={(e) => handleClassChange(e.target.value ? Number(e.target.value) : "")}
           className={INPUT}
         >
           <option value="">Select class…</option>
