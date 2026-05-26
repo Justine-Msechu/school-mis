@@ -68,6 +68,7 @@ class FeeStructureBody(BaseModel):
     fee_type_id:      int
     amount:           float
     class_id:         int | None = None
+    student_id:       int | None = None
     term:             int | None = None
     due_date:         str | None = None
 
@@ -78,8 +79,11 @@ def create_fee_structure(body: FeeStructureBody, user: Usr):
     conn = _get_conn()
     try:
         cur = conn.execute(
-            "INSERT INTO fee_structures (academic_year_id, class_id, fee_type_id, amount, term, due_date) VALUES (?,?,?,?,?,?)",
-            (body.academic_year_id, body.class_id, body.fee_type_id, body.amount, body.term, body.due_date),
+            """INSERT INTO fee_structures
+               (academic_year_id, class_id, student_id, fee_type_id, amount, term, due_date)
+               VALUES (?,?,?,?,?,?,?)""",
+            (body.academic_year_id, body.class_id, body.student_id,
+             body.fee_type_id, body.amount, body.term, body.due_date),
         )
         conn.commit()
         return {"id": cur.lastrowid, "ok": True}
@@ -121,16 +125,22 @@ def generate_bills(body: BillingGenerateBody, user: Usr):
 
     for fs in structures:
         # Determine which students get this bill
-        target_class = fs["class_id"] or body.class_id
-        if target_class:
+        if fs["student_id"]:
             students = conn.execute(
-                "SELECT id FROM students WHERE class_id=? AND is_active=1 AND deleted_at IS NULL",
-                (target_class,),
+                "SELECT id FROM students WHERE id=? AND is_active=1 AND deleted_at IS NULL",
+                (fs["student_id"],),
             ).fetchall()
         else:
-            students = conn.execute(
-                "SELECT id FROM students WHERE is_active=1 AND deleted_at IS NULL"
-            ).fetchall()
+            target_class = fs["class_id"] or body.class_id
+            if target_class:
+                students = conn.execute(
+                    "SELECT id FROM students WHERE class_id=? AND is_active=1 AND deleted_at IS NULL",
+                    (target_class,),
+                ).fetchall()
+            else:
+                students = conn.execute(
+                    "SELECT id FROM students WHERE is_active=1 AND deleted_at IS NULL"
+                ).fetchall()
 
         for s in students:
             existing = conn.execute(

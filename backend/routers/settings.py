@@ -273,10 +273,15 @@ def create_fee_type(body: FeeTypePayload, user: Usr):
 @router.get("/fee-structures")
 def list_fee_structures(user: Usr):
     rows = fetch_all(
-        """SELECT fs.*, ft.name AS fee_type_name, ay.label AS year_label
+        """SELECT fs.*, ft.name AS fee_type_name, ay.label AS year_label,
+                  c.name AS class_name,
+                  s.first_name || ' ' || s.last_name AS student_name,
+                  s.admission_no
            FROM fee_structures fs
            JOIN fee_types ft ON ft.id = fs.fee_type_id
            LEFT JOIN academic_years ay ON ay.id = fs.academic_year_id
+           LEFT JOIN classes c ON c.id = fs.class_id
+           LEFT JOIN students s ON s.id = fs.student_id
            ORDER BY ay.label DESC, ft.name"""
     )
     return [dict(r) for r in rows]
@@ -288,19 +293,29 @@ class FeeStructurePayload(BaseModel):
     amount:           float
     due_date:         str = ""
     term:             int | None = None
+    class_id:         int | None = None
+    student_id:       int | None = None
 
 
 @router.post("/fee-structures")
 def create_fee_structure(body: FeeStructurePayload, user: Usr):
     row_id = execute(
-        "INSERT INTO fee_structures (fee_type_id, academic_year_id, amount, due_date, term) VALUES (?,?,?,?,?)",
-        (body.fee_type_id, body.academic_year_id, body.amount, body.due_date, body.term),
+        """INSERT INTO fee_structures
+           (fee_type_id, academic_year_id, amount, due_date, term, class_id, student_id)
+           VALUES (?,?,?,?,?,?,?)""",
+        (body.fee_type_id, body.academic_year_id, body.amount, body.due_date,
+         body.term, body.class_id, body.student_id),
     )
     row = fetch_one(
-        """SELECT fs.*, ft.name AS fee_type_name, ay.label AS year_label
+        """SELECT fs.*, ft.name AS fee_type_name, ay.label AS year_label,
+                  c.name AS class_name,
+                  s.first_name || ' ' || s.last_name AS student_name,
+                  s.admission_no
            FROM fee_structures fs
            JOIN fee_types ft ON ft.id=fs.fee_type_id
            LEFT JOIN academic_years ay ON ay.id=fs.academic_year_id
+           LEFT JOIN classes c ON c.id=fs.class_id
+           LEFT JOIN students s ON s.id=fs.student_id
            WHERE fs.id=?""",
         (row_id,),
     )

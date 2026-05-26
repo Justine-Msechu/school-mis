@@ -123,16 +123,43 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
     academic_year_id: years.find((y) => y.is_current)?.id?.toString() ?? years[0]?.id?.toString() ?? "",
     amount:           "",
     due_date:         "",
+    scope:            "all" as "all" | "class" | "student",
+    class_id:         "",
+    student_search:   "",
+    student_id:       "" as string,
+    student_label:    "",
   });
+  const [classes, setClasses]       = useState<{ id: number; name: string }[]>([]);
   const [newFeeType, setNewFeeType] = useState("");
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState("");
+  const [lookupState, setLookupState] = useState<"idle" | "loading" | "found" | "error">("idle");
+
+  useEffect(() => { getClasses().then(setClasses).catch(() => {}); }, []);
+
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const lookupStudent = async () => {
+    if (!form.student_search.trim()) return;
+    setLookupState("loading");
+    try {
+      const res = await getStudents({ search: form.student_search.trim(), per_page: 10 });
+      const s = res.items.find((x) => x.admission_no === form.student_search.trim()) ?? res.items[0];
+      if (s) {
+        setForm((f) => ({ ...f, student_id: String(s.id), student_label: `${s.first_name} ${s.last_name} (${s.admission_no})` }));
+        setLookupState("found");
+      } else {
+        setLookupState("error");
+      }
+    } catch { setLookupState("error"); }
+  };
 
   const submit = async () => {
     if (!form.amount || Number(form.amount) <= 0) { setError("Enter a valid amount."); return; }
     if (!form.fee_type_id) { setError("Select a fee type."); return; }
     if (!form.academic_year_id) { setError("Select an academic year."); return; }
+    if (form.scope === "class" && !form.class_id) { setError("Select a class."); return; }
+    if (form.scope === "student" && !form.student_id) { setError("Look up a student first."); return; }
     setSaving(true); setError("");
     try {
       let typeId = Number(form.fee_type_id);
@@ -140,7 +167,14 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
         const t = await createFeeType({ name: newFeeType.trim() });
         typeId = t.id;
       }
-      await createFeeStructure({ fee_type_id: typeId, academic_year_id: Number(form.academic_year_id), amount: Number(form.amount), due_date: form.due_date || undefined });
+      await createFeeStructure({
+        fee_type_id:      typeId,
+        academic_year_id: Number(form.academic_year_id),
+        amount:           Number(form.amount),
+        due_date:         form.due_date || undefined,
+        class_id:         form.scope === "class"   ? Number(form.class_id)   : null,
+        student_id:       form.scope === "student" ? Number(form.student_id) : null,
+      });
       onSave();
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? "Failed to save fee structure.");
@@ -170,6 +204,37 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
               {years.map((y) => <option key={y.id} value={y.id}>{y.label}{y.is_current ? " (current)" : ""}</option>)}
             </select>
           </Field>
+          <Field label="Applies To *">
+            <select className={INPUT} value={form.scope} onChange={(e) => set("scope", e.target.value)}>
+              <option value="all">All Students</option>
+              <option value="class">Specific Class</option>
+              <option value="student">Specific Student</option>
+            </select>
+          </Field>
+          {form.scope === "class" && (
+            <Field label="Class *">
+              <select className={INPUT} value={form.class_id} onChange={(e) => set("class_id", e.target.value)}>
+                <option value="">— Select class —</option>
+                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+          )}
+          {form.scope === "student" && (
+            <Field label="Student * (search by admission no or name)">
+              <div className="flex gap-2">
+                <input
+                  className={INPUT}
+                  value={form.student_search}
+                  onChange={(e) => { set("student_search", e.target.value); setLookupState("idle"); }}
+                  onKeyDown={(e) => e.key === "Enter" && lookupStudent()}
+                  placeholder="Admission no or name…"
+                />
+                <Button variant="outline" size="sm" onClick={lookupStudent} disabled={lookupState === "loading"}>{lookupState === "loading" ? "…" : "Find"}</Button>
+              </div>
+              {lookupState === "found" && <p className="text-xs text-green-600 mt-1">✓ {form.student_label}</p>}
+              {lookupState === "error"  && <p className="text-xs text-red-600 mt-1">Student not found</p>}
+            </Field>
+          )}
           <Field label="Amount (TZS) *"><input type="number" min="1" className={INPUT} value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0" /></Field>
           <Field label="Due Date"><input type="date" className={INPUT} value={form.due_date} onChange={(e) => set("due_date", e.target.value)} /></Field>
         </div>
@@ -614,9 +679,11 @@ export default function FinancePage() {
                   <tr key={fs.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">{fs.fee_type_name}</td>
                     <td className="px-4 py-3">
-                      {fs.class_name
+                      {fs.student_name
+                        ? <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{fs.student_name} <span className="opacity-60">({fs.admission_no})</span></span>
+                        : fs.class_name
                         ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">{fs.class_name}</span>
-                        : <span className="text-gray-400 text-xs">All classes</span>
+                        : <span className="text-gray-400 text-xs">All students</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-gray-600">{fs.year_label}</td>

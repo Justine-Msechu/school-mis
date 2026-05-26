@@ -9,6 +9,9 @@ export interface FeeStructure {
   academic_year_id: number;
   class_id: number | null;
   class_name: string | null;
+  student_id: number | null;
+  student_name: string | null;
+  admission_no: string | null;
   due_date: string | null;
 }
 

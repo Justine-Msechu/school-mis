@@ -576,8 +576,9 @@ def initialize_database():
         ("fee_payments", "created_at",       "TEXT DEFAULT (datetime('now'))"),
         ("audit_log",    "before_state",     "TEXT"),
         ("audit_log",    "after_state",      "TEXT"),
-        ("subjects",     "credit_hours",     "INTEGER DEFAULT 1"),
-        ("subjects",     "subject_type",     "TEXT DEFAULT 'compulsory'"),
+        ("subjects",        "credit_hours",     "INTEGER DEFAULT 1"),
+        ("subjects",        "subject_type",     "TEXT DEFAULT 'compulsory'"),
+        ("fee_structures",  "student_id",       "INTEGER REFERENCES students(id)"),
     ]
     for table, col, col_type in _migrations:
         try:

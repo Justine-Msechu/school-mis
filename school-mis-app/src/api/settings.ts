@@ -80,5 +80,5 @@ export const createFeeType = (body: { name: string; description?: string }) =>
 export const getFeeStructures = () =>
   api.get<FeeStructure[]>("/settings/fee-structures").then((r) => r.data);
 
-export const createFeeStructure = (body: { fee_type_id: number; academic_year_id: number; amount: number; due_date?: string; term?: number }) =>
+export const createFeeStructure = (body: { fee_type_id: number; academic_year_id: number; amount: number; due_date?: string; term?: number; class_id?: number | null; student_id?: number | null }) =>
   api.post<FeeStructure>("/settings/fee-structures", body).then((r) => r.data);
