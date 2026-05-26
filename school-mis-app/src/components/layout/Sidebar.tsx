@@ -7,6 +7,7 @@ import {
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
   UserCheck, FileText, UsersRound, ShieldCheck, Banknote, Handshake, X,
+  CreditCard,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -73,8 +74,9 @@ const NAV_GROUPS: NavGroupDef[] = [
     items: [
       { icon: BarChart2,   label: "Reports",        to: "/reports",  perm: "reports.view" },
       { icon: Settings,    label: "Settings",       to: "/settings", perm: "settings.view" },
-      { icon: ShieldCheck, label: "Roles & Access", to: "/rbac",     roles: ["admin"] },
-      { icon: Shield,      label: "Audit Log",      to: "/audit",    perm: "audit.view" },
+      { icon: ShieldCheck, label: "Roles & Access", to: "/rbac",         roles: ["admin"] },
+      { icon: Shield,      label: "Audit Log",      to: "/audit",        perm: "audit.view" },
+      { icon: CreditCard,  label: "Subscription",   to: "/subscription", roles: ["admin"] },
     ],
   },
 ];

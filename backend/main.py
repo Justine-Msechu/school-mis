@@ -24,6 +24,8 @@ from backend.routers import enrollments, guardians, timetable, report_cards
 from backend.routers import ngo
 from backend.routers import setup as setup_router
 from backend.routers import subscription as subscription_router
+from backend.subscriptions.router import router as new_subscription_router
+from backend.subscriptions.webhooks.router import router as webhooks_router
 
 log = logging.getLogger(__name__)
 
@@ -119,8 +121,20 @@ async def lifespan(app: FastAPI):
         _mod18 = importlib.util.module_from_spec(_spec18)
         _spec18.loader.exec_module(_mod18)
         _mod18.run()
+        _mig19_path = os.path.join(os.path.dirname(__file__), "migrations", "019_subscription_v2.py")
+        _spec19 = importlib.util.spec_from_file_location("migration_019", _mig19_path)
+        _mod19 = importlib.util.module_from_spec(_spec19)
+        _spec19.loader.exec_module(_mod19)
+        _mod19.run()
     except Exception as e:
         log.warning("Migration warning (may already be applied): %s", e)
+
+    # Init payment providers from env vars
+    try:
+        from backend.subscriptions.providers.registry import init_providers
+        init_providers()
+    except Exception as e:
+        log.warning("Payment provider init warning: %s", e)
 
     # 2. Configure SQLite pragmas on the thread-local connection
     from backend.core.db import _get_conn
@@ -163,6 +177,8 @@ _SUBSCRIPTION_EXEMPT = (
     "/api/auth/",
     "/api/setup/",
     "/api/subscription/",
+    "/api/subscriptions/",
+    "/api/webhooks/",
     "/api/ai/",
     "/api/health",
     "/assets/",
@@ -248,6 +264,8 @@ app.include_router(payroll.router,       prefix="/api/payroll")
 app.include_router(ngo.router,           prefix="/api")
 app.include_router(setup_router.router,         prefix="/api/setup")
 app.include_router(subscription_router.router,  prefix="/api/subscription")
+app.include_router(new_subscription_router,     prefix="/api/subscriptions")
+app.include_router(webhooks_router,             prefix="/api/webhooks")
 app.include_router(ai.router,                   prefix="/api/ai")
 
 

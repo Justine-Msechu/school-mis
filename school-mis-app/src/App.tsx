@@ -28,6 +28,7 @@ import ForceChangePassword from "@/components/ui/ForceChangePassword";
 import RbacPage from "@/pages/RbacPage";
 import PayrollPage from "@/pages/PayrollPage";
 import NGOPage from "@/pages/NGOPage";
+import SubscriptionPage from "@/pages/SubscriptionPage";
 import { getSetupStatus } from "@/api/setup";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -107,8 +108,9 @@ export default function App() {
                   <Route path="/guardians"   element={<PermRoute perm="guardian.view"><GuardiansPage /></PermRoute>} />
                   <Route path="/report-cards" element={<PermRoute perm="report_cards.view"><ReportCardsPage /></PermRoute>} />
                   <Route path="/rbac"         element={<AdminRoute><RbacPage /></AdminRoute>} />
-                  <Route path="/payroll"      element={<PermRoute perm="payroll.view"><PayrollPage /></PermRoute>} />
-                  <Route path="/ngo"          element={<PermRoute perm="ngo.view"><NGOPage /></PermRoute>} />
+                  <Route path="/payroll"       element={<PermRoute perm="payroll.view"><PayrollPage /></PermRoute>} />
+                  <Route path="/ngo"           element={<PermRoute perm="ngo.view"><NGOPage /></PermRoute>} />
+                  <Route path="/subscription"  element={<AdminRoute><SubscriptionPage /></AdminRoute>} />
                 </Routes>
               </AppShell>
             </PrivateRoute>
