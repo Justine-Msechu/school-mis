@@ -188,7 +188,7 @@ export default function TeacherAssignmentsPanel({ teacher, onClose }: Props) {
               </p>
             ) : (
               <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="table-scroll"><table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide text-left">
                       <th className="px-4 py-2.5">Subject</th>
@@ -214,7 +214,7 @@ export default function TeacherAssignmentsPanel({ teacher, onClose }: Props) {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             )}
 
@@ -278,7 +278,7 @@ export default function TeacherAssignmentsPanel({ teacher, onClose }: Props) {
 
             {classAssigns.length > 0 && (
               <div className="rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <table className="w-full text-sm">
+                <div className="table-scroll"><table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide text-left">
                       <th className="px-4 py-2.5">Class</th>
@@ -302,7 +302,7 @@ export default function TeacherAssignmentsPanel({ teacher, onClose }: Props) {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             )}
 

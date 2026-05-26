@@ -87,7 +87,7 @@ export function DataTable<T extends object>({
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className={stickyHeader ? "overflow-auto max-h-[70vh]" : "overflow-x-auto"}>
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead className={stickyHeader ? "sticky top-0 z-10" : ""}>
             <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200">
               {columns.map((col) => (
@@ -151,7 +151,7 @@ export function DataTable<T extends object>({
               })
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {/* Pagination */}

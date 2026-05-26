@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import AppShell from "@/components/layout/AppShell";
 import LoginPage from "@/pages/LoginPage";
+import SetupPage from "@/pages/SetupPage";
 import DashboardPage from "@/pages/DashboardPage";
 import GradesPage from "@/pages/grades/GradesPage";
 import StudentsPage from "@/pages/StudentsPage";
@@ -25,6 +27,8 @@ import ReportCardsPage from "@/pages/ReportCardsPage";
 import ForceChangePassword from "@/components/ui/ForceChangePassword";
 import RbacPage from "@/pages/RbacPage";
 import PayrollPage from "@/pages/PayrollPage";
+import NGOPage from "@/pages/NGOPage";
+import { getSetupStatus } from "@/api/setup";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuthStore();
@@ -43,15 +47,42 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { isLoggedIn } = useAuthStore();
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+
+  // Check on first load if the system needs setup (no admin user exists yet)
+  useEffect(() => {
+    getSetupStatus()
+      .then((s) => setNeedsSetup(s.needs_setup))
+      .catch(() => setNeedsSetup(false)); // assume initialized if check fails
+  }, []);
+
+  // Blank screen while we check setup status
+  if (needsSetup === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
       <ForceChangePassword />
       <Routes>
-        <Route path="/login" element={isLoggedIn ? <Navigate to="/" replace /> : <LoginPage />} />
+        {/* Setup wizard — only accessible when system is not yet initialized */}
+        <Route path="/setup" element={needsSetup ? <SetupPage /> : <Navigate to="/login" replace />} />
+
+        {/* Redirect to setup if not initialized */}
+        <Route path="/login" element={
+          needsSetup ? <Navigate to="/setup" replace /> :
+          isLoggedIn ? <Navigate to="/" replace /> :
+          <LoginPage />
+        } />
+
         <Route
           path="/*"
           element={
+            needsSetup ? <Navigate to="/setup" replace /> :
             <PrivateRoute>
               <AppShell>
                 <Routes>
@@ -77,6 +108,7 @@ export default function App() {
                   <Route path="/report-cards" element={<PermRoute perm="report_cards.view"><ReportCardsPage /></PermRoute>} />
                   <Route path="/rbac"         element={<AdminRoute><RbacPage /></AdminRoute>} />
                   <Route path="/payroll"      element={<PermRoute perm="payroll.view"><PayrollPage /></PermRoute>} />
+                  <Route path="/ngo"          element={<PermRoute perm="ngo.view"><NGOPage /></PermRoute>} />
                 </Routes>
               </AppShell>
             </PrivateRoute>

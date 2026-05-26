@@ -2,11 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme CSS variables ─────────────────────────────────────────────────── */
+/* Each theme sets these vars; components use them via Tailwind's color aliases */
+
+:root,
+[data-theme="light"] {
+  --color-surface:            #ffffff;
+  --color-surface-2:          #f9fafb;   /* gray-50 */
+  --color-on-surface:         #111827;   /* gray-900 */
+  --color-on-surface-muted:   #6b7280;   /* gray-500 */
+  --color-border:             #e5e7eb;   /* gray-200 */
+  --color-accent:             #7c3aed;   /* violet-600 */
+  --color-accent-light:       #ede9fe;   /* violet-100 */
+  --color-accent-text:        #5b21b6;   /* violet-700 */
+  --color-input-bg:           #ffffff;
+  --color-hover:              #f3f4f6;   /* gray-100 */
+  --color-topbar-bg:          #ffffff;
+  --color-topbar-border:      #e5e7eb;
+}
+
+[data-theme="dark"] {
+  --color-surface:            #1e2433;
+  --color-surface-2:          #151b28;
+  --color-on-surface:         #f1f5f9;
+  --color-on-surface-muted:   #94a3b8;
+  --color-border:             #2d3748;
+  --color-accent:             #818cf8;   /* indigo-400 */
+  --color-accent-light:       #1e1b4b;   /* indigo-950 */
+  --color-accent-text:        #a5b4fc;   /* indigo-300 */
+  --color-input-bg:           #252d3d;
+  --color-hover:              #252d3d;
+  --color-topbar-bg:          #1a2035;
+  --color-topbar-border:      #2d3748;
+}
+
+[data-theme="blue"] {
+  --color-surface:            #ffffff;
+  --color-surface-2:          #f0f9ff;   /* sky-50 */
+  --color-on-surface:         #0c1a2e;
+  --color-on-surface-muted:   #475569;
+  --color-border:             #bae6fd;   /* sky-200 */
+  --color-accent:             #0284c7;   /* sky-600 */
+  --color-accent-light:       #e0f2fe;   /* sky-100 */
+  --color-accent-text:        #0369a1;   /* sky-700 */
+  --color-input-bg:           #ffffff;
+  --color-hover:              #f0f9ff;
+  --color-topbar-bg:          #ffffff;
+  --color-topbar-border:      #bae6fd;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
 @layer base {
   * { box-sizing: border-box; }
 
+  html { transition: background-color 0.2s ease; }
+
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    background-color: var(--color-surface-2);
+    color: var(--color-on-surface);
+    @apply antialiased;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
       "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
@@ -14,11 +68,18 @@
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-400; }
+  ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-on-surface-muted); }
 }
 
+/* ── Components ──────────────────────────────────────────────────────────── */
 @layer components {
+  /* Mobile-safe table wrapper */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Responsive page content padding */
+  .page-content { @apply p-4 md:p-6 lg:p-8 max-w-screen-xl mx-auto; }
+
   /* Frozen table column utilities */
   .col-frozen-left  { position: sticky; left: 0; z-index: 2; }
   .col-frozen-right { position: sticky; right: 0; z-index: 2; }
@@ -33,4 +94,94 @@
   .status-chip {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold;
   }
+
+  /* ── Themed surfaces ── */
+  /* These classes let components be theme-aware without knowing which theme */
+  .themed-card {
+    background-color: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-on-surface);
+  }
+
+  .themed-input {
+    background-color: var(--color-input-bg);
+    border-color: var(--color-border);
+    color: var(--color-on-surface);
+  }
+
+  .themed-input:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: var(--color-accent);
+  }
+}
+
+/* ── Dark mode global overrides ──────────────────────────────────────────── */
+/* Applied to common Tailwind utility classes inside the app shell */
+
+[data-theme="dark"] {
+  /* Backgrounds */
+  .bg-white          { background-color: var(--color-surface) !important; }
+  .bg-gray-50        { background-color: var(--color-surface-2) !important; }
+  .bg-gray-100       { background-color: #252d3d !important; }
+
+  /* Text */
+  .text-gray-900     { color: var(--color-on-surface) !important; }
+  .text-gray-800     { color: #e2e8f0 !important; }
+  .text-gray-700     { color: #cbd5e1 !important; }
+  .text-gray-600     { color: #94a3b8 !important; }
+  .text-gray-500     { color: #64748b !important; }
+  .text-gray-400     { color: #475569 !important; }
+
+  /* Borders */
+  .border-gray-200   { border-color: var(--color-border) !important; }
+  .border-gray-100   { border-color: #252d3d !important; }
+
+  /* Inputs */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    background-color: var(--color-input-bg) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-on-surface) !important;
+  }
+
+  /* Tables */
+  table { color: var(--color-on-surface); }
+  thead tr { background-color: #1a2035 !important; border-color: var(--color-border) !important; }
+  tbody tr:hover { background-color: var(--color-hover) !important; }
+  .divide-y > * { border-color: var(--color-border) !important; }
+  .divide-gray-100 > * { border-color: #252d3d !important; }
+
+  /* Cards and panels */
+  .rounded-xl.border,
+  .rounded-2xl.border { border-color: var(--color-border) !important; }
+
+  /* Hover states */
+  .hover\:bg-gray-50:hover { background-color: var(--color-hover) !important; }
+  .hover\:bg-gray-100:hover { background-color: #252d3d !important; }
+
+  /* Accent (violet → indigo) */
+  .text-violet-600  { color: var(--color-accent) !important; }
+  .bg-violet-600    { background-color: var(--color-accent) !important; }
+  .ring-violet-500  { --tw-ring-color: var(--color-accent) !important; }
+  .border-violet-200 { border-color: #312e81 !important; }
+  .bg-violet-50     { background-color: var(--color-accent-light) !important; }
+
+  /* Accent buttons keep their color but get a slight adjustment */
+  button[class*="bg-violet"] { background-color: var(--color-accent) !important; }
+}
+
+/* ── Blue theme accent overrides ─────────────────────────────────────────── */
+[data-theme="blue"] {
+  .text-violet-600  { color: var(--color-accent) !important; }
+  .bg-violet-600    { background-color: var(--color-accent) !important; }
+  .ring-violet-500  { --tw-ring-color: var(--color-accent) !important; }
+  .border-violet-200 { border-color: #bae6fd !important; }
+  .bg-violet-50     { background-color: var(--color-accent-light) !important; }
+  .bg-violet-100    { background-color: #e0f2fe !important; }
+  button[class*="bg-violet"] { background-color: var(--color-accent) !important; }
+
+  /* Sidebar accent strip */
+  .before\:bg-violet-400::before { background-color: #38bdf8 !important; }
 }

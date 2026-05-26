@@ -88,7 +88,7 @@ export default function ResultsPage() {
       `<h1>Results Report</h1>
        <h2>${report.exam.name} — ${report.class.name}</h2>
        <p class="meta">Generated: ${new Date().toLocaleString()} &nbsp;|&nbsp; ${report.rows.length} students</p>
-       <table>
+       <div className="table-scroll"><table>
          <thead>
            <tr>
              <th class="center">#</th>
@@ -101,7 +101,7 @@ export default function ResultsPage() {
            </tr>
          </thead>
          <tbody>${tableRows}</tbody>
-       </table>`,
+       </table></div>`,
     );
   };
 
@@ -111,7 +111,7 @@ export default function ResultsPage() {
   const activeClass   = classes.find((c) => c.id === classId);
 
   return (
-    <div className="p-8 max-w-screen-2xl mx-auto">
+    <div className="page-content">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Results & Reports</h1>
         <p className="text-sm text-gray-500 mt-0.5">View and export academic performance reports by class and exam.</p>

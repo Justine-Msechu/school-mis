@@ -119,7 +119,8 @@ class TransportService(BaseService):
         if term:
             where.append("s.term=?"); params.append(term)
         rows = fetch_all(
-            f"""SELECT s.*, st.first_name||' '||st.last_name AS student_name,
+            f"""SELECT s.*, s.notes AS pickup_point,
+                       st.first_name||' '||st.last_name AS student_name,
                        st.admission_no, c.name AS class_name,
                        r.name AS route_name,
                        ay.label AS year_label

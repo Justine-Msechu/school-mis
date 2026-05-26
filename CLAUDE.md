@@ -89,3 +89,39 @@ Files excluded from the manifest and never downloaded: `run_school_mis.sh`, `Sch
 - **Passwords** — SHA-256 + random 16-byte hex salt. `hash_password()` and `verify_password()` in `db.py`.
 - **Currency** — TZS (Tanzanian shilling). No conversion logic; amounts are stored as `REAL` in SQLite.
 - **`github_config.py`** — single place to set `GITHUB_USERNAME` / `GITHUB_REPO`. Both the installer scripts and the updater derive all GitHub URLs from this file.
+
+
+
+
+
+  Now fixed: The backend:
+  1. Explicitly handles / (root) with its own route
+  2. Auto-detects the dist/ folder automatically — no env var needed
+  3. Falls back gracefully with a log message if dist isn't found
+
+  What to do on your Pi
+  
+  After doing git pull (or re-copying the files), just run:
+  
+  cd /opt/school_mis
+  source venv/bin/activate
+  
+  # Build the frontend first (only needed after code changes)
+  cd school-mis-app && npm ci && npm run build && cd ..
+
+  # Start the server — no env var needed, it finds dist/ automatically
+  python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765
+
+  Then open http://<PI_IP>:8765 on your phone — you should see the login page (or setup wizard on a fresh install).
+  
+  For the systemd service, simplify the line too — remove the env var:
+  
+  sudo nano /etc/systemd/system/school-mis.service
+
+  Change the ExecStart line to:
+  ExecStart=/opt/school_mis/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8765
+ 
+  And remove the Environment= line entirely. Then:
+  sudo systemctl daemon-reload
+  sudo systemctl restart school-mis
+  sudo systemctl status school-mis

@@ -151,7 +151,7 @@ export default function HealthPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Health</h1>
@@ -161,7 +161,7 @@ export default function HealthPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Date</th>
@@ -197,7 +197,7 @@ export default function HealthPage() {
               ))
             }
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {dialog && (

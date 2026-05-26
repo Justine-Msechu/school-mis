@@ -167,7 +167,7 @@ export default function GradeEntryPage() {
         />
       )}
 
-      <div className="p-8 max-w-screen-xl mx-auto w-full">
+      <div className="page-content w-full">
         {!loaded && (
           <>
             <div className="mb-6">
@@ -223,7 +223,7 @@ export default function GradeEntryPage() {
         {/* Entry table */}
         {(loaded || loading) && (
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-[200px]">Student</th>
@@ -333,7 +333,7 @@ export default function GradeEntryPage() {
                       );
                     })}
               </tbody>
-            </table>
+            </table></div>
 
             {loaded && rows.length === 0 && (
               <EmptyState title="No students in this class" description="The selected class has no active students." />

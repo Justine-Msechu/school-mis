@@ -498,7 +498,7 @@ function OverridesTab() {
                   No permission overrides for this user
                 </div>
               ) : (
-                <table className="w-full text-sm">
+                <div className="table-scroll"><table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       {["Permission", "Effect", "Reason", "Expires", "Granted by", ""].map((h) => (
@@ -530,7 +530,7 @@ function OverridesTab() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </div>
           </>

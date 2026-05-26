@@ -118,7 +118,7 @@ export default function AccountingPage() {
   }, [load]);
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Accounting</h1>
@@ -135,7 +135,7 @@ export default function AccountingPage() {
 
       <h2 className="text-base font-semibold text-gray-800 mb-3">Recent Expenses</h2>
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Date</th>
@@ -171,7 +171,7 @@ export default function AccountingPage() {
               ))
             }
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {dialog && (

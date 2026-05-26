@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, BookOpen, RotateCcw, Plus, ArrowRightLeft } from "lucide-react";
 import { getBooks, getLoans, returnBook, createBook, checkoutBook, type Book, type Loan } from "@/api/library";
 import { getStudents } from "@/api/students";
+import { getClassList, getClassStudents, type ClassRecord, type ClassStudent } from "@/api/classes";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -72,41 +73,50 @@ function BookDialog({ onSave, onClose }: { onSave: () => void; onClose: () => vo
 }
 
 function CheckoutDialog({ book, onSave, onClose }: { book: Book; onSave: () => void; onClose: () => void }) {
-  const [form, setForm] = useState({
-    admission_no: "",
-    student_id:   null as number | null,
-    student_name: "",
-    due_date:     (() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().slice(0, 10); })(),
+  const [classId, setClassId]     = useState<number | "">("");
+  const [studentId, setStudentId] = useState<number | "">("");
+  const [classes, setClasses]     = useState<ClassRecord[]>([]);
+  const [students, setStudents]   = useState<ClassStudent[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().slice(0, 10);
   });
-  const [lookupState, setLookupState] = useState<"idle" | "loading" | "found" | "error">("idle");
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
 
-  const lookupStudent = async () => {
-    if (!form.admission_no.trim()) return;
-    setLookupState("loading");
-    try {
-      const res = await getStudents({ search: form.admission_no.trim(), per_page: 10 });
-      const student = res.items.find((s) => s.admission_no === form.admission_no.trim());
-      if (student) {
-        setForm((f) => ({ ...f, student_id: student.id, student_name: `${student.first_name} ${student.last_name}` }));
-        setLookupState("found");
-      } else {
-        setForm((f) => ({ ...f, student_id: null, student_name: "" }));
-        setLookupState("error");
-      }
-    } catch {
-      setLookupState("error");
+  useEffect(() => {
+    getClassList().then(setClasses).catch(() => {});
+    // Load all students initially
+    setLoadingStudents(true);
+    getStudents({ per_page: 200 })
+      .then((res) => setStudents(res.items.map((s) => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, admission_no: s.admission_no, gender: s.gender }))))
+      .catch(() => {})
+      .finally(() => setLoadingStudents(false));
+  }, []);
+
+  useEffect(() => {
+    setStudentId("");
+    setLoadingStudents(true);
+    if (classId !== "") {
+      getClassStudents(Number(classId))
+        .then(setStudents)
+        .catch(() => setStudents([]))
+        .finally(() => setLoadingStudents(false));
+    } else {
+      getStudents({ per_page: 200 })
+        .then((res) => setStudents(res.items.map((s) => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, admission_no: s.admission_no, gender: s.gender }))))
+        .catch(() => setStudents([]))
+        .finally(() => setLoadingStudents(false));
     }
-  };
+  }, [classId]);
 
   const submit = async () => {
-    if (!form.student_id) { setError("Please look up a valid student first."); return; }
-    if (!form.due_date)   { setError("Due date is required."); return; }
+    if (!studentId) { setError("Please select a student."); return; }
+    if (!dueDate)   { setError("Due date is required."); return; }
     setSaving(true);
     setError("");
     try {
-      await checkoutBook(book.id, form.student_id!, form.due_date);
+      await checkoutBook(book.id, Number(studentId), dueDate);
       onSave();
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? "Failed to checkout book.");
@@ -122,32 +132,45 @@ function CheckoutDialog({ book, onSave, onClose }: { book: Book; onSave: () => v
         <p className="text-sm text-gray-500 mb-4">{book.title} — {book.author}</p>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="space-y-3">
-          <Field label="Student Admission No *">
-            <div className="flex gap-2">
-              <input
-                className={INPUT}
-                value={form.admission_no}
-                placeholder="e.g. ADM001"
-                onChange={(e) => {
-                  setLookupState("idle");
-                  setForm((f) => ({ ...f, admission_no: e.target.value, student_id: null, student_name: "" }));
-                }}
-                onKeyDown={(e) => e.key === "Enter" && lookupStudent()}
-              />
-              <Button variant="outline" size="sm" onClick={lookupStudent} disabled={lookupState === "loading"}>
-                {lookupState === "loading" ? "…" : "Find"}
-              </Button>
-            </div>
-            {lookupState === "found" && <p className="text-xs text-green-600 mt-1">✓ {form.student_name}</p>}
-            {lookupState === "error"  && <p className="text-xs text-red-600 mt-1">Student not found</p>}
+          <Field label="Filter by Class">
+            <select
+              className={INPUT}
+              value={classId}
+              onChange={(e) => setClassId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">All Classes</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Student *">
+            <select
+              className={INPUT}
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value ? Number(e.target.value) : "")}
+              disabled={loadingStudents}
+            >
+              <option value="">{loadingStudents ? "Loading…" : `Select student (${students.length})`}</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.first_name} {s.last_name} — {s.admission_no}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Due Date *">
-            <input type="date" className={INPUT} value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} />
+            <input
+              type="date"
+              className={INPUT}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
           </Field>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Checkout"}</Button>
+          <Button variant="primary" onClick={submit} disabled={saving || !studentId}>
+            {saving ? "Saving…" : "Checkout"}
+          </Button>
         </div>
       </div>
     </div>
@@ -178,7 +201,12 @@ export default function LibraryPage() {
   useEffect(() => { if (tab === "books") loadBooks(); else loadLoans(); }, [tab, loadBooks, loadLoans]);
 
   const handleReturn = async (id: number) => {
-    await returnBook(id).catch(() => {});
+    try {
+      await returnBook(id);
+    } catch {
+      // silently ignore — loan refresh below will show current state
+    }
+    loansLoaded.current = false;
     loadLoans();
   };
 
@@ -188,7 +216,7 @@ export default function LibraryPage() {
   ];
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Library</h1>
@@ -226,7 +254,7 @@ export default function LibraryPage() {
             </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                   <th className="px-4 py-3">Title</th>
@@ -262,14 +290,14 @@ export default function LibraryPage() {
                   ))
                 }
               </tbody>
-            </table>
+            </table></div>
           </div>
         </>
       )}
 
       {tab === "loans" && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="table-scroll"><table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-3">Book</th>
@@ -286,7 +314,8 @@ export default function LibraryPage() {
                 : loans.length === 0
                 ? <tr><td colSpan={6} className="py-16"><EmptyState icon={BookOpen} title="No active loans" /></td></tr>
                 : loans.map((l) => {
-                  const overdue = !l.returned_at && new Date(l.due_date) < new Date();
+                  const returned = l.status === "returned";
+                  const overdue  = !returned && new Date(l.due_date) < new Date();
                   return (
                     <tr key={l.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-gray-900">{l.book_title}</td>
@@ -297,7 +326,7 @@ export default function LibraryPage() {
                       <td className="px-4 py-3 text-gray-500">{l.issue_date?.slice(0, 10)}</td>
                       <td className="px-4 py-3 text-gray-500">{l.due_date}</td>
                       <td className="px-4 py-3">
-                        {l.returned_at
+                        {returned
                           ? <Badge variant="green">Returned</Badge>
                           : overdue
                           ? <Badge variant="red">Overdue</Badge>
@@ -305,7 +334,7 @@ export default function LibraryPage() {
                         }
                       </td>
                       <td className="px-4 py-3">
-                        {!l.returned_at && (
+                        {!returned && (
                           <Button variant="outline" size="sm" icon={<RotateCcw size={13} />} onClick={() => handleReturn(l.id)}>
                             Return
                           </Button>
@@ -316,7 +345,7 @@ export default function LibraryPage() {
                 })
               }
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 

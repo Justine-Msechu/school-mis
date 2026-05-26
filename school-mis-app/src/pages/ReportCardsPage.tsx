@@ -94,7 +94,7 @@ export default function ReportCardsPage() {
          <strong>Rank:</strong> #${card.class_rank ?? "—"} &nbsp;|&nbsp;
          <strong>Overall:</strong> ${card.overall_pct != null ? card.overall_pct.toFixed(1) + "%" : "—"} — Grade ${card.overall_grade ?? "—"}
        </p>
-       <table>
+       <div className="table-scroll"><table>
          <thead>
            <tr>
              <th>Subject</th>
@@ -104,7 +104,7 @@ export default function ReportCardsPage() {
            </tr>
          </thead>
          <tbody>${subjectRows}</tbody>
-       </table>`,
+       </table></div>`,
     );
   };
 
@@ -209,7 +209,7 @@ export default function ReportCardsPage() {
               </div>
             </div>
             {selected.subjects && selected.subjects.length > 0 && (
-              <table className="w-full text-sm border-collapse">
+              <div className="table-scroll"><table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="text-left py-2 text-xs font-semibold text-gray-500">Subject</th>
@@ -230,7 +230,7 @@ export default function ReportCardsPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </div>
         )}

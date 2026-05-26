@@ -10,8 +10,10 @@ import SkeletonRow from "@/components/ui/SkeletonRow";
 import { useAuthStore } from "@/stores/authStore";
 import MyClassTab from "@/components/reports/MyClassTab";
 import MySubjectTab from "@/components/reports/MySubjectTab";
+import AccountingTab from "@/components/reports/AccountingTab";
+import InventoryTab from "@/components/reports/InventoryTab";
 
-type Tab = "overview" | "attendance" | "grades" | "my-class" | "my-subject";
+type Tab = "overview" | "attendance" | "grades" | "my-class" | "my-subject" | "accounting" | "inventory";
 
 const fmt = (n: number) => `TZS ${(n ?? 0).toLocaleString()}`;
 
@@ -43,19 +45,25 @@ export default function ReportsPage() {
     }
   }, [tab, examId]);
 
-  const showMyClass   = can("report_cards.view") && can("attendance.view");
-  const showMySubject = can("grades.view") && can("grades.write");
+  const showAttendance   = can("attendance.view");
+  const showGrades       = can("grades.view");
+  const showMyClass      = can("report_cards.view") && can("attendance.view");
+  const showMySubject    = can("grades.view") && can("grades.write");
+  const showAccounting   = can("finance.view");
+  const showInventory    = can("inventory.view");
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview",    label: "Overview" },
-    { key: "attendance",  label: "Attendance" },
-    { key: "grades",      label: "Grade Summary" },
-    ...(showMyClass   ? [{ key: "my-class"   as Tab, label: "My Class" }]   : []),
-    ...(showMySubject ? [{ key: "my-subject" as Tab, label: "My Subject" }] : []),
+    ...(showAttendance   ? [{ key: "attendance"  as Tab, label: "Attendance" }]   : []),
+    ...(showGrades       ? [{ key: "grades"      as Tab, label: "Grade Summary" }] : []),
+    ...(showMyClass      ? [{ key: "my-class"    as Tab, label: "My Class" }]     : []),
+    ...(showMySubject    ? [{ key: "my-subject"  as Tab, label: "My Subject" }]   : []),
+    ...(showAccounting   ? [{ key: "accounting"  as Tab, label: "Accounting" }]   : []),
+    ...(showInventory    ? [{ key: "inventory"   as Tab, label: "Inventory" }]    : []),
   ];
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Reports</h1>
@@ -107,7 +115,7 @@ export default function ReportsPage() {
 
       {tab === "attendance" && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="table-scroll"><table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-3">Student</th>
@@ -142,7 +150,7 @@ export default function ReportsPage() {
                 ))
               }
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
@@ -157,7 +165,7 @@ export default function ReportsPage() {
             />
           </div>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                   <th className="px-4 py-3">Class</th>
@@ -191,13 +199,15 @@ export default function ReportsPage() {
                   ))
                 }
               </tbody>
-            </table>
+            </table></div>
           </div>
         </>
       )}
 
-      {tab === "my-class"   && <MyClassTab />}
-      {tab === "my-subject" && <MySubjectTab />}
+      {tab === "my-class"    && <MyClassTab />}
+      {tab === "my-subject"  && <MySubjectTab />}
+      {tab === "accounting"  && <AccountingTab />}
+      {tab === "inventory"   && <InventoryTab />}
     </div>
   );
 }

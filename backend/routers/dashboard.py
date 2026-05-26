@@ -118,6 +118,17 @@ def get_stats(user: Usr):
         except Exception:
             result["health_visits_today"] = 0
 
+    # ── Inventory ─────────────────────────────────────────────────────────────
+    if can("inventory.view"):
+        try:
+            result["inventory_items"]    = _n(fetch_one("SELECT COUNT(*) as n FROM inventory_items WHERE is_active=1"))
+            result["inventory_low_stock"] = _n(fetch_one("SELECT COUNT(*) as n FROM inventory_items WHERE is_active=1 AND stock_qty <= reorder_qty"))
+            result["inventory_requests"]  = _n(fetch_one("SELECT COUNT(*) as n FROM inventory_requests WHERE status='pending'"))
+            sv = fetch_one("SELECT COALESCE(SUM(stock_qty * unit_price),0) as n FROM inventory_items WHERE is_active=1")
+            result["inventory_value"] = int(dict(sv)["n"]) if sv else 0
+        except Exception:
+            result["inventory_items"] = 0
+
     # ── Audit / Recent Activity ───────────────────────────────────────────────
     if can("audit.view"):
         try:

@@ -188,7 +188,7 @@ export default function TimetablePage() {
 
       {classId && version ? (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-auto">
-          <table className="w-full text-sm">
+          <div className="table-scroll"><table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">Period</th>
@@ -235,7 +235,7 @@ export default function TimetablePage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       ) : (
         <div className="flex items-center justify-center h-64 bg-white rounded-2xl border border-gray-100 text-gray-400">

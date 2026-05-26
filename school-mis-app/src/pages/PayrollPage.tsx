@@ -292,7 +292,7 @@ function HistoryModal({ staff, onClose }: { staff: StaffSalary; onClose: () => v
           ) : history.length === 0 ? (
             <div className="p-8 text-center text-gray-400">No payroll history found.</div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 border-b">
                 <tr>
                   <th className="text-left p-3 pl-4 font-medium text-gray-600">Period</th>
@@ -319,7 +319,7 @@ function HistoryModal({ staff, onClose }: { staff: StaffSalary; onClose: () => v
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>
@@ -389,7 +389,7 @@ function PayslipModal({ item, runLabel, onClose }: {
             )}
           </div>
 
-          <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+          <div className="table-scroll"><table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
             <tbody>
               <tr className="earn section-head">
                 <td colSpan={2} className="p-2 pl-3 text-xs font-semibold text-green-700 uppercase tracking-wide bg-green-50">
@@ -446,7 +446,7 @@ function PayslipModal({ item, runLabel, onClose }: {
                 </td>
               </tr>
             </tbody>
-          </table>
+          </table></div>
 
           <div className="sig mt-12 flex justify-between">
             <div className="sig-line text-center">
@@ -512,7 +512,7 @@ function printRegister(items: PayrollItem[], run: PayrollRun) {
     </style></head><body>
     <h1>PAYROLL REGISTER</h1>
     <p class="sub">${run.label} &nbsp;|&nbsp; ${items.length} employees &nbsp;|&nbsp; Status: ${run.status.toUpperCase()}</p>
-    <table>
+    <div className="table-scroll"><table>
       <thead><tr>
         <th>#</th><th>Emp No</th><th>Name</th>
         <th>Gross Pay</th><th>NSSF Emp</th><th>NSSF Er</th>
@@ -531,7 +531,7 @@ function printRegister(items: PayrollItem[], run: PayrollRun) {
           <td></td>
         </tr>
       </tbody>
-    </table>
+    </table></div>
     <div class="sig">
       <div class="sig-line"><br/><br/>Prepared by</div>
       <div class="sig-line"><br/><br/>Checked by</div>
@@ -770,7 +770,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
               No payslips yet. Click "Compute Payroll" to generate.
             </div>
           ) : subTab === "payslips" ? (
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 border-b">
                 <tr>
                   <th className="text-left p-2 pl-4 font-medium text-gray-600">Employee</th>
@@ -815,7 +815,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
 
           ) : subTab === "nssf" ? (
             <div>
@@ -825,7 +825,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
                   <Download size={14} /> Export CSV
                 </button>
               </div>
-              <table className="w-full text-sm">
+              <div className="table-scroll"><table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-3 pl-4 font-medium text-gray-600">#</th>
@@ -860,7 +860,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
                     <td className="text-right p-3 pr-4 font-mono">{fmt(totalNssfe + totalNssfer)}</td>
                   </tr>
                 </tbody>
-              </table>
+              </table></div>
             </div>
 
           ) : subTab === "paye" ? (
@@ -871,7 +871,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
                   <Download size={14} /> Export CSV
                 </button>
               </div>
-              <table className="w-full text-sm">
+              <div className="table-scroll"><table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-3 pl-4 font-medium text-gray-600">#</th>
@@ -904,7 +904,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
                     <td className="text-right p-3 pr-4 font-mono text-red-600">{fmt(totalPaye)}</td>
                   </tr>
                 </tbody>
-              </table>
+              </table></div>
             </div>
 
           ) : subTab === "bank" ? (
@@ -919,7 +919,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
                   <Download size={14} /> Export CSV
                 </button>
               </div>
-              <table className="w-full text-sm">
+              <div className="table-scroll"><table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-3 pl-4 font-medium text-gray-600">#</th>
@@ -942,7 +942,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
                     <td className="text-right p-3 pr-4 font-mono text-blue-700">{fmt(totalNet)}</td>
                   </tr>
                 </tbody>
-              </table>
+              </table></div>
             </div>
           ) : null}
         </div>
@@ -1034,7 +1034,7 @@ function YTDTab() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="table-scroll"><table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left p-3 pl-4 font-medium text-gray-600">Employee</th>
@@ -1078,7 +1078,7 @@ function YTDTab() {
                 <td className="text-right p-3 pr-4 font-mono text-blue-700">{fmt(tNet)}</td>
               </tr>
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
     </div>
@@ -1272,7 +1272,7 @@ export default function PayrollPage() {
               <div className="text-center text-gray-400 py-12">Loading…</div>
             ) : (
               <div className="bg-white rounded-xl border overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="table-scroll"><table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
                       <th className="text-left p-3 pl-4 font-medium text-gray-600">Employee</th>
@@ -1339,7 +1339,7 @@ export default function PayrollPage() {
                       </tr>
                     )}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             )}
           </div>

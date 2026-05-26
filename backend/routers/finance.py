@@ -10,13 +10,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.deps import require_auth
+from backend.deps import require_auth, rate_limit
 from backend.core.db import get_db
 from backend.core.security import require_permission
 from backend.core.exceptions import AppError
 from backend.services.finance_service import FinanceService
 
-router = APIRouter(tags=["finance"])
+from fastapi import Depends
+router = APIRouter(tags=["finance"], dependencies=[Depends(rate_limit(max_calls=120, window_secs=60, scope="finance"))])
 Usr = Annotated[dict, Depends(require_auth)]
 
 

@@ -15,6 +15,12 @@ export interface Student {
   address: string | null;
   notes: string | null;
   student_category: string;
+  student_type?: string;
+  sponsorship_type?: string;
+  sponsor_ngo_id?: number | null;
+  sponsor_name?: string | null;
+  sponsor_phone?: string | null;
+  sponsor_relationship?: string | null;
   is_active: boolean;
 }
 

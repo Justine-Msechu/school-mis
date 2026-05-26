@@ -238,7 +238,7 @@ export default function MySubjectTab() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead>
                 <tr className="bg-amber-50 text-left text-xs font-medium text-amber-800 uppercase tracking-wide">
                   <th className="px-4 py-2.5">Student</th>
@@ -259,7 +259,7 @@ export default function MySubjectTab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         )}
       </Card>

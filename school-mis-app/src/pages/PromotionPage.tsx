@@ -63,7 +63,7 @@ export default function PromotionPage() {
   const notPromoted   = students.filter((s) => !s.promoted);
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Promotion</h1>
         <p className="text-sm text-gray-500 mt-0.5">Promote students to the next class</p>
@@ -87,7 +87,7 @@ export default function PromotionPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3 w-8"></th>
@@ -131,7 +131,7 @@ export default function PromotionPage() {
               ))
             }
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

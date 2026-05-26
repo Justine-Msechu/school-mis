@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Users, GraduationCap, BookOpen, DollarSign,
   Calendar, Activity, Heart, AlertCircle,
+  Package, ClipboardList, AlertTriangle, TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { getDashboardStats, type DashboardStats } from "@/api/dashboard";
@@ -33,21 +34,25 @@ export default function DashboardPage() {
 
   // Which KPI cards to show — each gated by permission
   const kpiCards = [
-    can("student.view")   && { title: "Total Students",      value: val(stats?.students),              icon: Users,         color: "#7C3AED" },
-    can("teachers.view")  && { title: "Teachers",             value: val(stats?.teachers),              icon: GraduationCap, color: "#0891B2" },
-    can("classes.view")   && { title: "Classes",              value: val(stats?.classes),               icon: BookOpen,      color: "#059669" },
-    can("finance.view")   && { title: "Pending Fees (TZS)",   value: fmtTzs(stats?.pending_fees),       icon: DollarSign,    color: "#D97706" },
-    can("welfare.view")   && { title: "Active Welfare Cases", value: val(stats?.welfare_cases),         icon: AlertCircle,   color: "#DC2626" },
-    can("health.view")    && { title: "Health Visits Today",  value: val(stats?.health_visits_today),   icon: Heart,         color: "#DB2777" },
+    can("student.view")      && { title: "Total Students",      value: val(stats?.students),             icon: Users,          color: "#7C3AED" },
+    can("teachers.view")     && { title: "Teachers",             value: val(stats?.teachers),             icon: GraduationCap,  color: "#0891B2" },
+    can("classes.view")      && { title: "Classes",              value: val(stats?.classes),              icon: BookOpen,       color: "#059669" },
+    can("finance.view")      && { title: "Pending Fees (TZS)",   value: fmtTzs(stats?.pending_fees),      icon: DollarSign,     color: "#D97706" },
+    can("welfare.view")      && { title: "Active Welfare Cases", value: val(stats?.welfare_cases),        icon: AlertCircle,    color: "#DC2626" },
+    can("health.view")       && { title: "Health Visits Today",  value: val(stats?.health_visits_today),  icon: Heart,          color: "#DB2777" },
+    can("inventory.view")    && { title: "Total Stock Items",    value: val(stats?.inventory_items),      icon: Package,        color: "#7C3AED" },
+    can("inventory.view")    && { title: "Pending Requests",     value: val(stats?.inventory_requests),   icon: ClipboardList,  color: "#D97706" },
+    can("inventory.view")    && { title: "Low Stock Alerts",     value: val(stats?.inventory_low_stock),  icon: AlertTriangle,  color: "#DC2626" },
+    can("inventory.view")    && { title: "Stock Value (TZS)",    value: fmtTzs(stats?.inventory_value),   icon: TrendingUp,     color: "#059669" },
   ].filter(Boolean) as { title: string; value: string | number; icon: LucideIcon; color: string }[];
 
   const showAttendance = can("attendance.view");
   const showActivity   = can("audit.view");
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 md:mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
           {greeting()}, {user?.full_name.split(" ")[0]} 👋
         </h1>
@@ -66,7 +71,7 @@ export default function DashboardPage() {
 
       {/* KPI cards — only what the user can see */}
       {kpiCards.length > 0 && (
-        <div className={`grid grid-cols-2 lg:grid-cols-${Math.min(kpiCards.length, 4)} gap-4 mb-8`}>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
           {kpiCards.map((card) => (
             <StatCard
               key={card.title}

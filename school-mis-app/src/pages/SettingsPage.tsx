@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star } from "lucide-react";
+import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star, CreditCard, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { getUsers, getRoles, createUser, updateUser, toggleUserActive, getConfig, setConfig, getAcademicYears, createAcademicYear, setCurrentYear, type AppUser, type Role, type AcademicYear } from "@/api/settings";
 import { getTeachers, type Teacher } from "@/api/teachers";
+import { getSubscriptionStatus, activateSubscription, type SubscriptionInfo } from "@/api/subscription";
 import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
 
-type Tab = "users" | "school" | "years";
+type Tab = "users" | "school" | "years" | "subscription";
 
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -254,7 +255,7 @@ function AcademicYearsTab() {
         <Button variant="primary" icon={<Plus size={15} />} onClick={() => setDialog(true)}>Add Year</Button>
       </div>
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Label</th>
@@ -291,7 +292,7 @@ function AcademicYearsTab() {
               ))
             }
           </tbody>
-        </table>
+        </table></div>
       </div>
       {dialog && (
         <AcademicYearDialog onSave={() => { setDialog(false); load(); }} onClose={() => setDialog(false)} />
@@ -301,6 +302,178 @@ function AcademicYearsTab() {
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────
+
+// ── Subscription tab ────────────────────────────────────────────────────────
+
+const PLAN_FEATURES: Record<string, string[]> = {
+  trial:    ["Up to 50 users", "All modules included", "30-day free trial", "Email support"],
+  standard: ["Up to 150 users", "All modules included", "Priority support", "Data export"],
+  premium:  ["Up to 500 users", "All modules included", "Dedicated support", "Custom branding", "API access"],
+  lifetime: ["Unlimited users", "All modules included", "Lifetime updates", "Priority support", "Custom branding"],
+};
+
+function SubscriptionTab() {
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === "admin";
+  const [info, setInfo]       = useState<SubscriptionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activating, setActivating] = useState(false);
+  const [newPlan, setNewPlan] = useState("standard");
+  const [trialDays, setTrialDays] = useState("30");
+  const [saved, setSaved]     = useState(false);
+  const [error, setError]     = useState("");
+
+  useEffect(() => {
+    getSubscriptionStatus().then(setInfo).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const activate = async () => {
+    setActivating(true); setError(""); setSaved(false);
+    try {
+      let trialEnds: string | undefined;
+      if (newPlan === "trial") {
+        const d = new Date();
+        d.setDate(d.getDate() + parseInt(trialDays || "30"));
+        trialEnds = d.toISOString().slice(0, 10);
+      }
+      await activateSubscription(newPlan, undefined, trialEnds);
+      const fresh = await getSubscriptionStatus();
+      setInfo(fresh);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? "Failed to update subscription.");
+    } finally { setActivating(false); }
+  };
+
+  if (loading) return <div className="py-8 text-center text-sm text-gray-400">Loading…</div>;
+  if (!info) return null;
+
+  const statusIcon =
+    info.status === "expired"   ? <AlertTriangle size={18} className="text-red-500" /> :
+    info.status === "trial"     ? <Clock size={18} className="text-amber-500" /> :
+    <CheckCircle size={18} className="text-green-500" />;
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      {/* Current plan card */}
+      <div className="rounded-xl border-2 p-5" style={{ borderColor: info.plan_color + "60", background: info.plan_color + "08" }}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              {statusIcon}
+              <span className="text-sm font-semibold text-gray-700">Current Plan</span>
+            </div>
+            <p className="text-2xl font-bold" style={{ color: info.plan_color }}>{info.plan_label}</p>
+            {info.school_name && <p className="text-sm text-gray-500 mt-0.5">{info.school_name}</p>}
+          </div>
+          <div className="text-right">
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              info.status === "expired" ? "bg-red-100 text-red-700" :
+              info.status === "trial"   ? "bg-amber-100 text-amber-700" :
+              "bg-green-100 text-green-700"
+            }`}>
+              {info.status === "trial" ? `Trial${info.days_left !== null ? ` — ${info.days_left}d left` : ""}` :
+               info.status === "expired" ? "Expired" : "Active"}
+            </span>
+            {info.trial_ends && (
+              <p className="text-xs text-gray-400 mt-1">
+                {info.status === "expired" ? "Expired" : "Expires"}: {info.trial_ends}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">Max {info.max_users} users</p>
+          </div>
+        </div>
+        {info.warning && (
+          <div className="mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+            {info.warning}
+          </div>
+        )}
+        {/* Features */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(PLAN_FEATURES[info.plan] ?? []).map((f) => (
+            <span key={f} className="flex items-center gap-1 text-xs text-gray-600 bg-white border border-gray-200 px-2.5 py-1 rounded-full">
+              <CheckCircle size={11} className="text-green-500" /> {f}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Admin: upgrade / change plan */}
+      {isAdmin && (
+        <div className="rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <CreditCard size={16} className="text-gray-400" /> Change Subscription Plan
+          </h3>
+          {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {(["trial","standard","premium","lifetime"] as const).map((p) => (
+              <button key={p} onClick={() => setNewPlan(p)}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${newPlan === p ? "border-violet-500 bg-violet-50" : "border-gray-200 hover:border-gray-300"}`}>
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">{p}</p>
+                <p className="text-sm font-semibold text-gray-900 mt-0.5 capitalize">
+                  {p === "trial" ? "Free Trial" : p === "lifetime" ? "Lifetime" : p.charAt(0).toUpperCase() + p.slice(1)}
+                </p>
+              </button>
+            ))}
+          </div>
+          {newPlan === "trial" && (
+            <div className="mb-4 flex items-center gap-3">
+              <label className="text-xs font-medium text-gray-600 whitespace-nowrap">Trial duration (days)</label>
+              <input type="number" min="1" max="365" value={trialDays} onChange={(e) => setTrialDays(e.target.value)}
+                className="w-20 h-8 px-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          )}
+          <Button variant="primary" icon={<Save size={14} />} onClick={activate} disabled={activating}>
+            {saved ? "Plan Updated!" : activating ? "Updating…" : "Apply Plan"}
+          </Button>
+          <p className="text-xs text-gray-400 mt-3">
+            Changes take effect immediately. For billing questions contact your system vendor.
+          </p>
+        </div>
+      )}
+
+      {/* Plan comparison table */}
+      <div className="rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-700">Plan Comparison</h3>
+        </div>
+        <div className="table-scroll">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-gray-500 font-semibold">
+              <th className="px-4 py-2.5 text-left">Feature</th>
+              {["Trial","Standard","Premium","Lifetime"].map((p) => (
+                <th key={p} className="px-4 py-2.5 text-center">{p}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {[
+              ["Max users",       "50", "150", "500", "∞"],
+              ["All modules",     "✓", "✓", "✓", "✓"],
+              ["Email support",   "✓", "✓", "✓", "✓"],
+              ["Priority support","—", "✓", "✓", "✓"],
+              ["Custom branding", "—", "—", "✓", "✓"],
+              ["API access",      "—", "—", "✓", "✓"],
+              ["Duration",        "30 days","Monthly","Monthly","Forever"],
+            ].map(([feat, ...vals]) => (
+              <tr key={feat} className="hover:bg-gray-50">
+                <td className="px-4 py-2.5 text-gray-700 font-medium">{feat}</td>
+                {vals.map((v, i) => (
+                  <td key={i} className={`px-4 py-2.5 text-center ${v === "✓" ? "text-green-600" : v === "—" ? "text-gray-300" : "text-gray-700"}`}>
+                    {v}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { can } = useAuthStore();
@@ -347,13 +520,14 @@ export default function SettingsPage() {
   const roleMap = Object.fromEntries(roles.map((r) => [r.key, r]));
 
   const TABS = [
-    canUsers && { key: "users"  as Tab, label: canAllUsers ? "Users" : "Teacher Accounts" },
-    canSchool && { key: "school" as Tab, label: "School Info" },
-    canYears  && { key: "years"  as Tab, label: "Academic Years" },
+    canUsers  && { key: "users"        as Tab, label: canAllUsers ? "Users" : "Teacher Accounts" },
+    canSchool && { key: "school"       as Tab, label: "School Info" },
+    canYears  && { key: "years"        as Tab, label: "Academic Years" },
+    canSchool && { key: "subscription" as Tab, label: "Subscription" },
   ].filter(Boolean) as Array<{ key: Tab; label: string }>;
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Settings</h1>
@@ -380,7 +554,7 @@ export default function SettingsPage() {
 
       {tab === "users" && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="table-scroll"><table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-3">Name</th>
@@ -425,12 +599,13 @@ export default function SettingsPage() {
                 })
               }
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
-      {tab === "school" && <SchoolInfoTab />}
-      {tab === "years"  && <AcademicYearsTab />}
+      {tab === "school"        && <SchoolInfoTab />}
+      {tab === "years"         && <AcademicYearsTab />}
+      {tab === "subscription"  && <SubscriptionTab />}
 
       {editUser !== null && (
         <UserForm

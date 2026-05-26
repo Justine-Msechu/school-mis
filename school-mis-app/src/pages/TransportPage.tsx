@@ -13,7 +13,7 @@ import EmptyState from "@/components/ui/EmptyState";
 const fmt = (n: number) => `TZS ${n.toLocaleString()}`;
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-// ─── class → student picker ───────────────────────────────────────────────────
+// ─── types ────────────────────────────────────────────────────────────────────
 
 interface ClassItem { id: number; name: string; grade_level: number }
 interface StudentHit {
@@ -22,73 +22,6 @@ interface StudentHit {
   last_name: string;
   admission_no: string;
   class_name: string | null;
-}
-
-function ClassStudentPicker({
-  value, onChange,
-}: {
-  value: StudentHit | null;
-  onChange: (s: StudentHit | null) => void;
-}) {
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [classId, setClassId] = useState<number | "">("");
-  const [students, setStudents] = useState<StudentHit[]>([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
-
-  useEffect(() => {
-    api.get("/grades/classes").then(({ data }) => setClasses(data)).catch(() => {});
-  }, []);
-
-  const handleClassChange = (id: number | "") => {
-    setClassId(id);
-    setStudents([]);
-    onChange(null);
-    if (!id) return;
-    setLoadingStudents(true);
-    api.get("/students", { params: { class_id: id, limit: 200 } })
-      .then(({ data }) => setStudents(data.students ?? data ?? []))
-      .catch(() => setStudents([]))
-      .finally(() => setLoadingStudents(false));
-  };
-
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <div>
-        <label className="text-xs font-medium text-gray-600 mb-1 block">Class *</label>
-        <select
-          value={classId}
-          onChange={(e) => handleClassChange(e.target.value ? Number(e.target.value) : "")}
-          className={INPUT}
-        >
-          <option value="">Select class…</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="text-xs font-medium text-gray-600 mb-1 block">Student *</label>
-        <select
-          value={value?.id ?? ""}
-          onChange={(e) => {
-            const s = students.find((s) => s.id === Number(e.target.value)) ?? null;
-            onChange(s);
-          }}
-          disabled={!classId || loadingStudents}
-          className={INPUT}
-        >
-          <option value="">
-            {!classId ? "Select class first" : loadingStudents ? "Loading…" : students.length === 0 ? "No students" : "Select student…"}
-          </option>
-          {students.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.first_name} {s.last_name} ({s.admission_no})
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
-  );
 }
 
 // ─── route dialog ─────────────────────────────────────────────────────────────
@@ -178,46 +111,90 @@ function RouteDialog({ initial, onSave, onClose }: {
 
 function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }) {
   const { can } = useAuthStore();
-  const [students, setStudents] = useState<any[]>([]);
-  const [years, setYears] = useState<AcademicYear[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<StudentHit | null>(null);
-  const [pickupPoint, setPickupPoint] = useState("");
-  const [yearId, setYearId] = useState<number | "">("");
-  const [assigning, setAssigning] = useState(false);
-  const [assignErr, setAssignErr] = useState("");
+
+  // route student list
+  const [routeStudents, setRouteStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState<number | null>(null);
 
-  const loadStudents = () => {
+  // assign form visibility
+  const [showForm, setShowForm] = useState(false);
+
+  // form state — all owned here, no sub-component
+  const [allClasses, setAllClasses]           = useState<ClassItem[]>([]);
+  const [classId, setClassId]                 = useState<number | "">("");
+  const [classStudents, setClassStudents]     = useState<StudentHit[]>([]);
+  const [loadingCS, setLoadingCS]             = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<number | "">("");
+  const [years, setYears]                     = useState<AcademicYear[]>([]);
+  const [yearId, setYearId]                   = useState<number | "">("");
+  const [term, setTerm]                       = useState<number>(1);
+  const [pickupPoint, setPickupPoint]         = useState("");
+  const [assigning, setAssigning]             = useState(false);
+  const [assignErr, setAssignErr]             = useState("");
+
+  const loadRouteStudents = () => {
     setLoading(true);
-    getRouteStudents(route.id).then(setStudents).catch(() => {}).finally(() => setLoading(false));
+    getRouteStudents(route.id)
+      .then((data) => setRouteStudents(Array.isArray(data) ? data : []))
+      .catch(() => setRouteStudents([]))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    loadStudents();
-    getAcademicYears().then((yrs) => {
-      setYears(yrs);
-      const current = yrs.find((y) => y.is_current);
-      if (current) setYearId(current.id);
-    });
+    loadRouteStudents();
+    getAcademicYears()
+      .then((yrs) => {
+        setYears(yrs);
+        const cur = yrs.find((y) => y.is_current);
+        if (cur) setYearId(cur.id);
+      })
+      .catch(() => {});
+    api.get("/grades/classes")
+      .then(({ data }) => setAllClasses(Array.isArray(data) ? data : []))
+      .catch(() => {});
   }, [route.id]);
 
+  // when user picks a class, load that class's students
+  const handleClassChange = (id: number | "") => {
+    setClassId(id);
+    setClassStudents([]);
+    setSelectedStudentId("");
+    if (!id) return;
+    setLoadingCS(true);
+    api.get("/students", { params: { class_id: id, per_page: 100 } })
+      .then(({ data }) => {
+        const arr: StudentHit[] = Array.isArray(data) ? data : (data.items ?? []);
+        setClassStudents(arr);
+      })
+      .catch(() => setClassStudents([]))
+      .finally(() => setLoadingCS(false));
+  };
+
+  const resetForm = () => {
+    setClassId("");
+    setClassStudents([]);
+    setSelectedStudentId("");
+    setPickupPoint("");
+    setTerm(1);
+    setAssignErr("");
+    setShowForm(false);
+  };
+
   const handleAssign = async () => {
-    if (!selectedStudent) { setAssignErr("Select a student."); return; }
-    if (!yearId)          { setAssignErr("Select an academic year."); return; }
+    if (!selectedStudentId) { setAssignErr("Select a student."); return; }
+    if (!yearId)            { setAssignErr("Select an academic year."); return; }
     setAssigning(true); setAssignErr("");
     try {
       await assignStudent({
-        student_id:       selectedStudent.id,
+        student_id:       Number(selectedStudentId),
         route_id:         route.id,
         academic_year_id: Number(yearId),
+        term,
         pickup_point:     pickupPoint.trim(),
       });
-      setShowForm(false);
-      setSelectedStudent(null);
-      setPickupPoint("");
-      loadStudents();
+      resetForm();
+      loadRouteStudents();
     } catch (e: any) {
       setAssignErr(e?.response?.data?.detail ?? "Failed to assign student.");
     } finally { setAssigning(false); }
@@ -226,7 +203,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
   const handleRemove = async (subId: number) => {
     if (!confirm("Remove this student from the route?")) return;
     setRemoving(subId);
-    try { await unassignStudent(subId); loadStudents(); }
+    try { await unassignStudent(subId); loadRouteStudents(); }
     catch (e: any) { alert(e?.response?.data?.detail ?? "Failed to remove."); }
     finally { setRemoving(null); }
   };
@@ -239,7 +216,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
           <div>
             <h2 className="text-lg font-bold text-gray-900">{route.name}</h2>
             <p className="text-xs text-gray-400">
-              {students.length} student{students.length !== 1 ? "s" : ""} assigned
+              {routeStudents.length} student{routeStudents.length !== 1 ? "s" : ""} assigned
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -262,8 +239,40 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
           <div className="p-4 bg-violet-50 border-b shrink-0">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Assign a Student</h3>
             <div className="space-y-3">
-              <ClassStudentPicker value={selectedStudent} onChange={setSelectedStudent} />
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Class *</label>
+                  <select
+                    value={classId}
+                    onChange={(e) => handleClassChange(e.target.value ? Number(e.target.value) : "")}
+                    className={INPUT}
+                  >
+                    <option value="">Select class…</option>
+                    {allClasses.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Student *</label>
+                  <select
+                    value={selectedStudentId}
+                    onChange={(e) => setSelectedStudentId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={!classId || loadingCS}
+                    className={INPUT}
+                  >
+                    <option value="">
+                      {!classId ? "Select class first" : loadingCS ? "Loading…" : classStudents.length === 0 ? "No students" : "Select student…"}
+                    </option>
+                    {classStudents.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.first_name} {s.last_name} ({s.admission_no})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Academic Year *</label>
                   <select
@@ -277,6 +286,14 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
                         {y.label}{y.is_current ? " (current)" : ""}
                       </option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Term *</label>
+                  <select value={term} onChange={(e) => setTerm(Number(e.target.value))} className={INPUT}>
+                    <option value={1}>Term 1</option>
+                    <option value={2}>Term 2</option>
+                    <option value={3}>Term 3</option>
                   </select>
                 </div>
                 <div>
@@ -300,7 +317,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
                 {assigning ? "Assigning…" : "Assign"}
               </button>
               <button
-                onClick={() => { setShowForm(false); setAssignErr(""); setSelectedStudent(null); setPickupPoint(""); }}
+                onClick={resetForm}
                 className="px-4 py-1.5 text-sm border rounded-lg hover:bg-white text-gray-600"
               >
                 Cancel
@@ -313,7 +330,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
         <div className="overflow-y-auto flex-1">
           {loading ? (
             <div className="py-10 text-center text-sm text-gray-400">Loading…</div>
-          ) : students.length === 0 ? (
+          ) : routeStudents.length === 0 ? (
             <div className="py-10 text-center">
               <Users size={32} className="mx-auto text-gray-200 mb-2" />
               <p className="text-sm text-gray-400">No students assigned yet.</p>
@@ -327,7 +344,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
               )}
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-medium text-gray-500 uppercase border-b border-gray-100 sticky top-0 bg-white">
                   <th className="px-5 py-3">Student</th>
@@ -336,7 +353,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {students.map((s: any) => (
+                {routeStudents.map((s: any) => (
                   <tr key={s.id} className="hover:bg-gray-50 group">
                     <td className="px-5 py-3">
                       <div className="font-medium text-gray-900">
@@ -366,7 +383,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>
@@ -391,7 +408,7 @@ export default function TransportPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Transport</h1>

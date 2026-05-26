@@ -2,9 +2,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
 from backend.deps import require_auth
 from backend.core.authz import compute_effective_permissions
+from backend.core.security import require_permission
 from database.db import fetch_all, fetch_one
 
-router = APIRouter(tags=["reports"])
+from backend.deps import rate_limit
+from fastapi import Depends
+router = APIRouter(tags=["reports"], dependencies=[Depends(rate_limit(max_calls=60, window_secs=60, scope="reports"))])
 Usr = Annotated[dict, Depends(require_auth)]
 
 
@@ -472,3 +475,202 @@ def my_class_missing_marks(user: Usr, exam_id: int = Query(None)):
         [class_id, *subject_ids, exam_id],
     )
     return [dict(r) for r in missing]
+
+
+# ── Accounting reports ────────────────────────────────────────────────────────
+
+@router.get("/accounting/fee-collection-by-class")
+def fee_collection_by_class(
+    user: Usr,
+    academic_year_id: int = Query(None),
+    term: int = Query(None),
+):
+    """Billed vs collected per class, for the bar chart."""
+    require_permission(user, "finance.view")
+    where = ["1=1"]
+    params: list = []
+    if academic_year_id:
+        where.append("sb.academic_year_id = ?"); params.append(academic_year_id)
+    if term:
+        where.append("sb.term = ?"); params.append(term)
+    rows = fetch_all(
+        f"""SELECT
+               COALESCE(c.name, 'Unassigned')    AS class_name,
+               COALESCE(SUM(sb.amount_due), 0)   AS billed,
+               COALESCE(SUM(sb.amount_paid), 0)  AS collected,
+               COALESCE(SUM(sb.amount_due - sb.amount_paid), 0) AS outstanding
+            FROM student_bills sb
+            JOIN students s ON s.id = sb.student_id
+            LEFT JOIN classes c ON c.id = s.class_id
+            WHERE {' AND '.join(where)}
+            GROUP BY s.class_id
+            ORDER BY c.name""",
+        params,
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/accounting/monthly-income")
+def monthly_income(user: Usr, year: int = Query(None)):
+    """Payment totals grouped by month, for the line/bar chart."""
+    require_permission(user, "finance.view")
+    params: list = []
+    year_filter = ""
+    if year:
+        year_filter = "WHERE strftime('%Y', p.payment_date) = ?"
+        params.append(str(year))
+    rows = fetch_all(
+        f"""SELECT
+               strftime('%Y-%m', p.payment_date) AS month,
+               COALESCE(SUM(p.amount), 0)        AS income
+            FROM payments p
+            {year_filter}
+            GROUP BY month
+            ORDER BY month""",
+        params,
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/accounting/expense-breakdown")
+def expense_breakdown(
+    user: Usr,
+    from_date: str = Query(None),
+    to_date:   str = Query(None),
+):
+    """Expenses grouped by category, for the pie chart."""
+    require_permission(user, "finance.view")
+    where = ["1=1"]
+    params: list = []
+    if from_date:
+        where.append("e.expense_date >= ?"); params.append(from_date)
+    if to_date:
+        where.append("e.expense_date <= ?"); params.append(to_date)
+    rows = fetch_all(
+        f"""SELECT
+               COALESCE(ec.name, e.category, 'Other') AS category,
+               COALESCE(SUM(e.amount), 0)             AS total
+            FROM expenses e
+            LEFT JOIN expense_categories ec ON ec.id = e.category_id
+            WHERE {' AND '.join(where)}
+            GROUP BY COALESCE(ec.name, e.category, 'Other')
+            ORDER BY total DESC""",
+        params,
+    )
+    return [dict(r) for r in rows]
+
+
+# ── Inventory reports ─────────────────────────────────────────────────────────
+
+@router.get("/inventory/overview")
+def inventory_overview(user: Usr):
+    """Summary stats for the storekeeper dashboard."""
+    from backend.deps import require_auth  # user already verified
+    total     = fetch_one("SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1")
+    low       = fetch_one("SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1 AND stock_qty <= reorder_qty")
+    value     = fetch_one("SELECT COALESCE(SUM(stock_qty * unit_price),0) AS v FROM inventory_items WHERE is_active=1")
+    pending   = fetch_one("SELECT COUNT(*) AS n FROM inventory_requests WHERE status='pending'")
+    today_in  = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='stock_in' AND DATE(created_at)=DATE('now')")
+    today_out = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='issued' AND DATE(created_at)=DATE('now')")
+    return {
+        "total_items":      dict(total)["n"]   if total   else 0,
+        "low_stock_count":  dict(low)["n"]     if low     else 0,
+        "stock_value":      dict(value)["v"]   if value   else 0,
+        "pending_requests": dict(pending)["n"] if pending else 0,
+        "today_stock_in":   dict(today_in)["n"]  if today_in  else 0,
+        "today_issued":     dict(today_out)["n"] if today_out else 0,
+    }
+
+
+@router.get("/inventory/by-category")
+def inventory_by_category(user: Usr):
+    """Items count and total value per main category."""
+    rows = fetch_all("""
+        SELECT
+            COALESCE(main_category, 'Uncategorized') AS category,
+            COUNT(*) AS item_count,
+            COALESCE(SUM(stock_qty), 0) AS total_qty,
+            COALESCE(SUM(stock_qty * unit_price), 0) AS total_value
+        FROM inventory_items
+        WHERE is_active = 1
+        GROUP BY COALESCE(main_category, 'Uncategorized')
+        ORDER BY total_value DESC
+    """)
+    return [dict(r) for r in rows]
+
+
+@router.get("/inventory/monthly-movements")
+def inventory_monthly_movements(user: Usr, months: int = Query(12)):
+    """Monthly stock_in vs issued quantities for the last N months."""
+    rows = fetch_all("""
+        SELECT
+            strftime('%Y-%m', created_at) AS month,
+            SUM(CASE WHEN type='stock_in' THEN qty ELSE 0 END)  AS received,
+            SUM(CASE WHEN type='issued'   THEN qty ELSE 0 END)  AS issued,
+            SUM(CASE WHEN type='adjusted' THEN ABS(qty) ELSE 0 END) AS adjusted
+        FROM inventory_transactions
+        WHERE created_at >= date('now', ? || ' months')
+        GROUP BY month
+        ORDER BY month
+    """, (f"-{months}",))
+    return [dict(r) for r in rows]
+
+
+@router.get("/inventory/type-distribution")
+def inventory_type_distribution(user: Usr):
+    """Consumable vs asset breakdown."""
+    rows = fetch_all("""
+        SELECT
+            COALESCE(item_type, 'consumable') AS item_type,
+            COUNT(*) AS count,
+            COALESCE(SUM(stock_qty * unit_price), 0) AS value
+        FROM inventory_items
+        WHERE is_active = 1
+        GROUP BY COALESCE(item_type, 'consumable')
+    """)
+    return [dict(r) for r in rows]
+
+
+@router.get("/inventory/low-stock-detail")
+def inventory_low_stock_detail(user: Usr):
+    """Low-stock items with gap to reorder level, for the report table."""
+    rows = fetch_all("""
+        SELECT id, name,
+               COALESCE(main_category,'') AS main_category,
+               COALESCE(location,'') AS location,
+               stock_qty AS quantity, reorder_qty, unit,
+               COALESCE(unit_price,0) AS unit_price,
+               (reorder_qty - stock_qty) AS shortage
+        FROM inventory_items
+        WHERE is_active=1 AND stock_qty <= reorder_qty
+        ORDER BY shortage DESC, name
+    """)
+    return [dict(r) for r in rows]
+
+
+@router.get("/accounting/income-vs-expense")
+def income_vs_expense(user: Usr, year: int = Query(None)):
+    """Monthly income vs expense for the combo chart."""
+    require_permission(user, "finance.view")
+    y = str(year) if year else None
+    income_rows = fetch_all(
+        "SELECT strftime('%Y-%m', payment_date) AS month, COALESCE(SUM(amount),0) AS income "
+        "FROM payments " +
+        ("WHERE strftime('%Y', payment_date)=? " if y else "") +
+        "GROUP BY month ORDER BY month",
+        [y] if y else [],
+    )
+    expense_rows = fetch_all(
+        "SELECT strftime('%Y-%m', expense_date) AS month, COALESCE(SUM(amount),0) AS expense "
+        "FROM expenses " +
+        ("WHERE strftime('%Y', expense_date)=? " if y else "") +
+        "GROUP BY month ORDER BY month",
+        [y] if y else [],
+    )
+    income_map  = {dict(r)["month"]: dict(r)["income"]  for r in income_rows}
+    expense_map = {dict(r)["month"]: dict(r)["expense"] for r in expense_rows}
+    months = sorted(set(income_map) | set(expense_map))
+    return [
+        {"month": m, "income": income_map.get(m, 0), "expense": expense_map.get(m, 0)}
+        for m in months
+    ]

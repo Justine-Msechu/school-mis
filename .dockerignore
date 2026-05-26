@@ -1,0 +1,13 @@
+school-mis-app/node_modules
+school-mis-app/dist
+venv
+__pycache__
+*.pyc
+*.pyo
+school_mis.db
+school_mis.db-shm
+school_mis.db-wal
+exports/
+uploads/
+*.db
+.git

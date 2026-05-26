@@ -18,8 +18,12 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# Path to the shared database file
-DB_PATH = Path(__file__).parent.parent.parent / "school_mis.db"
+# Path to the shared database file (overridable via env var for Docker)
+import os as _os
+DB_PATH = Path(_os.environ.get(
+    "SCHOOL_MIS_DB_PATH",
+    str(Path(__file__).parent.parent.parent / "school_mis.db"),
+))
 
 _local = threading.local()
 

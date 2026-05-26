@@ -118,7 +118,7 @@ function StudentsModal({ cls, onClose }: { cls: ClassRecord; onClose: () => void
           ) : students.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-400">No students enrolled</div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-medium text-gray-500 uppercase border-b border-gray-100">
                   <th className="pb-2">#</th>
@@ -137,7 +137,7 @@ function StudentsModal({ cls, onClose }: { cls: ClassRecord; onClose: () => void
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>
@@ -164,7 +164,7 @@ export default function ClassesPage() {
   }, [load]);
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Classes</h1>

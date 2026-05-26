@@ -6,7 +6,9 @@ from backend.deps import require_auth
 from backend.core.id_generator import next_admission_no
 from database.db import fetch_all, fetch_one, execute
 
-router = APIRouter(tags=["students"])
+from backend.deps import rate_limit
+from fastapi import Depends
+router = APIRouter(tags=["students"], dependencies=[Depends(rate_limit(max_calls=200, window_secs=60, scope="students"))])
 Usr = Annotated[dict, Depends(require_auth)]
 
 
@@ -110,8 +112,13 @@ class StudentPayload(BaseModel):
     parent_email:   str | None = None
     address:        str | None = None
     notes:          str | None = None
-    student_category: str = "regular"
-    student_type:     str = "Day"        # Day | Boarding
+    student_category:    str = "regular"  # background: regular|orphan|vulnerable|staff_child
+    student_type:        str = "Day"      # Day | Boarding
+    sponsorship_type:    str = "none"     # none | ngo | individual
+    sponsor_ngo_id:      int | None = None
+    sponsor_name:        str | None = None
+    sponsor_phone:       str | None = None
+    sponsor_relationship: str | None = None
 
 
 @router.post("")
@@ -124,11 +131,18 @@ def create_student(body: StudentPayload, user: Usr):
         """INSERT INTO students
            (first_name, last_name, admission_no, gender, class_id, date_of_birth,
             parent_name, parent_phone, parent_email, address, notes,
-            student_category, student_type, is_active)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
+            student_category, student_type,
+            sponsorship_type, sponsor_ngo_id, sponsor_name, sponsor_phone, sponsor_relationship,
+            is_active)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
         (body.first_name, body.last_name, adm_no, body.gender, body.class_id,
          body.date_of_birth, body.parent_name, body.parent_phone, body.parent_email,
-         body.address, body.notes, body.student_category, body.student_type),
+         body.address, body.notes, body.student_category, body.student_type,
+         body.sponsorship_type,
+         body.sponsor_ngo_id if body.sponsorship_type == "ngo" else None,
+         body.sponsor_name if body.sponsorship_type == "individual" else None,
+         body.sponsor_phone if body.sponsorship_type == "individual" else None,
+         body.sponsor_relationship if body.sponsorship_type == "individual" else None),
     )
     _sync_guardian(row_id, body.parent_name, body.parent_phone, body.parent_email)
     _audit(user["id"], "student_create", row_id, f"Created student {body.first_name} {body.last_name} ({adm_no})")
@@ -151,10 +165,18 @@ def update_student(student_id: int, body: StudentPayload, user: Usr):
     execute(
         """UPDATE students SET first_name=?, last_name=?, admission_no=?, gender=?,
            class_id=?, date_of_birth=?, parent_name=?, parent_phone=?, parent_email=?,
-           address=?, notes=?, student_category=?, student_type=? WHERE id=?""",
+           address=?, notes=?, student_category=?, student_type=?,
+           sponsorship_type=?, sponsor_ngo_id=?, sponsor_name=?, sponsor_phone=?, sponsor_relationship=?
+           WHERE id=?""",
         (body.first_name, body.last_name, adm_no, body.gender, body.class_id,
          body.date_of_birth, body.parent_name, body.parent_phone, body.parent_email,
-         body.address, body.notes, body.student_category, body.student_type, student_id),
+         body.address, body.notes, body.student_category, body.student_type,
+         body.sponsorship_type,
+         body.sponsor_ngo_id if body.sponsorship_type == "ngo" else None,
+         body.sponsor_name if body.sponsorship_type == "individual" else None,
+         body.sponsor_phone if body.sponsorship_type == "individual" else None,
+         body.sponsor_relationship if body.sponsorship_type == "individual" else None,
+         student_id),
     )
     _sync_guardian(student_id, body.parent_name, body.parent_phone, body.parent_email)
     _audit(user["id"], "student_update", student_id, f"Updated student {body.first_name} {body.last_name}")

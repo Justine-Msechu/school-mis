@@ -61,6 +61,7 @@ class AssignBody(BaseModel):
     student_id:        int
     route_id:          int
     academic_year_id:  int
+    term:              int = 1
     pickup_point:      str = ""
 
 
@@ -69,7 +70,8 @@ def assign_student(body: AssignBody, user: Usr):
     hydrate_session(user)
     try:
         sub_id = transport_service.assign_student(
-            body.student_id, body.route_id, body.academic_year_id, body.pickup_point
+            body.student_id, body.route_id, body.academic_year_id,
+            body.term, body.pickup_point,
         )
         return {"subscription_id": sub_id, "ok": True}
     except (ServiceError, PolicyViolation) as e:

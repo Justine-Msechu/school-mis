@@ -23,8 +23,8 @@ export interface Loan {
   borrower_name: string;
   issue_date: string;
   due_date: string;
-  returned_at: string | null;
-  status: string;
+  return_date: string | null;
+  status: string;  // active | returned
 }
 
 export const getBooks = (search = "", category = "", available_only = false) =>

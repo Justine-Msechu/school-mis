@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  school-mis:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8765:8765"     # backend API + static files
+    volumes:
+      - db_data:/data   # SQLite database persists here
+    environment:
+      - SCHOOL_MIS_DB_PATH=/data/school_mis.db
+
+volumes:
+  db_data:

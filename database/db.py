@@ -5,7 +5,10 @@ Added: finance, welfare, inventory, accounting, reporting domains.
 
 import sqlite3, os, hashlib, secrets
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "school_mis.db")
+DB_PATH = os.environ.get(
+    "SCHOOL_MIS_DB_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "school_mis.db"),
+)
 
 # Roles are pure display labels — no logic, no permissions.
 # All permission assignments live in the `role_permissions` DB table

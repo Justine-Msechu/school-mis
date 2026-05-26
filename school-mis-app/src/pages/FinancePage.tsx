@@ -512,7 +512,7 @@ function StudentBillPanel() {
                 <h3 className="text-sm font-semibold text-gray-700">Bills</h3>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="table-scroll"><table className="w-full text-sm">
                   <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
                     <th className="px-4 py-2.5">Fee Type</th>
                     <th className="px-4 py-2.5">Billed</th>
@@ -540,7 +540,7 @@ function StudentBillPanel() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </>
           )}
@@ -550,7 +550,7 @@ function StudentBillPanel() {
             <>
               <h3 className="text-sm font-semibold text-gray-700">Waivers / Discounts</h3>
               <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="table-scroll"><table className="w-full text-sm">
                   <thead><tr className="bg-amber-50 text-left text-xs font-medium text-amber-700 uppercase">
                     <th className="px-4 py-2.5">Type</th>
                     <th className="px-4 py-2.5">Discount</th>
@@ -575,7 +575,7 @@ function StudentBillPanel() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </>
           )}
@@ -585,7 +585,7 @@ function StudentBillPanel() {
             <>
               <h3 className="text-sm font-semibold text-gray-700">Payments</h3>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="table-scroll"><table className="w-full text-sm">
                   <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
                     <th className="px-4 py-2.5">Date</th>
                     <th className="px-4 py-2.5">Amount</th>
@@ -602,7 +602,7 @@ function StudentBillPanel() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </>
           )}
@@ -798,7 +798,7 @@ function OutstandingTab() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Student</th>
@@ -832,7 +832,7 @@ function OutstandingTab() {
               ))
             }
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );
@@ -1014,7 +1014,7 @@ function ManageTab({ years }: { years: AcademicYear[] }) {
           <p className="text-xs text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-xl">No locked periods</p>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
                 <th className="px-4 py-2.5">Year</th>
                 <th className="px-4 py-2.5">Term</th>
@@ -1041,7 +1041,7 @@ function ManageTab({ years }: { years: AcademicYear[] }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         )}
       </section>
@@ -1077,7 +1077,7 @@ function ManageTab({ years }: { years: AcademicYear[] }) {
         )}
         {rules.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-3">
-            <table className="w-full text-sm">
+            <div className="table-scroll"><table className="w-full text-sm">
               <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
                 <th className="px-4 py-2.5">After Due</th>
                 <th className="px-4 py-2.5">Charge</th>
@@ -1102,7 +1102,7 @@ function ManageTab({ years }: { years: AcademicYear[] }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         )}
         {canManage && rules.length > 0 && (
@@ -1515,7 +1515,7 @@ function InvoicesTab() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Invoice</th>
@@ -1613,7 +1613,7 @@ function InvoicesTab() {
               })
             }
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {createOpen && (
@@ -1678,7 +1678,7 @@ export default function FinancePage() {
   ].filter((t) => !t.perm || can(t.perm as string));
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Finance</h1>
@@ -1728,7 +1728,7 @@ export default function FinancePage() {
 
       {tab === "payments" && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="table-scroll"><table className="w-full text-sm">
             <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Student</th><th className="px-4 py-3">Adm. No</th>
               <th className="px-4 py-3">Amount</th><th className="px-4 py-3">Method</th>
@@ -1751,13 +1751,13 @@ export default function FinancePage() {
                 ))
               }
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
       {tab === "fees" && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="table-scroll"><table className="w-full text-sm">
             <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Fee Type</th>
               <th className="px-4 py-3">Applies To</th>
@@ -1794,7 +1794,7 @@ export default function FinancePage() {
                 ))
               }
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 

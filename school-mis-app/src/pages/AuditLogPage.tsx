@@ -128,7 +128,7 @@ export default function AuditLogPage() {
   useEffect(() => { load(); }, [table, action]);
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Audit Log</h1>
         <p className="text-sm text-gray-500 mt-0.5">Complete trail of all system activity</p>

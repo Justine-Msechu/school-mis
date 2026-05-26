@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 # Make the parent directory importable so existing services/db/auth work
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -21,6 +21,9 @@ from backend.routers import (
 )
 from backend.routers import notifications, audit
 from backend.routers import enrollments, guardians, timetable, report_cards
+from backend.routers import ngo
+from backend.routers import setup as setup_router
+from backend.routers import subscription as subscription_router
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +89,36 @@ async def lifespan(app: FastAPI):
         _mod11 = importlib.util.module_from_spec(_spec11)
         _spec11.loader.exec_module(_mod11)
         _mod11.run()
+        _mig12_path = os.path.join(os.path.dirname(__file__), "migrations", "012_inventory_upgrade.py")
+        _spec12 = importlib.util.spec_from_file_location("migration_012", _mig12_path)
+        _mod12 = importlib.util.module_from_spec(_spec12)
+        _spec12.loader.exec_module(_mod12)
+        _mod12.run()
+        _mig13_path = os.path.join(os.path.dirname(__file__), "migrations", "013_inventory_classification.py")
+        _spec13 = importlib.util.spec_from_file_location("migration_013", _mig13_path)
+        _mod13 = importlib.util.module_from_spec(_spec13)
+        _spec13.loader.exec_module(_mod13)
+        _mod13.run()
+        _mig15_path = os.path.join(os.path.dirname(__file__), "migrations", "015_ngo.py")
+        _spec15 = importlib.util.spec_from_file_location("migration_015", _mig15_path)
+        _mod15 = importlib.util.module_from_spec(_spec15)
+        _spec15.loader.exec_module(_mod15)
+        _mod15.run()
+        _mig16_path = os.path.join(os.path.dirname(__file__), "migrations", "016_student_sponsorship.py")
+        _spec16 = importlib.util.spec_from_file_location("migration_016", _mig16_path)
+        _mod16 = importlib.util.module_from_spec(_spec16)
+        _spec16.loader.exec_module(_mod16)
+        _mod16.run()
+        _mig17_path = os.path.join(os.path.dirname(__file__), "migrations", "017_welfare_extended.py")
+        _spec17 = importlib.util.spec_from_file_location("migration_017", _mig17_path)
+        _mod17 = importlib.util.module_from_spec(_spec17)
+        _spec17.loader.exec_module(_mod17)
+        _mod17.run()
+        _mig18_path = os.path.join(os.path.dirname(__file__), "migrations", "018_security.py")
+        _spec18 = importlib.util.spec_from_file_location("migration_018", _mig18_path)
+        _mod18 = importlib.util.module_from_spec(_spec18)
+        _spec18.loader.exec_module(_mod18)
+        _mod18.run()
     except Exception as e:
         log.warning("Migration warning (may already be applied): %s", e)
 
@@ -162,11 +195,64 @@ app.include_router(report_cards.router,  prefix="/api/report-cards")
 app.include_router(rbac.router,          prefix="/api/rbac")
 app.include_router(invoices.router,      prefix="/api/invoices")
 app.include_router(payroll.router,       prefix="/api/payroll")
+app.include_router(ngo.router,           prefix="/api")
+app.include_router(setup_router.router,         prefix="/api/setup")
+app.include_router(subscription_router.router,  prefix="/api/subscription")
 
 
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "version": "5.1.0", "timestamp": datetime.utcnow().isoformat()}
+
+
+# ── Static file serving (Pi / Docker / production) ────────────────────────────
+# When SCHOOL_MIS_STATIC_DIR is set, serve the built React app on all non-API
+# routes so the whole system is accessible via a single port.
+import os as _os
+from fastapi.responses import FileResponse as _FileResponse
+
+_static_dir = _os.environ.get("SCHOOL_MIS_STATIC_DIR", "").strip()
+
+# Also auto-detect: if dist/ sits next to the project root, use it
+if not _static_dir:
+    _auto = Path(__file__).parent.parent / "school-mis-app" / "dist"
+    if _auto.is_dir():
+        _static_dir = str(_auto)
+
+if _static_dir and Path(_static_dir).is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    _assets = Path(_static_dir) / "assets"
+    if _assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
+
+    # Serve any other static files that Vite emits at the root (favicon, manifest, etc.)
+    @app.get("/favicon.ico", include_in_schema=False)
+    @app.get("/manifest.json", include_in_schema=False)
+    @app.get("/robots.txt", include_in_schema=False)
+    def _static_root_files(request: Request):
+        p = Path(_static_dir) / request.url.path.lstrip("/")
+        if p.is_file():
+            return _FileResponse(str(p))
+        return _FileResponse(str(Path(_static_dir) / "index.html"))
+
+    # Root path — must be explicit because /{path} doesn't match empty ""
+    @app.get("/", include_in_schema=False)
+    def _spa_root():
+        return _FileResponse(str(Path(_static_dir) / "index.html"))
+
+    # All other non-API paths → React Router handles them client-side
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def _spa_fallback(full_path: str):
+        # Don't intercept /api/* (already handled above, but just in case)
+        if full_path.startswith("api/"):
+            from fastapi import HTTPException
+            raise HTTPException(404)
+        return _FileResponse(str(Path(_static_dir) / "index.html"))
+
+    log.info("Serving frontend from %s", _static_dir)
+else:
+    log.info("SCHOOL_MIS_STATIC_DIR not set or dist/ not found — frontend not served (API-only mode)")
 
 
 if __name__ == "__main__":

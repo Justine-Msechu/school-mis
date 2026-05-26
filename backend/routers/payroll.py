@@ -1,3 +1,5 @@
+from backend.deps import rate_limit
+from fastapi import Depends
 """Payroll router — salary configuration, payroll runs, payslips, reports."""
 
 from typing import Annotated
@@ -10,7 +12,7 @@ from backend.core.security import require_permission
 from backend.services.payroll_service import PayrollService
 from database.db import fetch_all, fetch_one
 
-router = APIRouter(tags=["payroll"])
+router = APIRouter(tags=["payroll"], dependencies=[Depends(rate_limit(max_calls=60, window_secs=60, scope="payroll"))])
 Usr = Annotated[dict, Depends(require_auth)]
 
 

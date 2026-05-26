@@ -41,14 +41,14 @@ export default function ApprovalsTab() {
   };
 
   return (
-    <div className="p-8 max-w-screen-xl mx-auto">
+    <div className="page-content">
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-900">Pending Approvals</h2>
         <p className="text-sm text-gray-500 mt-0.5">Grade submissions awaiting head-teacher approval</p>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-scroll"><table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Exam</th>
@@ -93,7 +93,7 @@ export default function ApprovalsTab() {
               })
             }
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

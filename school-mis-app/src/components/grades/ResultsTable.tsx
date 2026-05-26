@@ -195,7 +195,7 @@ export default function ResultsTable({ report, loading, search }: ResultsTablePr
       {/* Table wrapper with horizontal scroll on subjects only */}
       <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm" style={{ minWidth: 600 }}>
+          <div className="table-scroll"><table className="w-full border-collapse text-sm" style={{ minWidth: 600 }}>
             <thead>
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id}>
@@ -237,7 +237,7 @@ export default function ResultsTable({ report, loading, search }: ResultsTablePr
                     </tr>
                   ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
 
