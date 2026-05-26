@@ -1778,10 +1778,10 @@ export default function FinancePage() {
                     <td className="px-4 py-3">
                       {fs.student_name
                         ? <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{fs.student_name} <span className="opacity-60">({fs.student_admission_no})</span></span>
-                        : fs.grade_name
-                        ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">{fs.grade_name}</span>
-                        : fs.class_name
-                        ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">{fs.class_name}</span>
+                        : (fs.grade_name || fs.class_name)
+                        ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">
+                            {(fs.grade_name || fs.class_name!).replace(/[A-Z]+$/, "").trim()}
+                          </span>
                         : <span className="text-gray-400 text-xs">All students</span>
                       }
                     </td>

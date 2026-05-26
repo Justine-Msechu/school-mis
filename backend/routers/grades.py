@@ -43,7 +43,9 @@ def get_exams(user: Usr, academic_year_id: int = Query(None)):
 
 @router.get("/classes")
 def get_classes(user: Usr):
-    rows = fetch_all("SELECT id, name FROM classes ORDER BY name")
+    rows = fetch_all(
+        "SELECT id, name, grade_level FROM classes WHERE deleted_at IS NULL ORDER BY grade_level, name"
+    )
     return [dict(r) for r in rows]
 
 
