@@ -93,11 +93,19 @@ def initialize(body: SetupPayload):
 
     # 3. Create admin user (bcrypt from day one)
     pw_hash = bcrypt.hashpw(body.admin_password.encode(), bcrypt.gensalt(rounds=BCRYPT_COST)).decode()
-    execute(
+    user_id = execute(
         """INSERT INTO users (username, password_hash, salt, pw_scheme, full_name, role, is_active, must_change_pw, school_id)
            VALUES (?, ?, '', 'bcrypt', ?, 'admin', 1, 0, ?)""",
         (body.admin_username.strip(), pw_hash, body.admin_fullname.strip() or body.admin_username.strip(), school_id),
     )
+
+    # 4. Assign admin role in user_roles so permissions work immediately
+    admin_role = fetch_one("SELECT id FROM roles WHERE name='admin'")
+    if admin_role:
+        execute(
+            "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+            (user_id, admin_role["id"]),
+        )
 
     return {
         "ok": True,

@@ -167,6 +167,10 @@ def login(body: LoginRequest, request: Request):
     if row_dict.get("pw_scheme", "sha256") == "sha256":
         _upgrade_to_bcrypt(row_dict["id"], body.password)
 
+    # Ensure user_roles is in sync (fixes users created before this was enforced)
+    from database.db import sync_user_role
+    sync_user_role(row_dict["id"], row_dict.get("role", ""))
+
     user_dict = _user_to_dict(row)
     ip        = request.client.host if request.client else None
     ua        = request.headers.get("user-agent", "")[:200]
