@@ -24,7 +24,8 @@ from datetime import datetime, timedelta
 from threading import Lock
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
+from typing import TYPE_CHECKING
 
 from database.db import execute, fetch_all, fetch_one
 
@@ -188,15 +189,59 @@ def revoke_all_user_sessions(user_id: int) -> int:
         return 0
 
 
+# ── Subscription check ────────────────────────────────────────────────────────
+
+def _check_subscription(user: dict, request_path: str) -> None:
+    """
+    Raise 402 if the school's subscription has expired.
+    Admins are always allowed through so they can reactivate.
+    Auth, setup, and subscription endpoints are always allowed.
+    """
+    # Always allow these paths regardless of subscription
+    exempt_prefixes = ("/api/auth/", "/api/setup/", "/api/subscription/")
+    for prefix in exempt_prefixes:
+        if request_path.startswith(prefix):
+            return
+
+    # Admins can always access everything (they need to be able to reactivate)
+    if user.get("role") == "admin":
+        return
+
+    try:
+        from backend.routers.subscription import get_subscription_info
+        sub = get_subscription_info(user.get("school_id"))
+        if not sub.get("is_active", True):
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "subscription_expired",
+                    "message": "Your subscription has expired. Contact your administrator to reactivate.",
+                    "trial_ends": sub.get("trial_ends"),
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # never block on subscription check failure
+
+
 # ── FastAPI auth dependency ────────────────────────────────────────────────────
 
-def require_auth(authorization: Annotated[str | None, Header()] = None) -> dict:
+def require_auth(
+    authorization: Annotated[str | None, Header()] = None,
+    request: Request | None = None,
+) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
     token = authorization[7:]
     user  = get_user_from_token(token)
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired — please log in again")
+
+    # Subscription gate
+    if request is not None:
+        _check_subscription(user, request.url.path)
+
     return user
 
 

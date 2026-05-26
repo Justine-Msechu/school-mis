@@ -13,7 +13,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to login on 401
+// Handle 401 (redirect to login) and 402 (subscription expired)
 api.interceptors.response.use(
   (r) => r,
   (err) => {
@@ -21,6 +21,12 @@ api.interceptors.response.use(
       sessionStorage.removeItem("mis_token");
       localStorage.removeItem("mis_token");
       window.location.href = "/login";
+    }
+    if (err.response?.status === 402) {
+      // Broadcast subscription expiry — AppShell listens and shows lock screen
+      window.dispatchEvent(new CustomEvent("subscription:expired", {
+        detail: err.response.data?.detail ?? {},
+      }));
     }
     return Promise.reject(err);
   }

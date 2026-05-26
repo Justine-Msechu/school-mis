@@ -60,8 +60,8 @@ function ExpenseDialog({ categories, onSave, onClose }: { categories: string[]; 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Record Expense</h2>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="space-y-3">

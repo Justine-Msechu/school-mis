@@ -343,7 +343,7 @@ export default function GradeEntryPage() {
 
         {/* Change request modal */}
         {changeTarget && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="modal-overlay">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
               <h3 className="text-base font-bold text-gray-900 mb-1">Request Grade Change</h3>
               <p className="text-xs text-gray-500 mb-4">For: <strong>{changeTarget.student_name}</strong></p>

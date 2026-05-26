@@ -32,8 +32,8 @@ function ExamForm({ initial, onSave, onCancel }: ExamFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">{initial ? "Edit Exam" : "New Exam"}</h2>
         <div className="flex flex-col gap-3">
           <div>

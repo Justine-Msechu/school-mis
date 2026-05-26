@@ -133,8 +133,8 @@ function ItemDialog({ initial, onSave, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+    <div className="modal-overlay">
+      <div className="modal-card-lg p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-1">{initial ? "Edit Item" : "Add Item"}</h2>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 
@@ -488,7 +488,7 @@ function OverviewTab({ onIssue, onReceive, onViewRequests, onViewLowStock }: {
 
       {/* reject modal */}
       {rejectId !== null && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="modal-overlay">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-3">Reject Request</h2>
             <label className={LABEL}>Reason (optional)</label>
@@ -1006,7 +1006,7 @@ function RequestsTab() {
 
       {/* reject modal */}
       {rejectId !== null && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="modal-overlay">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-3">Reject Request</h2>
             <Field label="Reason (optional)">
@@ -1272,7 +1272,7 @@ function IssueDialog({ item, onSave, onClose }: { item: InventoryItem; onSave: (
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Issue Stock</h2>
         <p className="text-sm text-gray-500 mb-4">{item.name} — available: {item.quantity} {item.unit}</p>

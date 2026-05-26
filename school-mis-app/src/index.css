@@ -78,11 +78,39 @@
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* Responsive page content padding */
-  .page-content { @apply p-4 md:p-6 lg:p-8 max-w-screen-xl mx-auto; }
+  .page-content { @apply p-3 sm:p-4 md:p-6 lg:p-8 max-w-screen-xl mx-auto; }
 
   /* Frozen table column utilities */
   .col-frozen-left  { position: sticky; left: 0; z-index: 2; }
   .col-frozen-right { position: sticky; right: 0; z-index: 2; }
+
+  /* ── Modal helpers ── */
+  /* Full-screen backdrop */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(2px);
+  }
+  /* Modal card — sheet on mobile, centred card on sm+ */
+  .modal-card {
+    @apply relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full
+           overflow-y-auto flex flex-col;
+    max-height: 92vh;
+    max-width: 100%;
+  }
+  @screen sm {
+    .modal-card { max-width: 480px; }
+  }
+  .modal-card-lg {
+    @apply modal-card;
+  }
+  @screen sm {
+    .modal-card-lg { max-width: 640px; }
+  }
+
+  /* ── Touch-friendly button minimum ── */
+  button, [role="button"] { min-height: 36px; }
+  input, select, textarea { min-height: 36px; touch-action: manipulation; }
 
   /* Grade badge base */
   .grade-pill {

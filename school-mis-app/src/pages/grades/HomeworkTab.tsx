@@ -82,7 +82,7 @@ function AssignmentDialog({ classes, onSave, onClose }: { classes: ClassItem[]; 
   const subjectOptions = [{ value: null as null, label: form.class_id ? "Select subject…" : "Select class first" }, ...subjects.map((s) => ({ value: s.id, label: s.name }))];
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-gray-900 mb-4">New Assignment</h2>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}

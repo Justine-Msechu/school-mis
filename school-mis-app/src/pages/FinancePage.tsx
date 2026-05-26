@@ -170,8 +170,8 @@ function PaymentDialog({ onSave, onClose, initialStudent }: { onSave: () => void
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Record Payment</h2>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="space-y-3">
@@ -279,8 +279,8 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Add Fee Structure</h2>
         {years.length === 0 && (
           <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
@@ -393,7 +393,7 @@ function WaiverDialog({ bill, studentId, onSave, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <h2 className="text-base font-bold text-gray-900 mb-4">Grant Waiver</h2>
         <div className="space-y-3">
@@ -667,8 +667,8 @@ function GenerateBillsDialog({ years, onDone, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Generate Student Bills</h2>
         <p className="text-sm text-gray-500 mb-5">
           Creates one bill per student per fee structure. Already-billed combinations are skipped automatically.
@@ -1248,7 +1248,7 @@ function CreateInvoiceDialog({ onSave, onClose }: { onSave: () => void; onClose:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Create Invoice</h2>
         <div className="space-y-3">
@@ -1337,8 +1337,8 @@ function InvoicePayDialog({ invoice, onSave, onClose }: { invoice: Invoice; onSa
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Record Payment</h2>
         <p className="text-sm text-gray-500 mb-4">{invoice.invoice_no} · {invoice.student_name} · Remaining: <strong>{fmt(net)}</strong></p>
         <div className="space-y-3">
@@ -1381,7 +1381,7 @@ function AuditModal({ invoice, onClose }: { invoice: Invoice; onClose: () => voi
   }, [invoice.id]);
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-gray-900">Audit Trail — {invoice.invoice_no}</h2>

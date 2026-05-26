@@ -87,7 +87,7 @@ export default function SetupPage() {
   if (done) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+        <div className="modal-card p-6 sm:p-8 text-center">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
             <Check size={32} className="text-green-600" />
           </div>

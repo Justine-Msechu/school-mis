@@ -259,7 +259,7 @@ function HistoryModal({ staff, onClose }: { staff: StaffSalary; onClose: () => v
     .reduce((s, h) => s + h.net_pay, 0);
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b shrink-0">
           <div>
@@ -659,7 +659,7 @@ function RunDetailModal({ run: initialRun, onClose, onRefresh }: {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col">
         {/* header */}
         <div className="flex items-center justify-between p-4 border-b shrink-0">

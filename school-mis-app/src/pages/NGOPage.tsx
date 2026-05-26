@@ -81,8 +81,8 @@ function NgoDialog({ initial, onSave, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+    <div className="modal-overlay">
+      <div className="modal-card-lg p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">
           {initial ? "Edit NGO" : "Add NGO Partner"}
         </h2>
@@ -184,8 +184,8 @@ function AddSponsorshipDialog({ ngoId, ngoName, onSave, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Add Beneficiary</h2>
         <p className="text-sm text-gray-500 mb-4">Sponsored by <span className="font-medium text-violet-700">{ngoName}</span></p>
 

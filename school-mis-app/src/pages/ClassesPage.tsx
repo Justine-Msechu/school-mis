@@ -60,8 +60,8 @@ function ClassDialog({ initial, teachers, onSave, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">{initial ? "Edit Class" : "Add Class"}</h2>
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="grid grid-cols-2 gap-3">
@@ -106,7 +106,7 @@ function StudentsModal({ cls, onClose }: { cls: ClassRecord; onClose: () => void
   }, [cls.id]);
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-overlay">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-900">{cls.name} — Students</h2>
