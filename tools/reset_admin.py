@@ -13,14 +13,13 @@ initialize_database()
 
 # Show all active users so we know what's in the DB
 print("\nActive users in database:")
-users = fetch_all("SELECT id, username, role, pw_scheme FROM users WHERE is_active=1")
+users = fetch_all("SELECT id, username, role FROM users WHERE is_active=1")
 if not users:
     print("  No active users found. The database may be empty.")
     sys.exit(1)
 
 for u in users:
-    scheme = u["pw_scheme"] if "pw_scheme" in u.keys() else "sha256"
-    print(f"  [{u['id']}] {u['username']}  (role: {u['role']}, scheme: {scheme})")
+    print(f"  [{u['id']}] {u['username']}  (role: {u['role']})")
 
 # Pick the user to reset
 print()
