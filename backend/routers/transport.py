@@ -76,6 +76,16 @@ def assign_student(body: AssignBody, user: Usr):
         raise HTTPException(400, str(e))
 
 
+@router.delete("/subscriptions/{sub_id}")
+def unassign_student(sub_id: int, user: Usr):
+    hydrate_session(user)
+    try:
+        transport_service.cancel_subscription(sub_id)
+        return {"ok": True}
+    except (ServiceError, PolicyViolation) as e:
+        raise HTTPException(400, str(e))
+
+
 @router.get("/stats")
 def get_stats(user: Usr):
     hydrate_session(user)

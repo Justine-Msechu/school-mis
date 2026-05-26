@@ -34,5 +34,8 @@ export const getRouteStudents = (route_id: number) =>
 export const assignStudent = (body: { student_id: number; route_id: number; academic_year_id: number; pickup_point?: string }) =>
   api.post("/transport/assign", body).then((r) => r.data);
 
+export const unassignStudent = (subId: number) =>
+  api.delete(`/transport/subscriptions/${subId}`).then((r) => r.data);
+
 export const getTransportStats = () =>
   api.get("/transport/stats").then((r) => r.data);
