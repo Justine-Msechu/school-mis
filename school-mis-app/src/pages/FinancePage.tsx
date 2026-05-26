@@ -140,8 +140,8 @@ function StudentSearch({
 
 // ── Payment dialog ──────────────────────────────────────────────────────────
 
-function PaymentDialog({ onSave, onClose }: { onSave: () => void; onClose: () => void }) {
-  const [student, setStudent]   = useState<SelectedStudent | null>(null);
+function PaymentDialog({ onSave, onClose, initialStudent }: { onSave: () => void; onClose: () => void; initialStudent?: SelectedStudent | null }) {
+  const [student, setStudent]   = useState<SelectedStudent | null>(initialStudent ?? null);
   const [amount, setAmount]     = useState("");
   const [date, setDate]         = useState(new Date().toISOString().slice(0, 10));
   const [method, setMethod]     = useState("cash");
@@ -236,14 +236,15 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
 
   const submit = async () => {
     if (!form.amount || Number(form.amount) <= 0) { setError("Enter a valid amount."); return; }
-    if (!form.fee_type_id) { setError("Select a fee type."); return; }
+    if (!form.fee_type_id || form.fee_type_id === "") { setError("Select a fee type."); return; }
+    if (form.fee_type_id === "__new__" && !newFeeType.trim()) { setError("Enter a name for the new fee type."); return; }
     if (!form.academic_year_id) { setError("Select an academic year."); return; }
     if (form.scope === "class" && !form.class_id) { setError("Select a class."); return; }
     if (form.scope === "student" && !selectedStudent) { setError("Select a student first."); return; }
     setSaving(true); setError("");
     try {
       let typeId = Number(form.fee_type_id);
-      if (!typeId && newFeeType.trim()) {
+      if (form.fee_type_id === "__new__") {
         const t = await createFeeType({ name: newFeeType.trim() });
         typeId = t.id;
       }
@@ -267,6 +268,11 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Add Fee Structure</h2>
+        {years.length === 0 && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+            <strong>No academic years found.</strong> Go to <strong>Settings → Academic Years</strong> and create one before adding fee structures.
+          </div>
+        )}
         {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
         <div className="space-y-3">
           <Field label="Fee Type *">
@@ -326,7 +332,7 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+          <Button variant="primary" onClick={submit} disabled={saving || years.length === 0}>{saving ? "Saving…" : "Save"}</Button>
         </div>
       </div>
     </div>
@@ -412,6 +418,7 @@ function StudentBillPanel() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
   const [waiverOpen, setWaiverOpen] = useState(false);
+  const [payOpen, setPayOpen]   = useState(false);
 
   const lookup = useCallback(async (s: SelectedStudent | null) => {
     if (!s) { setBill(null); return; }
@@ -467,16 +474,26 @@ function StudentBillPanel() {
             </div>
           </div>
 
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPayOpen(true)}
+              className="flex items-center gap-1.5 h-8 px-3 text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg transition-colors"
+            >
+              + Record Payment
+            </button>
+            {can("finance.waiver.create") && (
+              <button onClick={() => setWaiverOpen(true)} className="flex items-center gap-1.5 h-8 px-3 text-sm font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg transition-colors">
+                + Grant Waiver
+              </button>
+            )}
+          </div>
+
           {/* Bills table */}
           {bill.bills.length > 0 && (
             <>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">Bills</h3>
-                {can("finance.waiver.create") && (
-                  <button onClick={() => setWaiverOpen(true)} className="flex items-center gap-1.5 h-7 px-3 text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg transition-colors">
-                    + Grant Waiver
-                  </button>
-                )}
               </div>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <table className="w-full text-sm">
@@ -576,6 +593,13 @@ function StudentBillPanel() {
         </div>
       )}
 
+      {payOpen && selected && (
+        <PaymentDialog
+          initialStudent={selected}
+          onSave={() => { setPayOpen(false); lookup(selected); }}
+          onClose={() => setPayOpen(false)}
+        />
+      )}
       {waiverOpen && bill && (
         <WaiverDialog
           bill={bill}
@@ -1436,6 +1460,21 @@ function InvoicesTab() {
 
   return (
     <div>
+      {/* Workflow guide */}
+      <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+        <p className="text-xs font-semibold text-blue-800 mb-1.5">Invoice workflow — 4 steps</p>
+        <div className="flex items-center gap-1.5 flex-wrap text-xs text-blue-700">
+          <span className="px-2 py-0.5 bg-blue-100 rounded font-medium">1 · Create invoice</span>
+          <span className="text-blue-400">→</span>
+          <span className="px-2 py-0.5 bg-blue-100 rounded font-medium">2 · Another user approves</span>
+          <span className="text-blue-400">→</span>
+          <span className="px-2 py-0.5 bg-blue-100 rounded font-medium">3 · Issue control number</span>
+          <span className="text-blue-400">→</span>
+          <span className="px-2 py-0.5 bg-blue-100 rounded font-medium">4 · Record payment</span>
+        </div>
+        <p className="text-2xs text-blue-500 mt-1.5">Actions appear per row. Step 2 requires a <em>different</em> user to approve (maker/checker rule).</p>
+      </div>
+
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <div className="relative max-w-xs flex-1">
@@ -1750,7 +1789,7 @@ export default function FinancePage() {
       {paymentDialog && (
         <PaymentDialog onSave={() => { setPaymentDialog(false); loadPayments(); }} onClose={() => setPaymentDialog(false)} />
       )}
-      {feeDialog && years.length > 0 && (
+      {feeDialog && (
         <FeeStructureDialog feeTypes={feeTypes} years={years} onSave={() => { setFeeDialog(false); loadFees(); }} onClose={() => setFeeDialog(false)} />
       )}
       {billingDialog && years.length > 0 && (
