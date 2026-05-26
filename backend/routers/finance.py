@@ -136,17 +136,24 @@ def generate_bills(body: BillingGenerateBody, user: Usr):
                 (fs["student_id"],),
             ).fetchall()
         else:
-            st_where = ["is_active=1", "deleted_at IS NULL"]
+            st_where = ["s.is_active=1", "s.deleted_at IS NULL"]
             st_params: list = []
-            target_class = fs["class_id"] or body.class_id
-            if target_class:
-                st_where.append("class_id=?")
-                st_params.append(target_class)
+            if fs["grade_level"]:
+                # All students whose class shares this grade level (covers all sections)
+                st_where.append(
+                    "s.class_id IN (SELECT id FROM classes WHERE grade_level=?)"
+                )
+                st_params.append(fs["grade_level"])
+            else:
+                target_class = fs["class_id"] or body.class_id
+                if target_class:
+                    st_where.append("s.class_id=?")
+                    st_params.append(target_class)
             if fs["student_type"]:
-                st_where.append("student_type=?")
+                st_where.append("s.student_type=?")
                 st_params.append(fs["student_type"])
             students = conn.execute(
-                f"SELECT id FROM students WHERE {' AND '.join(st_where)}",
+                f"SELECT s.id FROM students s WHERE {' AND '.join(st_where)}",
                 st_params,
             ).fetchall()
 

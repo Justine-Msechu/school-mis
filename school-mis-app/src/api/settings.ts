@@ -69,6 +69,8 @@ export interface FeeStructure {
   amount: number;
   due_date: string;
   term: number | null;
+  grade_level: number | null;
+  grade_name: string | null;
   class_id: number | null;
   class_name: string | null;
   student_id: number | null;
@@ -92,6 +94,7 @@ export const createFeeStructure = (body: {
   amount: number;
   due_date?: string;
   term?: number;
+  grade_level?: number | null;
   class_id?: number | null;
   student_id?: number | null;
   student_type?: string | null;

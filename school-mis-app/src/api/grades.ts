@@ -11,6 +11,7 @@ export interface Exam {
 export interface ClassItem {
   id: number;
   name: string;
+  grade_level: number;
 }
 
 export interface Subject {
