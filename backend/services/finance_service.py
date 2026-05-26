@@ -255,15 +255,31 @@ class FinanceService:
         bills    = self.repo.get_student_bills(student_id, academic_year_id)
         payments = self.repo.list_payments(student_id=student_id)
 
-        total_billed = sum(b["amount_due"] for b in bills)
-        total_paid   = sum(p["amount_paid"] for p in payments)
+        # Waivers
+        from database.db import fetch_all as _fa
+        waivers = _fa(
+            """SELECT w.*, ft.name AS fee_type_name
+               FROM fee_waivers w
+               LEFT JOIN student_bills sb ON sb.id = w.bill_id
+               LEFT JOIN fee_structures fs ON fs.id = sb.fee_structure_id
+               LEFT JOIN fee_types ft ON ft.id = fs.fee_type_id
+               WHERE w.student_id=?
+               ORDER BY w.created_at DESC""",
+            (student_id,),
+        )
+
+        total_billed   = sum(b["amount_due"] for b in bills)
+        total_discount = sum(b.get("discount_amount", 0) or 0 for b in bills)
+        total_paid     = sum(p["amount_paid"] for p in payments)
         return {
-            "student_id":   student_id,
-            "bills":        bills,
-            "payments":     payments,
-            "total_billed": total_billed,
-            "total_paid":   total_paid,
-            "balance":      total_billed - total_paid,
+            "student_id":     student_id,
+            "bills":          bills,
+            "payments":       payments,
+            "waivers":        [dict(w) for w in waivers],
+            "total_billed":   total_billed,
+            "total_discount": total_discount,
+            "total_paid":     total_paid,
+            "balance":        total_billed - total_discount - total_paid,
         }
 
     # ── Ledger / financial reporting ──────────────────────────────────────────

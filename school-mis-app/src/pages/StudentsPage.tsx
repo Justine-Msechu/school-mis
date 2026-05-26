@@ -50,6 +50,7 @@ function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps
     address:       initial?.address       ?? "",
     notes:         initial?.notes         ?? "",
     student_category: initial?.student_category ?? "regular",
+    student_type:     (initial as any)?.student_type ?? "Day",
   });
   const [admPreview, setAdmPreview] = useState("");
   const [loadingPreview, setLoadingPreview]  = useState(false);
@@ -105,9 +106,14 @@ function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps
   ];
 
   const categoryOptions = [
-    { value: "regular",   label: "Regular" },
-    { value: "orphan",    label: "Orphan" },
-    { value: "sponsored", label: "Sponsored" },
+    { value: "regular",    label: "Regular" },
+    { value: "orphan",     label: "Orphan" },
+    { value: "sponsored",  label: "Sponsored" },
+    { value: "staff_child",label: "Staff Child" },
+  ];
+  const typeOptions = [
+    { value: "Day",      label: "Day Scholar" },
+    { value: "Boarding", label: "Boarding" },
   ];
 
   return (
@@ -156,6 +162,11 @@ function StudentDialog({ classes, initial, onSave, onClose }: StudentDialogProps
           </Field>
           <Field label="Date of Birth">
             <input type="date" className={INPUT} value={form.date_of_birth ?? ""} onChange={(e) => set("date_of_birth", e.target.value)} />
+          </Field>
+          <Field label="Type">
+            <select className={INPUT} value={form.student_type} onChange={(e) => set("student_type", e.target.value)}>
+              {typeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </Field>
           <Field label="Category">
             <select className={INPUT} value={form.student_category} onChange={(e) => set("student_category", e.target.value)}>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
-import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, type Payment, type FinanceSummary, type StudentBill, type DebtorRow } from "@/api/finance";
+import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, createWaiver, deleteWaiver, type Payment, type FinanceSummary, type StudentBill, type DebtorRow, type WaiverRecord } from "@/api/finance";
 import { getStudents } from "@/api/students";
 import { getFeeStructures, getFeeTypes, createFeeStructure, createFeeType, getAcademicYears, type FeeStructure, type FeeType, type AcademicYear } from "@/api/settings";
 import { getClasses } from "@/api/grades";
@@ -128,6 +128,8 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
     student_search:   "",
     student_id:       "" as string,
     student_label:    "",
+    student_type:     "" as string,   // "" = both, "Day", "Boarding"
+    term:             "" as string,   // "" = all terms, "1","2","3"
   });
   const [classes, setClasses]       = useState<{ id: number; name: string }[]>([]);
   const [newFeeType, setNewFeeType] = useState("");
@@ -174,6 +176,8 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
         due_date:         form.due_date || undefined,
         class_id:         form.scope === "class"   ? Number(form.class_id)   : null,
         student_id:       form.scope === "student" ? Number(form.student_id) : null,
+        student_type:     form.student_type || null,
+        term:             form.term ? Number(form.term) : undefined,
       });
       onSave();
     } catch (e: any) {
@@ -235,6 +239,21 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
               {lookupState === "error"  && <p className="text-xs text-red-600 mt-1">Student not found</p>}
             </Field>
           )}
+          <Field label="Student Type">
+            <select className={INPUT} value={form.student_type} onChange={(e) => set("student_type", e.target.value)}>
+              <option value="">All (Day &amp; Boarding)</option>
+              <option value="Day">Day Scholars only</option>
+              <option value="Boarding">Boarding students only</option>
+            </select>
+          </Field>
+          <Field label="Term">
+            <select className={INPUT} value={form.term} onChange={(e) => set("term", e.target.value)}>
+              <option value="">All Terms</option>
+              <option value="1">Term 1</option>
+              <option value="2">Term 2</option>
+              <option value="3">Term 3</option>
+            </select>
+          </Field>
           <Field label="Amount (TZS) *"><input type="number" min="1" className={INPUT} value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0" /></Field>
           <Field label="Due Date"><input type="date" className={INPUT} value={form.due_date} onChange={(e) => set("due_date", e.target.value)} /></Field>
         </div>
@@ -249,11 +268,83 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
 
 // ── Student Bill lookup ─────────────────────────────────────────────────────
 
+const WAIVER_TYPES = [
+  { value: "scholarship",       label: "Scholarship" },
+  { value: "orphan_exemption",  label: "Orphan Exemption" },
+  { value: "partial_discount",  label: "Partial Discount" },
+  { value: "staff_child",       label: "Staff Child" },
+  { value: "other",             label: "Other" },
+];
+
+function WaiverDialog({ bill, studentId, onSave, onClose }: {
+  bill: StudentBill; studentId: number; onSave: () => void; onClose: () => void;
+}) {
+  const toast = useToast();
+  const [form, setForm] = useState({ bill_id: "", waiver_type: "scholarship", discount_percent: "100", reason: "" });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    const pct = Number(form.discount_percent);
+    if (!pct || pct <= 0 || pct > 100) { toast.error("Discount must be 1–100%"); return; }
+    setSaving(true);
+    try {
+      await createWaiver({
+        student_id:       studentId,
+        bill_id:          form.bill_id ? Number(form.bill_id) : null,
+        waiver_type:      form.waiver_type,
+        discount_percent: pct,
+        reason:           form.reason || undefined,
+      });
+      toast.success("Waiver granted");
+      onSave();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail ?? "Failed to grant waiver");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h2 className="text-base font-bold text-gray-900 mb-4">Grant Waiver</h2>
+        <div className="space-y-3">
+          <Field label="Apply to Bill (leave blank for all bills)">
+            <select className={INPUT} value={form.bill_id} onChange={(e) => set("bill_id", e.target.value)}>
+              <option value="">All bills</option>
+              {bill.bills.map((b) => (
+                <option key={b.id} value={b.id}>{b.fee_type_name} — {fmt(b.amount_due)}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Waiver Type">
+            <select className={INPUT} value={form.waiver_type} onChange={(e) => set("waiver_type", e.target.value)}>
+              {WAIVER_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Discount %">
+            <input type="number" min="1" max="100" className={INPUT} value={form.discount_percent} onChange={(e) => set("discount_percent", e.target.value)} />
+          </Field>
+          <Field label="Reason">
+            <input className={INPUT} value={form.reason} onChange={(e) => set("reason", e.target.value)} placeholder="e.g. Government scholarship" />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Grant Waiver"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StudentBillPanel() {
+  const { can }             = useAuthStore();
+  const toast               = useToast();
   const [admNo, setAdmNo]   = useState("");
   const [bill, setBill]     = useState<StudentBill | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState("");
+  const [waiverOpen, setWaiverOpen] = useState(false);
 
   const lookup = async () => {
     if (!admNo.trim()) return;
@@ -263,6 +354,15 @@ function StudentBillPanel() {
       setBill(data);
     } catch { setError("Student not found or no billing data."); }
     finally { setLoading(false); }
+  };
+
+  const handleRemoveWaiver = async (id: number) => {
+    if (!confirm("Remove this waiver? The discount will be reversed.")) return;
+    try {
+      await deleteWaiver(id);
+      toast.success("Waiver removed");
+      await lookup();
+    } catch { toast.error("Failed to remove waiver"); }
   };
 
   return (
@@ -284,31 +384,67 @@ function StudentBillPanel() {
       {error && <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 
       {bill && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+        <div className="space-y-5">
+          {/* Summary cards */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
               <div className="text-xs font-medium text-violet-600">Total Billed</div>
-              <div className="text-lg font-bold text-violet-900 mt-1">{fmt(bill.total_billed)}</div>
+              <div className="text-base font-bold text-violet-900 mt-0.5">{fmt(bill.total_billed)}</div>
             </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+            {bill.total_discount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <div className="text-xs font-medium text-amber-600">Discount/Waiver</div>
+                <div className="text-base font-bold text-amber-900 mt-0.5">- {fmt(bill.total_discount)}</div>
+              </div>
+            )}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
               <div className="text-xs font-medium text-emerald-600">Total Paid</div>
-              <div className="text-lg font-bold text-emerald-900 mt-1">{fmt(bill.total_paid)}</div>
+              <div className="text-base font-bold text-emerald-900 mt-0.5">{fmt(bill.total_paid)}</div>
             </div>
-            <div className={`border rounded-xl p-4 ${bill.balance > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"}`}>
+            <div className={`border rounded-xl p-3 ${bill.balance > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"}`}>
               <div className={`text-xs font-medium ${bill.balance > 0 ? "text-red-600" : "text-gray-500"}`}>Balance Due</div>
-              <div className={`text-lg font-bold mt-1 ${bill.balance > 0 ? "text-red-900" : "text-gray-700"}`}>{fmt(bill.balance)}</div>
+              <div className={`text-base font-bold mt-0.5 ${bill.balance > 0 ? "text-red-900" : "text-gray-700"}`}>{fmt(bill.balance)}</div>
             </div>
           </div>
 
+          {/* Bills table */}
           {bill.bills.length > 0 && (
             <>
-              <h3 className="text-sm font-semibold text-gray-700">Bills</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700">Bills</h3>
+                {can("finance.waiver.create") && (
+                  <button onClick={() => setWaiverOpen(true)} className="flex items-center gap-1.5 h-7 px-3 text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg transition-colors">
+                    + Grant Waiver
+                  </button>
+                )}
+              </div>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase"><th className="px-4 py-2.5">Fee Type</th><th className="px-4 py-2.5">Amount</th><th className="px-4 py-2.5">Due Date</th></tr></thead>
+                  <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-2.5">Fee Type</th>
+                    <th className="px-4 py-2.5">Billed</th>
+                    <th className="px-4 py-2.5">Discount</th>
+                    <th className="px-4 py-2.5">Paid</th>
+                    <th className="px-4 py-2.5">Status</th>
+                    <th className="px-4 py-2.5">Due Date</th>
+                  </tr></thead>
                   <tbody className="divide-y divide-gray-100">
                     {bill.bills.map((b) => (
-                      <tr key={b.id}><td className="px-4 py-2.5 text-gray-800">{b.fee_type_name}</td><td className="px-4 py-2.5 font-medium text-gray-900">{fmt(b.amount)}</td><td className="px-4 py-2.5 text-gray-500">{b.due_date || "—"}</td></tr>
+                      <tr key={b.id}>
+                        <td className="px-4 py-2.5 text-gray-800">{b.fee_type_name}</td>
+                        <td className="px-4 py-2.5 font-medium text-gray-900">{fmt(b.amount_due)}</td>
+                        <td className="px-4 py-2.5 text-amber-600">{b.discount_amount > 0 ? `- ${fmt(b.discount_amount)}` : "—"}</td>
+                        <td className="px-4 py-2.5 text-emerald-700">{b.amount_paid > 0 ? fmt(b.amount_paid) : "—"}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                            b.status === "paid"    ? "bg-emerald-100 text-emerald-700" :
+                            b.status === "waived"  ? "bg-amber-100 text-amber-700" :
+                            b.status === "partial" ? "bg-blue-100 text-blue-700" :
+                            "bg-red-100 text-red-700"
+                          }`}>{b.status}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-500">{b.due_date || "—"}</td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -316,15 +452,61 @@ function StudentBillPanel() {
             </>
           )}
 
+          {/* Waivers */}
+          {bill.waivers.length > 0 && (
+            <>
+              <h3 className="text-sm font-semibold text-gray-700">Waivers / Discounts</h3>
+              <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-amber-50 text-left text-xs font-medium text-amber-700 uppercase">
+                    <th className="px-4 py-2.5">Type</th>
+                    <th className="px-4 py-2.5">Discount</th>
+                    <th className="px-4 py-2.5">Fee</th>
+                    <th className="px-4 py-2.5">Reason</th>
+                    <th className="px-4 py-2.5">Granted By</th>
+                    <th className="px-4 py-2.5 w-8" />
+                  </tr></thead>
+                  <tbody className="divide-y divide-amber-100">
+                    {bill.waivers.map((w: WaiverRecord) => (
+                      <tr key={w.id}>
+                        <td className="px-4 py-2.5 capitalize text-gray-700">{w.waiver_type.replace(/_/g, " ")}</td>
+                        <td className="px-4 py-2.5 font-medium text-amber-700">{w.discount_percent}%</td>
+                        <td className="px-4 py-2.5 text-gray-500">{w.fee_type_name ?? "All bills"}</td>
+                        <td className="px-4 py-2.5 text-gray-500">{w.reason || "—"}</td>
+                        <td className="px-4 py-2.5 text-gray-400">{w.approved_by_name ?? "—"}</td>
+                        <td className="px-4 py-2.5">
+                          {can("finance.waiver.create") && (
+                            <button onClick={() => handleRemoveWaiver(w.id)} className="text-gray-300 hover:text-red-500 transition-colors">×</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* Payments */}
           {bill.payments.length > 0 && (
             <>
               <h3 className="text-sm font-semibold text-gray-700">Payments</h3>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase"><th className="px-4 py-2.5">Date</th><th className="px-4 py-2.5">Amount</th><th className="px-4 py-2.5">Method</th><th className="px-4 py-2.5">Reference</th></tr></thead>
+                  <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-2.5">Date</th>
+                    <th className="px-4 py-2.5">Amount</th>
+                    <th className="px-4 py-2.5">Method</th>
+                    <th className="px-4 py-2.5">Reference</th>
+                  </tr></thead>
                   <tbody className="divide-y divide-gray-100">
                     {bill.payments.map((p) => (
-                      <tr key={p.id}><td className="px-4 py-2.5 text-gray-600">{p.payment_date}</td><td className="px-4 py-2.5 font-medium text-emerald-700">{fmt(p.amount)}</td><td className="px-4 py-2.5 capitalize text-gray-600">{p.method}</td><td className="px-4 py-2.5 text-gray-400">{p.reference || "—"}</td></tr>
+                      <tr key={p.id}>
+                        <td className="px-4 py-2.5 text-gray-600">{p.payment_date}</td>
+                        <td className="px-4 py-2.5 font-medium text-emerald-700">{fmt(p.amount_paid)}</td>
+                        <td className="px-4 py-2.5 capitalize text-gray-600">{p.method}</td>
+                        <td className="px-4 py-2.5 text-gray-400">{p.reference || "—"}</td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -332,6 +514,15 @@ function StudentBillPanel() {
             </>
           )}
         </div>
+      )}
+
+      {waiverOpen && bill && (
+        <WaiverDialog
+          bill={bill}
+          studentId={bill.student_id}
+          onSave={() => { setWaiverOpen(false); lookup(); }}
+          onClose={() => setWaiverOpen(false)}
+        />
       )}
     </div>
   );
@@ -348,6 +539,7 @@ function GenerateBillsDialog({ years, onDone, onClose }: {
   const [classes, setClasses]   = useState<{ id: number; name: string }[]>([]);
   const [yearId, setYearId]     = useState(years.find((y) => y.is_current)?.id?.toString() ?? years[0]?.id?.toString() ?? "");
   const [classId, setClassId]   = useState("");
+  const [term, setTerm]         = useState("");
   const [running, setRunning]   = useState(false);
   const [result, setResult]     = useState<{ created: number; skipped: number } | null>(null);
 
@@ -362,6 +554,7 @@ function GenerateBillsDialog({ years, onDone, onClose }: {
       const { data } = await api.post("/finance/billing/generate", {
         academic_year_id: Number(yearId),
         class_id: classId ? Number(classId) : null,
+        term: term ? Number(term) : null,
       });
       setResult(data);
       toast.success(`${data.created} bill${data.created !== 1 ? "s" : ""} created`);
@@ -410,6 +603,14 @@ function GenerateBillsDialog({ years, onDone, onClose }: {
               <select className={INPUT} value={classId} onChange={(e) => setClassId(e.target.value)}>
                 <option value="">All classes</option>
                 {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Term (leave blank for all terms)">
+              <select className={INPUT} value={term} onChange={(e) => setTerm(e.target.value)}>
+                <option value="">All Terms</option>
+                <option value="1">Term 1</option>
+                <option value="2">Term 2</option>
+                <option value="3">Term 3</option>
               </select>
             </Field>
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2 text-xs text-amber-800">
@@ -666,26 +867,30 @@ export default function FinancePage() {
             <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-3">Fee Type</th>
               <th className="px-4 py-3">Applies To</th>
+              <th className="px-4 py-3">Type</th>
+              <th className="px-4 py-3">Term</th>
               <th className="px-4 py-3">Academic Year</th>
               <th className="px-4 py-3">Amount</th>
               <th className="px-4 py-3">Due Date</th>
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
               {loading
-                ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+                ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
                 : feeStructures.length === 0
-                ? <tr><td colSpan={5} className="py-16"><EmptyState icon={DollarSign} title="No fee structures" description="Add fee structures to bill students." /></td></tr>
+                ? <tr><td colSpan={7} className="py-16"><EmptyState icon={DollarSign} title="No fee structures" description="Add fee structures to bill students." /></td></tr>
                 : feeStructures.map((fs) => (
                   <tr key={fs.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">{fs.fee_type_name}</td>
                     <td className="px-4 py-3">
                       {fs.student_name
-                        ? <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{fs.student_name} <span className="opacity-60">({fs.admission_no})</span></span>
+                        ? <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{fs.student_name} <span className="opacity-60">({fs.student_admission_no})</span></span>
                         : fs.class_name
                         ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">{fs.class_name}</span>
                         : <span className="text-gray-400 text-xs">All students</span>
                       }
                     </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{fs.student_type ?? "All"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{fs.term ? `Term ${fs.term}` : "All"}</td>
                     <td className="px-4 py-3 text-gray-600">{fs.year_label}</td>
                     <td className="px-4 py-3 font-semibold text-violet-700">{fmt(fs.amount)}</td>
                     <td className="px-4 py-3 text-gray-500">{fs.due_date || "—"}</td>

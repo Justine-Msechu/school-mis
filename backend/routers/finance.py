@@ -96,6 +96,7 @@ def create_fee_structure(body: FeeStructureBody, user: Usr):
 class BillingGenerateBody(BaseModel):
     academic_year_id: int
     class_id:         int | None = None
+    term:             int | None = None   # 1/2/3 — filters fee structures by term
 
 @router.post("/billing/generate")
 def generate_bills(body: BillingGenerateBody, user: Usr):
@@ -110,6 +111,9 @@ def generate_bills(body: BillingGenerateBody, user: Usr):
     if body.class_id:
         fs_where.append("(fs.class_id = ? OR fs.class_id IS NULL)")
         fs_params.append(body.class_id)
+    if body.term:
+        fs_where.append("(fs.term = ? OR fs.term IS NULL)")
+        fs_params.append(body.term)
 
     structures = conn.execute(
         f"""SELECT fs.* FROM fee_structures fs
@@ -131,16 +135,19 @@ def generate_bills(body: BillingGenerateBody, user: Usr):
                 (fs["student_id"],),
             ).fetchall()
         else:
+            st_where = ["is_active=1", "deleted_at IS NULL"]
+            st_params: list = []
             target_class = fs["class_id"] or body.class_id
             if target_class:
-                students = conn.execute(
-                    "SELECT id FROM students WHERE class_id=? AND is_active=1 AND deleted_at IS NULL",
-                    (target_class,),
-                ).fetchall()
-            else:
-                students = conn.execute(
-                    "SELECT id FROM students WHERE is_active=1 AND deleted_at IS NULL"
-                ).fetchall()
+                st_where.append("class_id=?")
+                st_params.append(target_class)
+            if fs["student_type"]:
+                st_where.append("student_type=?")
+                st_params.append(fs["student_type"])
+            students = conn.execute(
+                f"SELECT id FROM students WHERE {' AND '.join(st_where)}",
+                st_params,
+            ).fetchall()
 
         for s in students:
             existing = conn.execute(
@@ -188,14 +195,16 @@ def get_outstanding(
                 s.first_name || ' ' || s.last_name AS student_name,
                 s.admission_no,
                 c.name          AS class_name,
-                SUM(sb.amount_due)                       AS total_billed,
-                COALESCE(SUM(sb.amount_paid), 0)         AS total_paid,
-                SUM(sb.amount_due - sb.amount_paid)      AS balance
+                SUM(sb.amount_due)                                                    AS total_billed,
+                COALESCE(SUM(sb.discount_amount), 0)                                  AS total_discount,
+                COALESCE(SUM(sb.amount_paid), 0)                                      AS total_paid,
+                SUM(sb.amount_due - COALESCE(sb.discount_amount,0) - sb.amount_paid)  AS balance
             FROM student_bills sb
             JOIN students s  ON s.id  = sb.student_id
             LEFT JOIN classes c ON c.id = s.class_id
             WHERE {' AND '.join(where)}
             GROUP BY s.id
+            HAVING balance > 0.01
             ORDER BY balance DESC""",
         params,
     ).fetchall()
@@ -364,3 +373,101 @@ def get_summary(user: Usr):
     base = svc.get_summary()
     recent = svc.repo.list_payments(limit=10)
     return {**base, "recent_payments": recent}
+
+
+# ── Waivers ───────────────────────────────────────────────────────────────────
+
+class WaiverBody(BaseModel):
+    student_id:       int
+    bill_id:          int | None = None
+    academic_year_id: int | None = None
+    waiver_type:      str = "other"   # orphan_exemption|scholarship|partial_discount|staff_child|other
+    discount_percent: float = 100
+    reason:           str | None = None
+
+
+@router.get("/waivers")
+def list_waivers(user: Usr, student_id: int = Query(None)):
+    require_permission(user, "finance.view")
+    from backend.core.db import _get_conn
+    conn = _get_conn()
+    where = "1=1"
+    params: list = []
+    if student_id:
+        where = "w.student_id = ?"
+        params.append(student_id)
+    rows = conn.execute(
+        f"""SELECT w.*,
+                   s.first_name || ' ' || s.last_name AS student_name,
+                   s.admission_no,
+                   u.username AS approved_by_name,
+                   ft.name AS fee_type_name
+            FROM fee_waivers w
+            JOIN students s ON s.id = w.student_id
+            LEFT JOIN users u ON u.id = w.approved_by
+            LEFT JOIN student_bills sb ON sb.id = w.bill_id
+            LEFT JOIN fee_structures fs ON fs.id = sb.fee_structure_id
+            LEFT JOIN fee_types ft ON ft.id = fs.fee_type_id
+            WHERE {where}
+            ORDER BY w.created_at DESC""",
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/waivers")
+def create_waiver(body: WaiverBody, user: Usr):
+    require_permission(user, "finance.waiver.create")
+    from backend.core.db import _get_conn
+    conn = _get_conn()
+
+    # Insert waiver record
+    cur = conn.execute(
+        """INSERT INTO fee_waivers
+           (student_id, bill_id, academic_year_id, waiver_type, discount_percent, approved_by, reason)
+           VALUES (?,?,?,?,?,?,?)""",
+        (body.student_id, body.bill_id, body.academic_year_id,
+         body.waiver_type, body.discount_percent, user["id"], body.reason),
+    )
+    waiver_id = cur.lastrowid
+
+    # Apply discount to the specific bill if bill_id given
+    if body.bill_id:
+        bill = conn.execute("SELECT * FROM student_bills WHERE id=?", (body.bill_id,)).fetchone()
+        if bill:
+            discount = round(bill["amount_due"] * (body.discount_percent / 100), 2)
+            new_discount = min(bill["amount_due"], bill["discount_amount"] + discount)
+            effective_outstanding = bill["amount_due"] - new_discount - bill["amount_paid"]
+            new_status = "waived" if effective_outstanding <= 0.01 else ("partial" if bill["amount_paid"] > 0 else "unpaid")
+            conn.execute(
+                "UPDATE student_bills SET discount_amount=?, status=? WHERE id=?",
+                (new_discount, new_status, body.bill_id),
+            )
+
+    conn.commit()
+    return {"id": waiver_id, "ok": True}
+
+
+@router.delete("/waivers/{waiver_id}")
+def delete_waiver(waiver_id: int, user: Usr):
+    require_permission(user, "finance.waiver.create")
+    from backend.core.db import _get_conn
+    conn = _get_conn()
+    waiver = conn.execute("SELECT * FROM fee_waivers WHERE id=?", (waiver_id,)).fetchone()
+    if not waiver:
+        raise HTTPException(404, "Waiver not found")
+    # Reverse discount on bill if linked
+    if waiver["bill_id"]:
+        bill = conn.execute("SELECT * FROM student_bills WHERE id=?", (waiver["bill_id"],)).fetchone()
+        if bill:
+            discount = round(bill["amount_due"] * (waiver["discount_percent"] / 100), 2)
+            new_discount = max(0.0, bill["discount_amount"] - discount)
+            effective_outstanding = bill["amount_due"] - new_discount - bill["amount_paid"]
+            new_status = "paid" if effective_outstanding <= 0.01 and bill["amount_paid"] > 0 else ("partial" if bill["amount_paid"] > 0 else "unpaid")
+            conn.execute(
+                "UPDATE student_bills SET discount_amount=?, status=? WHERE id=?",
+                (new_discount, new_status, waiver["bill_id"]),
+            )
+    conn.execute("DELETE FROM fee_waivers WHERE id=?", (waiver_id,))
+    conn.commit()
+    return {"ok": True}

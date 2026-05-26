@@ -111,6 +111,7 @@ class StudentPayload(BaseModel):
     address:        str | None = None
     notes:          str | None = None
     student_category: str = "regular"
+    student_type:     str = "Day"        # Day | Boarding
 
 
 @router.post("")
@@ -122,11 +123,12 @@ def create_student(body: StudentPayload, user: Usr):
     row_id = execute(
         """INSERT INTO students
            (first_name, last_name, admission_no, gender, class_id, date_of_birth,
-            parent_name, parent_phone, parent_email, address, notes, student_category, is_active)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)""",
+            parent_name, parent_phone, parent_email, address, notes,
+            student_category, student_type, is_active)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
         (body.first_name, body.last_name, adm_no, body.gender, body.class_id,
          body.date_of_birth, body.parent_name, body.parent_phone, body.parent_email,
-         body.address, body.notes, body.student_category),
+         body.address, body.notes, body.student_category, body.student_type),
     )
     _sync_guardian(row_id, body.parent_name, body.parent_phone, body.parent_email)
     _audit(user["id"], "student_create", row_id, f"Created student {body.first_name} {body.last_name} ({adm_no})")
@@ -139,7 +141,6 @@ def update_student(student_id: int, body: StudentPayload, user: Usr):
     before = fetch_one("SELECT * FROM students WHERE id=? AND deleted_at IS NULL", (student_id,))
     if not before:
         raise HTTPException(404, "Student not found")
-    # Keep existing admission_no if caller sends empty/null
     adm_no = (body.admission_no or "").strip() or before["admission_no"]
     dup = fetch_one(
         "SELECT id FROM students WHERE admission_no=? AND id != ?",
@@ -150,10 +151,10 @@ def update_student(student_id: int, body: StudentPayload, user: Usr):
     execute(
         """UPDATE students SET first_name=?, last_name=?, admission_no=?, gender=?,
            class_id=?, date_of_birth=?, parent_name=?, parent_phone=?, parent_email=?,
-           address=?, notes=?, student_category=? WHERE id=?""",
+           address=?, notes=?, student_category=?, student_type=? WHERE id=?""",
         (body.first_name, body.last_name, adm_no, body.gender, body.class_id,
          body.date_of_birth, body.parent_name, body.parent_phone, body.parent_email,
-         body.address, body.notes, body.student_category, student_id),
+         body.address, body.notes, body.student_category, body.student_type, student_id),
     )
     _sync_guardian(student_id, body.parent_name, body.parent_phone, body.parent_email)
     _audit(user["id"], "student_update", student_id, f"Updated student {body.first_name} {body.last_name}")

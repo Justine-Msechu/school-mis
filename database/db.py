@@ -579,6 +579,8 @@ def initialize_database():
         ("subjects",        "credit_hours",     "INTEGER DEFAULT 1"),
         ("subjects",        "subject_type",     "TEXT DEFAULT 'compulsory'"),
         ("fee_structures",  "student_id",       "INTEGER REFERENCES students(id)"),
+        ("fee_structures",  "student_type",     "TEXT"),        # Day / Boarding / NULL = both
+        ("students",        "student_type",     "TEXT DEFAULT 'Day'"),
     ]
     for table, col, col_type in _migrations:
         try:
