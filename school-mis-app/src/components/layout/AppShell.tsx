@@ -3,6 +3,7 @@ import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import SubscriptionBanner from "./SubscriptionBanner";
 import SubscriptionLockScreen from "./SubscriptionLockScreen";
+import AiChat from "@/components/ai/AiChat";
 import { useAuthStore } from "@/stores/authStore";
 import "@/stores/themeStore"; // ensure theme is applied on load
 
@@ -32,6 +33,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <AiChat />
     </div>
   );
 }

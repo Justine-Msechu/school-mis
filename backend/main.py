@@ -17,7 +17,7 @@ from backend.routers import (
     auth, grades, students, dashboard, classes,
     teachers, attendance, finance, library, transport,
     inventory, health, welfare, promotion, accounting,
-    reports, settings, rbac, invoices, payroll, subjects,
+    reports, settings, rbac, invoices, payroll, subjects, ai,
 )
 from backend.routers import notifications, audit
 from backend.routers import enrollments, guardians, timetable, report_cards
@@ -163,6 +163,7 @@ _SUBSCRIPTION_EXEMPT = (
     "/api/auth/",
     "/api/setup/",
     "/api/subscription/",
+    "/api/ai/",
     "/api/health",
     "/assets/",
     "/favicon",
@@ -247,6 +248,7 @@ app.include_router(payroll.router,       prefix="/api/payroll")
 app.include_router(ngo.router,           prefix="/api")
 app.include_router(setup_router.router,         prefix="/api/setup")
 app.include_router(subscription_router.router,  prefix="/api/subscription")
+app.include_router(ai.router,                   prefix="/api/ai")
 
 
 @app.get("/api/health")
