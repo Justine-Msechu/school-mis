@@ -599,17 +599,26 @@ export default function FinancePage() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead><tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-              <th className="px-4 py-3">Fee Type</th><th className="px-4 py-3">Academic Year</th>
-              <th className="px-4 py-3">Amount</th><th className="px-4 py-3">Due Date</th>
+              <th className="px-4 py-3">Fee Type</th>
+              <th className="px-4 py-3">Applies To</th>
+              <th className="px-4 py-3">Academic Year</th>
+              <th className="px-4 py-3">Amount</th>
+              <th className="px-4 py-3">Due Date</th>
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
               {loading
-                ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={4} />)
+                ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
                 : feeStructures.length === 0
-                ? <tr><td colSpan={4} className="py-16"><EmptyState icon={DollarSign} title="No fee structures" description="Add fee structures to bill students." /></td></tr>
+                ? <tr><td colSpan={5} className="py-16"><EmptyState icon={DollarSign} title="No fee structures" description="Add fee structures to bill students." /></td></tr>
                 : feeStructures.map((fs) => (
                   <tr key={fs.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">{fs.fee_type_name}</td>
+                    <td className="px-4 py-3">
+                      {fs.class_name
+                        ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">{fs.class_name}</span>
+                        : <span className="text-gray-400 text-xs">All classes</span>
+                      }
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{fs.year_label}</td>
                     <td className="px-4 py-3 font-semibold text-violet-700">{fmt(fs.amount)}</td>
                     <td className="px-4 py-3 text-gray-500">{fs.due_date || "—"}</td>

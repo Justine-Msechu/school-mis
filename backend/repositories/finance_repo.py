@@ -238,10 +238,12 @@ class FinanceRepository(BaseRepository):
             where = "fs.academic_year_id = ?"
             params.append(academic_year_id)
         return self._q(
-            f"""SELECT fs.*, ft.name AS fee_type_name, ay.label AS year_label
+            f"""SELECT fs.*, ft.name AS fee_type_name, ay.label AS year_label,
+                       c.name AS class_name
                 FROM fee_structures fs
                 JOIN fee_types ft ON ft.id = fs.fee_type_id
                 LEFT JOIN academic_years ay ON ay.id = fs.academic_year_id
+                LEFT JOIN classes c ON c.id = fs.class_id
                 WHERE {where}
                 ORDER BY ay.label DESC, ft.name""",
             params,

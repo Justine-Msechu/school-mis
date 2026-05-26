@@ -7,6 +7,9 @@ export interface FeeStructure {
   amount: number;
   year_label: string;
   academic_year_id: number;
+  class_id: number | null;
+  class_name: string | null;
+  due_date: string | null;
 }
 
 export interface StudentBill {
