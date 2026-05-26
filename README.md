@@ -1,143 +1,112 @@
 # School Management Information System
-**Primary School Edition — v2.1**
+**Web Edition — v2.2**
+
+A browser-based school MIS designed for primary schools. Runs on a Raspberry Pi (or any Linux server) and is accessed by staff from any phone, tablet, or PC on the same network — no installation required on client devices.
 
 ---
 
-## For the developer: Push to GitHub (do this first)
+## Architecture
 
-### Step 1 — Create a GitHub account and repository
-
-1. Go to **https://github.com** and sign up (free)
-2. Click **"New repository"** (top-right **+** button)
-3. Fill in:
-   - Repository name: `school-mis`  *(or any name you prefer)*
-   - Visibility: **Public** ← required for installs and auto-updates to work
-   - Do NOT tick "Initialize with README"
-4. Click **Create repository**
-5. GitHub shows you a page with commands — keep it open
-
-### Step 2 — Edit `github_config.py`
-
-Open `github_config.py` and set your details:
-
-```python
-GITHUB_USERNAME = "your-github-username"   # your actual GitHub username
-GITHUB_REPO     = "school-mis"             # the repo name you just created
-GITHUB_BRANCH   = "main"
-```
-
-Also open `SETUP_WINDOWS.bat` and `SETUP_LINUX.sh` and set the same values
-at the top of each file:
-
-```bat
-set GITHUB_USER=your-github-username
-set GITHUB_REPO=school-mis
-```
-
-```bash
-GITHUB_USER="your-github-username"
-GITHUB_REPO="school-mis"
-```
-
-### Step 3 — Install Git (if not already installed)
-
-**Windows:**  Download from https://git-scm.com/download/win — use all defaults
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt install git
-```
-
-### Step 4 — Push the code
-
-Open a terminal (or Git Bash on Windows) inside the `school_mis` folder:
-
-```bash
-# Tell Git who you are (one time only)
-git config --global user.email "you@example.com"
-git config --global user.name  "Your Name"
-
-# Initialise and push
-git init
-git add .
-git commit -m "Initial release v2.0"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/school-mis.git
-git push -u origin main
-```
-
-GitHub will ask for your username and password.
-> If it asks for a "token" instead of a password:
-> Go to GitHub → Settings → Developer settings → Personal access tokens → Generate new token (classic)
-> Tick: `repo` scope → Generate → copy the token → paste it as the password
-
-### Step 5 — Build the update manifest
-
-After every code change, run this before pushing:
-
-```bash
-python tools/build_manifest.py --version 2.1.0 --notes "Fixed attendance bug"
-git add .
-git commit -m "Release v2.1.0"
-git push
-```
-
-Installed apps will detect the new version on next startup and offer to update.
+| Layer | Technology |
+|---|---|
+| Backend API | Python / FastAPI |
+| Frontend | React + TypeScript (Vite) |
+| Database | SQLite |
+| Server | Uvicorn (via systemd or Docker) |
 
 ---
 
-## For the school: Installing on a new PC
+## Deployment
 
-### Windows
+See **[DEPLOY.md](DEPLOY.md)** for full instructions. Summary:
 
-1. Download the installer — click the link below and save the file:
-   ```
-   https://raw.githubusercontent.com/Justine-Msechu/school-mis/main/SETUP_WINDOWS.bat
-   ```
-   *(Right-click the page → Save as → SETUP_WINDOWS.bat)*
-2. Double-click `SETUP_WINDOWS.bat`
-3. Follow the on-screen instructions
+### Raspberry Pi (no Docker)
 
-### Linux
-
-1. Download and run in one command:
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/Justine-Msechu/school-mis/main/SETUP_LINUX.sh -o SETUP_LINUX.sh
-   chmod +x SETUP_LINUX.sh
-   ./SETUP_LINUX.sh
-   ```
-   Or download `SETUP_LINUX.sh` from:
-   ```
-   https://raw.githubusercontent.com/Justine-Msechu/school-mis/main/SETUP_LINUX.sh
-   ```
-
-### Alternative — download the full ZIP
-
-If the scripts don't work, download the full app as a ZIP:
-```
-https://github.com/Justine-Msechu/school-mis/archive/refs/heads/main.zip
-```
-Extract it, open a terminal inside the folder, then run:
 ```bash
-python install.py        # Linux / Mac
-python install.py        # Windows (in Command Prompt)
+# 1. Clone the repo
+git clone https://github.com/Justine-Msechu/school-mis.git /opt/school_mis
+cd /opt/school_mis
+
+# 2. Build the frontend
+cd school-mis-app && npm ci && npm run build && cd ..
+
+# 3. Create Python environment and install dependencies
+python3 -m venv venv
+source venv/bin/activate
+pip install -r backend/requirements.txt
+
+# 4. Start the server
+uvicorn backend.main:app --host 0.0.0.0 --port 8765
 ```
 
-Both setup scripts:
-- Check and install Python automatically
-- Download the full app from GitHub
-- Set up the virtual environment
-- Create a desktop shortcut
+Open `http://<pi-ip>:8765` on any device on the same network.
+
+### Docker (recommended for any server)
+
+```bash
+git clone https://github.com/Justine-Msechu/school-mis.git
+cd school-mis
+docker compose up -d --build
+```
+
+Access at `http://<server-ip>:8765`.
 
 ---
 
-## First-run setup (admin)
+## Updating the server
 
-On first launch a **Setup Wizard** appears:
-1. Enter school name, address, logo
+### Raspberry Pi (systemd)
+
+```bash
+cd /opt/school_mis
+git pull
+cd school-mis-app && npm ci && npm run build && cd ..
+sudo systemctl restart school-mis
+sudo systemctl status school-mis
+```
+
+### Docker
+
+```bash
+cd /opt/school_mis
+git pull
+docker compose up -d --build
+```
+
+---
+
+## Run as a systemd service (auto-start on boot)
+
+```bash
+sudo tee /etc/systemd/system/school-mis.service << 'EOF'
+[Unit]
+Description=School MIS
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/opt/school_mis
+ExecStart=/opt/school_mis/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8765
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable school-mis
+sudo systemctl start school-mis
+```
+
+---
+
+## First-run setup
+
+On first launch the app shows a **Setup Wizard**:
+1. Enter school name, address, and logo
 2. Create the administrator account
-3. Optionally add the head teacher
-4. Click **Open School MIS**
+3. Click **Finish** — the login page appears
 
 ---
 
@@ -145,25 +114,16 @@ On first launch a **Setup Wizard** appears:
 
 | Role | Access |
 |---|---|
-| **Administrator** | Full access — settings, users, all data |
+| **Administrator** | Full access — settings, users, all modules |
 | **Head Teacher** | All school operations, approve grades |
-| **Academic Officer** | Enter/approve/publish exam results, reports |
+| **Academic Officer** | Enter/approve/publish exam results and reports |
 | **Class Teacher** | Attendance for their class, view students |
 | **Subject Teacher** | Enter grades for their subjects only |
+| **Accountant** | Finance, payroll, and fee collection |
+| **Librarian** | Library module only |
+| **Transport Officer** | Transport routes and student assignments |
 
 User accounts are managed under **Settings → Users & Access**.
-
----
-
-## Pushing an update to all schools
-
-1. Make your code changes locally
-2. Test thoroughly
-3. Run: `python tools/build_manifest.py --version X.Y.Z --notes "What changed"`
-4. `git add . && git commit -m "Release vX.Y.Z" && git push`
-
-All installed apps check for updates on startup. If connected to the internet,
-they download only the changed files automatically.
 
 ---
 
@@ -171,32 +131,49 @@ they download only the changed files automatically.
 
 ```
 school_mis/
-├── main.py                  ← Entry point
-├── github_config.py         ← Set your GitHub repo here
-├── version.json             ← Generated by build_manifest.py
-├── requirements.txt
-├── SETUP_WINDOWS.bat        ← Share with Windows users
-├── SETUP_LINUX.sh           ← Share with Linux users
-├── install.py               ← Smart cross-platform installer
-├── auth/
-│   └── session.py           ← Current user & permissions
+├── backend/
+│   ├── main.py              ← FastAPI app entry point
+│   ├── deps.py              ← Auth dependencies & permission checks
+│   ├── core/
+│   │   └── db.py            ← Database connection helpers
+│   ├── routers/             ← One file per module (students, finance, …)
+│   ├── migrations/          ← Numbered DB migration scripts
+│   └── requirements.txt
+├── school-mis-app/          ← React/TypeScript frontend
+│   ├── src/
+│   │   ├── pages/           ← One page component per module
+│   │   ├── api/             ← API client functions
+│   │   ├── components/      ← Shared UI components
+│   │   └── stores/          ← Zustand state stores
+│   └── dist/                ← Built frontend (served by FastAPI)
 ├── database/
-│   └── db.py                ← Schema, auth helpers, config
-├── modules/
-│   ├── setup_wizard.py      ← First-run wizard
-│   ├── login.py             ← Login screen
-│   ├── dashboard.py
-│   ├── students.py
-│   ├── teachers.py
-│   ├── classes.py
-│   ├── attendance.py
-│   ├── fees.py
-│   ├── settings.py          ← Users, school info, updates
-│   └── updater.py           ← GitHub auto-updater
-├── ui/
-│   ├── theme.py             ← Global stylesheet (fixes text colours)
-│   └── main_window.py       ← Sidebar + navigation
-├── tools/
-│   └── build_manifest.py    ← Run before every release
-└── exports/                 ← PDFs and Excel files go here
+│   └── db.py                ← Schema initialisation & seed data
+├── services/                ← Business logic shared across routers
+├── Dockerfile
+├── docker-compose.yml
+└── DEPLOY.md                ← Full deployment guide
+```
+
+---
+
+## Phone / tablet access
+
+Once the server is running, staff open `http://<server-ip>:8765` in any browser.
+
+- Works on Android (Chrome) and iPhone (Safari)
+- Tap **"Add to Home Screen"** for an app-like shortcut
+- No app installation needed
+
+---
+
+## Backup
+
+All school data is in a single SQLite file:
+
+```bash
+# Manual backup
+cp /opt/school_mis/school_mis.db "/opt/school_mis/backups/school_mis_$(date +%Y%m%d).db"
+
+# Automated daily backup (add to crontab)
+0 2 * * * cp /opt/school_mis/school_mis.db "/opt/school_mis/backups/school_mis_$(date +\%Y\%m\%d).db"
 ```
