@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Bus, Phone, User, Plus, Edit2, Users, X, UserPlus, Trash2, MapPin } from "lucide-react";
 import {
   getRoutes, createRoute, updateRoute, getRouteStudents,
@@ -13,8 +13,9 @@ import EmptyState from "@/components/ui/EmptyState";
 const fmt = (n: number) => `TZS ${n.toLocaleString()}`;
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-// ─── student search ───────────────────────────────────────────────────────────
+// ─── class → student picker ───────────────────────────────────────────────────
 
+interface ClassItem { id: number; name: string; grade_level: number }
 interface StudentHit {
   id: number;
   first_name: string;
@@ -23,57 +24,67 @@ interface StudentHit {
   class_name: string | null;
 }
 
-function StudentSearch({
+function ClassStudentPicker({
   value, onChange,
 }: {
   value: StudentHit | null;
   onChange: (s: StudentHit | null) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<StudentHit[]>([]);
-  const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [classId, setClassId] = useState<number | "">("");
+  const [students, setStudents] = useState<StudentHit[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
-  const search = (q: string) => {
-    setQuery(q);
+  useEffect(() => {
+    api.get("/grades/classes").then(({ data }) => setClasses(data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!classId) { setStudents([]); onChange(null); return; }
+    setLoadingStudents(true);
     onChange(null);
-    if (!q.trim()) { setResults([]); setOpen(false); return; }
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      try {
-        const { data } = await api.get("/students", { params: { search: q, limit: 8 } });
-        setResults(data.students ?? data ?? []);
-        setOpen(true);
-      } catch { setResults([]); }
-    }, 280);
-  };
-
-  const pick = (s: StudentHit) => {
-    onChange(s);
-    setQuery(`${s.first_name} ${s.last_name} (${s.admission_no})`);
-    setOpen(false);
-  };
+    api.get("/students", { params: { class_id: classId, limit: 200 } })
+      .then(({ data }) => setStudents(data.students ?? data ?? []))
+      .catch(() => setStudents([]))
+      .finally(() => setLoadingStudents(false));
+  }, [classId]);
 
   return (
-    <div className="relative">
-      <input
-        value={value ? `${value.first_name} ${value.last_name} (${value.admission_no})` : query}
-        onChange={(e) => search(e.target.value)}
-        onFocus={() => results.length > 0 && setOpen(true)}
-        placeholder="Search student by name or admission no…"
-        className={INPUT}
-      />
-      {open && results.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-          {results.map((s) => (
-            <button key={s.id} onMouseDown={() => pick(s)}
-              className="w-full text-left px-3 py-2 hover:bg-violet-50 text-sm flex justify-between items-center">
-              <span className="font-medium">{s.first_name} {s.last_name}</span>
-              <span className="text-xs text-gray-400">{s.admission_no} {s.class_name ? `· ${s.class_name}` : ""}</span>
-            </button>
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="text-xs font-medium text-gray-600 mb-1 block">Class *</label>
+        <select
+          value={classId}
+          onChange={(e) => setClassId(e.target.value ? Number(e.target.value) : "")}
+          className={INPUT}
+        >
+          <option value="">Select class…</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </div>
-      )}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-gray-600 mb-1 block">Student *</label>
+        <select
+          value={value?.id ?? ""}
+          onChange={(e) => {
+            const s = students.find((s) => s.id === Number(e.target.value)) ?? null;
+            onChange(s);
+          }}
+          disabled={!classId || loadingStudents}
+          className={INPUT}
+        >
+          <option value="">
+            {!classId ? "Select class first" : loadingStudents ? "Loading…" : students.length === 0 ? "No students" : "Select student…"}
+          </option>
+          {students.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.first_name} {s.last_name} ({s.admission_no})
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
@@ -249,10 +260,7 @@ function StudentsModal({ route, onClose }: { route: Route; onClose: () => void }
           <div className="p-4 bg-violet-50 border-b shrink-0">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Assign a Student</h3>
             <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Student *</label>
-                <StudentSearch value={selectedStudent} onChange={setSelectedStudent} />
-              </div>
+              <ClassStudentPicker value={selectedStudent} onChange={setSelectedStudent} />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Academic Year *</label>
