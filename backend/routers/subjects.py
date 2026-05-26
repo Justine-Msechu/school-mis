@@ -1,9 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from database.db import fetch_all, fetch_one, execute
-from backend.deps import get_current_user
-from fastapi import Depends
+from backend.deps import require_auth
 
 router = APIRouter(tags=["subjects"])
 Usr = dict
@@ -19,7 +18,7 @@ def _ensure_is_active():
 
 
 @router.get("")
-def list_subjects(include_inactive: bool = False, user: Usr = Depends(get_current_user)):
+def list_subjects(include_inactive: bool = False, user: Usr = Depends(require_auth)):
     _ensure_is_active()
     if include_inactive:
         rows = fetch_all("SELECT * FROM subjects ORDER BY name")
@@ -37,7 +36,7 @@ class SubjectPayload(BaseModel):
 
 
 @router.post("")
-def create_subject(body: SubjectPayload, user: Usr = Depends(get_current_user)):
+def create_subject(body: SubjectPayload, user: Usr = Depends(require_auth)):
     _ensure_is_active()
     if not body.name.strip():
         raise HTTPException(400, "Subject name is required.")
@@ -60,7 +59,7 @@ def create_subject(body: SubjectPayload, user: Usr = Depends(get_current_user)):
 
 
 @router.put("/{sid}")
-def update_subject(sid: int, body: SubjectPayload, user: Usr = Depends(get_current_user)):
+def update_subject(sid: int, body: SubjectPayload, user: Usr = Depends(require_auth)):
     if not fetch_one("SELECT id FROM subjects WHERE id=?", (sid,)):
         raise HTTPException(404, "Subject not found.")
     if not body.name.strip():
@@ -88,7 +87,7 @@ def update_subject(sid: int, body: SubjectPayload, user: Usr = Depends(get_curre
 
 
 @router.patch("/{sid}/toggle")
-def toggle_subject(sid: int, user: Usr = Depends(get_current_user)):
+def toggle_subject(sid: int, user: Usr = Depends(require_auth)):
     row = fetch_one("SELECT id, is_active FROM subjects WHERE id=?", (sid,))
     if not row:
         raise HTTPException(404, "Subject not found.")
