@@ -1,4 +1,4 @@
-"""Payroll router — salary configuration, payroll runs, payslips."""
+"""Payroll router — salary configuration, payroll runs, payslips, reports."""
 
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -22,7 +22,6 @@ def _svc() -> PayrollService:
 
 @router.get("/staff")
 def list_staff(user: Usr, search: str = Query("")):
-    """All active teachers with their salary config (if set)."""
     require_permission(user, "payroll.view")
     params: list = []
     where = ["t.deleted_at IS NULL", "t.is_active = 1"]
@@ -38,6 +37,25 @@ def list_staff(user: Usr, search: str = Query("")):
             WHERE {' AND '.join(where)}
             ORDER BY t.last_name, t.first_name""",
         params,
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/staff/{teacher_id}/history")
+def staff_history(teacher_id: int, user: Usr):
+    """All payslips for one employee across all runs."""
+    require_permission(user, "payroll.view")
+    t = fetch_one("SELECT id FROM teachers WHERE id=? AND deleted_at IS NULL", (teacher_id,))
+    if not t:
+        raise HTTPException(404, "Teacher not found")
+    rows = fetch_all(
+        """SELECT pi.*, pr.label AS run_label, pr.status AS run_status,
+                  pr.month, pr.year
+           FROM payroll_items pi
+           JOIN payroll_runs pr ON pr.id = pi.run_id
+           WHERE pi.teacher_id=?
+           ORDER BY pr.year DESC, pr.month DESC""",
+        (teacher_id,),
     )
     return [dict(r) for r in rows]
 
@@ -72,7 +90,8 @@ def list_runs(user: Usr):
     rows = fetch_all(
         """SELECT pr.*,
                   (SELECT COUNT(*) FROM payroll_items pi WHERE pi.run_id = pr.id) AS employee_count,
-                  (SELECT SUM(net_pay) FROM payroll_items pi WHERE pi.run_id = pr.id) AS total_net
+                  (SELECT SUM(net_pay) FROM payroll_items pi WHERE pi.run_id = pr.id) AS total_net,
+                  (SELECT SUM(gross_pay) FROM payroll_items pi WHERE pi.run_id = pr.id) AS total_gross
            FROM payroll_runs pr
            ORDER BY pr.year DESC, pr.month DESC"""
     )
@@ -93,6 +112,26 @@ def create_run(body: CreateRunBody, user: Usr):
         run = _svc().create_run(body.month, body.year, actor_id=user["id"])
         return run
     except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.delete("/runs/{run_id}")
+def delete_run(run_id: int, user: Usr):
+    require_permission(user, "payroll.manage")
+    try:
+        _svc().delete_run(run_id, actor_id=user["id"])
+        return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/runs/{run_id}/reopen")
+def reopen_run(run_id: int, user: Usr):
+    require_permission(user, "payroll.manage")
+    try:
+        _svc().reopen_run(run_id, actor_id=user["id"])
+        return {"ok": True}
+    except ValueError as e:
         raise HTTPException(400, str(e))
 
 
@@ -122,6 +161,30 @@ def approve_run(run_id: int, user: Usr):
     try:
         _svc().approve_run(run_id, actor_id=user["id"])
         return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ── Pro-rating ────────────────────────────────────────────────────────────────
+
+class ProrateBody(BaseModel):
+    prorate_pct: float
+
+
+@router.patch("/runs/{run_id}/items/{teacher_id}")
+def update_prorate(run_id: int, teacher_id: int, body: ProrateBody, user: Usr):
+    require_permission(user, "payroll.manage")
+    if not (0 < body.prorate_pct <= 100):
+        raise HTTPException(400, "prorate_pct must be between 1 and 100")
+    try:
+        _svc().update_prorate(run_id, teacher_id, body.prorate_pct, actor_id=user["id"])
+        row = fetch_one(
+            """SELECT pi.*, t.first_name, t.last_name, t.employee_no
+               FROM payroll_items pi JOIN teachers t ON t.id=pi.teacher_id
+               WHERE pi.run_id=? AND pi.teacher_id=?""",
+            (run_id, teacher_id),
+        )
+        return dict(row)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -163,6 +226,34 @@ def get_payslip(run_id: int, teacher_id: int, user: Usr):
     if not item:
         raise HTTPException(404, "Payslip not found")
     return {"run": dict(run), "item": dict(item)}
+
+
+# ── Year-to-Date ──────────────────────────────────────────────────────────────
+
+@router.get("/ytd")
+def ytd_summary(user: Usr, year: int = Query(...)):
+    """Year-to-date totals per employee for finalized/approved runs in the given year."""
+    require_permission(user, "payroll.view")
+    rows = fetch_all(
+        """SELECT t.id AS teacher_id, t.first_name, t.last_name, t.employee_no,
+                  COUNT(pi.id) AS months_paid,
+                  SUM(pi.gross_pay) AS ytd_gross,
+                  SUM(pi.nssf_employee) AS ytd_nssf_employee,
+                  SUM(pi.nssf_employer) AS ytd_nssf_employer,
+                  SUM(pi.paye) AS ytd_paye,
+                  SUM(pi.loan_deduction) AS ytd_loan,
+                  SUM(pi.loan_board) AS ytd_loan_board,
+                  SUM(pi.total_deductions) AS ytd_deductions,
+                  SUM(pi.net_pay) AS ytd_net
+           FROM payroll_items pi
+           JOIN payroll_runs pr ON pr.id = pi.run_id
+           JOIN teachers t ON t.id = pi.teacher_id
+           WHERE pr.year=? AND pr.status IN ('finalized','approved')
+           GROUP BY pi.teacher_id
+           ORDER BY t.last_name, t.first_name""",
+        (year,),
+    )
+    return [dict(r) for r in rows]
 
 
 # ── Audit log ─────────────────────────────────────────────────────────────────

@@ -34,6 +34,7 @@ export interface PayrollRun {
   created_at: string;
   employee_count: number;
   total_net: number | null;
+  total_gross: number | null;
 }
 
 export interface PayrollItem {
@@ -56,11 +57,35 @@ export interface PayrollItem {
   loan_board: number;
   total_deductions: number;
   net_pay: number;
+  prorate_pct: number;
 }
 
 export interface RunItems {
   run: PayrollRun;
   items: PayrollItem[];
+}
+
+export interface YTDRow {
+  teacher_id: number;
+  first_name: string;
+  last_name: string;
+  employee_no: string;
+  months_paid: number;
+  ytd_gross: number;
+  ytd_nssf_employee: number;
+  ytd_nssf_employer: number;
+  ytd_paye: number;
+  ytd_loan: number;
+  ytd_loan_board: number;
+  ytd_deductions: number;
+  ytd_net: number;
+}
+
+export interface HistoryItem extends PayrollItem {
+  run_label: string;
+  run_status: string;
+  month: number;
+  year: number;
 }
 
 export const getPayrollStaff = (search = "") =>
@@ -69,11 +94,20 @@ export const getPayrollStaff = (search = "") =>
 export const setSalaryConfig = (teacherId: number, body: SalaryConfigPayload) =>
   api.put<StaffSalary>(`/payroll/staff/${teacherId}/salary`, body).then((r) => r.data);
 
+export const getStaffHistory = (teacherId: number) =>
+  api.get<HistoryItem[]>(`/payroll/staff/${teacherId}/history`).then((r) => r.data);
+
 export const getPayrollRuns = () =>
   api.get<PayrollRun[]>("/payroll/runs").then((r) => r.data);
 
 export const createPayrollRun = (month: number, year: number) =>
   api.post<PayrollRun>("/payroll/runs", { month, year }).then((r) => r.data);
+
+export const deletePayrollRun = (runId: number) =>
+  api.delete(`/payroll/runs/${runId}`).then((r) => r.data);
+
+export const reopenRun = (runId: number) =>
+  api.post(`/payroll/runs/${runId}/reopen`).then((r) => r.data);
 
 export const computeRun = (runId: number) =>
   api.post<{ computed: number }>(`/payroll/runs/${runId}/compute`).then((r) => r.data);
@@ -84,5 +118,11 @@ export const finalizeRun = (runId: number) =>
 export const approveRun = (runId: number) =>
   api.post(`/payroll/runs/${runId}/approve`).then((r) => r.data);
 
+export const updateProrate = (runId: number, teacherId: number, prorate_pct: number) =>
+  api.patch<PayrollItem>(`/payroll/runs/${runId}/items/${teacherId}`, { prorate_pct }).then((r) => r.data);
+
 export const getRunItems = (runId: number) =>
   api.get<RunItems>(`/payroll/runs/${runId}/items`).then((r) => r.data);
+
+export const getYTD = (year: number) =>
+  api.get<YTDRow[]>("/payroll/ytd", { params: { year } }).then((r) => r.data);

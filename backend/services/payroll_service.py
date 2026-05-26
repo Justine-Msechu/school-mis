@@ -2,14 +2,15 @@
 Payroll calculation service — TZS, TRA 2024/25 rules.
 
 PAYE bands (monthly taxable income):
-  0 – 270,000       → 0%
-  270,001 – 520,000 → 8%
-  520,001 – 760,000 → 20%
+  0 – 270,000         → 0%
+  270,001 – 520,000   → 8%
+  520,001 – 760,000   → 20%
   760,001 – 1,000,000 → 25%
-  > 1,000,000       → 30%
+  > 1,000,000         → 30%
 
 NSSF: employee 10% of gross, employer 10% of gross.
 Loan Board (HESLB): 15% of gross when loan_board flag is set.
+Pro-rating: salary × (prorate_pct / 100) before any deduction.
 """
 
 from __future__ import annotations
@@ -17,15 +18,15 @@ from datetime import datetime
 
 
 PAYE_BANDS = [
-    (270_000,   0.00),
-    (520_000,   0.08),
-    (760_000,   0.20),
-    (1_000_000, 0.25),
+    (270_000,       0.00),
+    (520_000,       0.08),
+    (760_000,       0.20),
+    (1_000_000,     0.25),
     (float("inf"), 0.30),
 ]
 
-NSSF_RATE      = 0.10
-LOAN_BOARD_RATE = 0.15
+NSSF_RATE       = 0.10
+LOAN_BOARD_RATE  = 0.15
 
 
 def compute_paye(taxable: float) -> float:
@@ -48,34 +49,43 @@ def compute_payslip(
     other_allow: float,
     loan_deduction: float,
     loan_board: bool,
+    prorate_pct: float = 100.0,
 ) -> dict:
-    gross = basic_salary + housing_allow + transport_allow + other_allow
+    factor = max(0.0, min(prorate_pct, 100.0)) / 100.0
+
+    basic     = round(basic_salary    * factor, 2)
+    housing   = round(housing_allow   * factor, 2)
+    transport = round(transport_allow * factor, 2)
+    other     = round(other_allow     * factor, 2)
+    loan_ded  = round(loan_deduction  * factor, 2)
+
+    gross = basic + housing + transport + other
 
     nssf_employee = round(gross * NSSF_RATE, 2)
     nssf_employer = round(gross * NSSF_RATE, 2)
 
-    # Taxable income = gross − NSSF employee share
     taxable = max(gross - nssf_employee, 0)
-    paye = compute_paye(taxable)
+    paye    = compute_paye(taxable)
 
     lb = round(gross * LOAN_BOARD_RATE, 2) if loan_board else 0.0
 
-    total_deductions = nssf_employee + paye + loan_deduction + lb
-    net_pay = round(gross - total_deductions, 2)
+    total_deductions = nssf_employee + paye + loan_ded + lb
+    net_pay          = round(gross - total_deductions, 2)
 
     return {
-        "basic_salary":    round(basic_salary, 2),
-        "housing_allow":   round(housing_allow, 2),
-        "transport_allow": round(transport_allow, 2),
-        "other_allow":     round(other_allow, 2),
+        "basic_salary":    basic,
+        "housing_allow":   housing,
+        "transport_allow": transport,
+        "other_allow":     other,
         "gross_pay":       round(gross, 2),
         "nssf_employee":   nssf_employee,
         "nssf_employer":   nssf_employer,
         "paye":            paye,
-        "loan_deduction":  round(loan_deduction, 2),
+        "loan_deduction":  loan_ded,
         "loan_board":      lb,
         "total_deductions": round(total_deductions, 2),
         "net_pay":         net_pay,
+        "prorate_pct":     prorate_pct,
     }
 
 
@@ -135,10 +145,38 @@ class PayrollService:
         self._log(run_id, actor_id, "created", f"Payroll run created for {label}")
         return self._get_run(run_id)
 
+    def delete_run(self, run_id: int, actor_id: int):
+        run = self._get_run(run_id)
+        if run["status"] != "draft":
+            raise ValueError("Only draft runs can be deleted")
+        self._conn.execute("DELETE FROM payroll_items WHERE run_id=?", (run_id,))
+        self._conn.execute("DELETE FROM payroll_audit_log WHERE run_id=?", (run_id,))
+        self._conn.execute("DELETE FROM payroll_runs WHERE id=?", (run_id,))
+        self._conn.commit()
+
+    def reopen_run(self, run_id: int, actor_id: int):
+        run = self._get_run(run_id)
+        if run["status"] == "approved":
+            raise ValueError("Approved runs cannot be reopened")
+        self._conn.execute(
+            "UPDATE payroll_runs SET status='draft', finalized_at=NULL, finalized_by=NULL WHERE id=?",
+            (run_id,),
+        )
+        self._conn.commit()
+        self._log(run_id, actor_id, "reopened", "Run returned to draft")
+
     def compute_run(self, run_id: int, actor_id: int) -> int:
         run = self._get_run(run_id)
         if run["status"] == "approved":
             raise ValueError("Cannot recompute an approved payroll run")
+
+        # Preserve existing prorate values
+        existing_prorate: dict[int, float] = {}
+        rows = self._conn.execute(
+            "SELECT teacher_id, prorate_pct FROM payroll_items WHERE run_id=?", (run_id,)
+        ).fetchall()
+        for r in rows:
+            existing_prorate[r["teacher_id"]] = r["prorate_pct"]
 
         configs = self._conn.execute(
             """SELECT psc.*, t.id as teacher_id
@@ -149,6 +187,7 @@ class PayrollService:
 
         count = 0
         for cfg in configs:
+            pct = existing_prorate.get(cfg["teacher_id"], 100.0)
             ps = compute_payslip(
                 cfg["basic_salary"],
                 cfg["housing_allow"],
@@ -156,13 +195,14 @@ class PayrollService:
                 cfg["other_allow"],
                 cfg["loan_deduction"],
                 bool(cfg["loan_board"]),
+                prorate_pct=pct,
             )
             self._conn.execute(
                 """INSERT INTO payroll_items
                        (run_id, teacher_id, basic_salary, housing_allow, transport_allow,
                         other_allow, gross_pay, nssf_employee, nssf_employer, paye,
-                        loan_deduction, loan_board, total_deductions, net_pay)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        loan_deduction, loan_board, total_deductions, net_pay, prorate_pct)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(run_id, teacher_id) DO UPDATE SET
                        basic_salary     = excluded.basic_salary,
                        housing_allow    = excluded.housing_allow,
@@ -175,13 +215,15 @@ class PayrollService:
                        loan_deduction   = excluded.loan_deduction,
                        loan_board       = excluded.loan_board,
                        total_deductions = excluded.total_deductions,
-                       net_pay          = excluded.net_pay""",
+                       net_pay          = excluded.net_pay,
+                       prorate_pct      = excluded.prorate_pct""",
                 (
                     run_id, cfg["teacher_id"],
                     ps["basic_salary"], ps["housing_allow"], ps["transport_allow"],
                     ps["other_allow"], ps["gross_pay"], ps["nssf_employee"],
                     ps["nssf_employer"], ps["paye"], ps["loan_deduction"],
                     ps["loan_board"], ps["total_deductions"], ps["net_pay"],
+                    ps["prorate_pct"],
                 ),
             )
             count += 1
@@ -189,6 +231,39 @@ class PayrollService:
         self._conn.commit()
         self._log(run_id, actor_id, "computed", f"Computed {count} payslips")
         return count
+
+    def update_prorate(self, run_id: int, teacher_id: int, prorate_pct: float, actor_id: int):
+        run = self._get_run(run_id)
+        if run["status"] == "approved":
+            raise ValueError("Cannot edit an approved payroll run")
+
+        cfg = self._conn.execute(
+            "SELECT * FROM payroll_salary_config WHERE teacher_id=?", (teacher_id,)
+        ).fetchone()
+        if not cfg:
+            raise ValueError("No salary config found for this employee")
+
+        ps = compute_payslip(
+            cfg["basic_salary"], cfg["housing_allow"], cfg["transport_allow"],
+            cfg["other_allow"], cfg["loan_deduction"], bool(cfg["loan_board"]),
+            prorate_pct=prorate_pct,
+        )
+        self._conn.execute(
+            """UPDATE payroll_items SET
+                   basic_salary=?, housing_allow=?, transport_allow=?, other_allow=?,
+                   gross_pay=?, nssf_employee=?, nssf_employer=?, paye=?,
+                   loan_deduction=?, loan_board=?, total_deductions=?, net_pay=?,
+                   prorate_pct=?
+               WHERE run_id=? AND teacher_id=?""",
+            (
+                ps["basic_salary"], ps["housing_allow"], ps["transport_allow"],
+                ps["other_allow"], ps["gross_pay"], ps["nssf_employee"],
+                ps["nssf_employer"], ps["paye"], ps["loan_deduction"],
+                ps["loan_board"], ps["total_deductions"], ps["net_pay"],
+                ps["prorate_pct"], run_id, teacher_id,
+            ),
+        )
+        self._conn.commit()
 
     def finalize_run(self, run_id: int, actor_id: int):
         now = datetime.utcnow().isoformat()
@@ -207,7 +282,6 @@ class PayrollService:
         )
         self._conn.commit()
         self._log(run_id, actor_id, "approved", "Payroll run approved")
-        # Post journal entry
         self._post_journal(run_id, actor_id)
 
     # ── Internal helpers ──────────────────────────────────────────────────────
@@ -231,7 +305,6 @@ class PayrollService:
             pass
 
     def _post_journal(self, run_id: int, actor_id: int):
-        """Post salary expense journal entries to the accounting ledger."""
         try:
             totals = self._conn.execute(
                 """SELECT SUM(gross_pay) as gross, SUM(nssf_employer) as nssf_emp,
@@ -241,19 +314,16 @@ class PayrollService:
             ).fetchone()
             run = self._get_run(run_id)
             desc = f"Payroll — {run['label']}"
-            # Salary expense debit
             self._conn.execute(
                 """INSERT INTO ledger_entries (date, description, account, debit, credit, created_by)
                    VALUES (date('now'),?,?,?,?,?)""",
                 (desc, "Salary Expense", round(totals["gross"] or 0, 2), 0, actor_id),
             )
-            # Cash/Bank credit (net pay to staff)
             self._conn.execute(
                 """INSERT INTO ledger_entries (date, description, account, debit, credit, created_by)
                    VALUES (date('now'),?,?,?,?,?)""",
                 (desc, "Cash / Bank", 0, round(totals["net"] or 0, 2), actor_id),
             )
-            # NSSF payable
             if totals["nssf_emp"]:
                 self._conn.execute(
                     """INSERT INTO ledger_entries (date, description, account, debit, credit, created_by)
@@ -262,4 +332,4 @@ class PayrollService:
                 )
             self._conn.commit()
         except Exception:
-            pass  # accounting table may not exist yet in all DBs
+            pass
