@@ -219,9 +219,8 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
     academic_year_id: years.find((y) => y.is_current)?.id?.toString() ?? years[0]?.id?.toString() ?? "",
     amount:           "",
     due_date:         "",
-    scope:            "all" as "all" | "grade" | "class" | "student",
+    scope:            "all" as "all" | "class" | "student",
     grade_level:      "",
-    class_id:         "",
     student_type:     "" as string,
     term:             "" as string,
   });
@@ -233,14 +232,12 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
 
   useEffect(() => { getClasses().then(setClasses).catch(() => {}); }, []);
 
-  // Unique grade levels sorted, with label derived from class names
+  // Unique grade levels, label stripped of section letter ("Std 7A" → "Std 7")
   const gradeGroups = (() => {
     const seen = new Map<number, string>();
     for (const c of classes) {
       if (!seen.has(c.grade_level)) {
-        // Remove trailing section letter: "Std 7A" → "Std 7"
-        const label = c.name.replace(/[A-Z]+$/, "").trim();
-        seen.set(c.grade_level, label);
+        seen.set(c.grade_level, c.name.replace(/[A-Z]+$/, "").trim());
       }
     }
     return [...seen.entries()]
@@ -255,8 +252,7 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
     if (!form.fee_type_id || form.fee_type_id === "") { setError("Select a fee type."); return; }
     if (form.fee_type_id === "__new__" && !newFeeType.trim()) { setError("Enter a name for the new fee type."); return; }
     if (!form.academic_year_id) { setError("Select an academic year."); return; }
-    if (form.scope === "grade" && !form.grade_level) { setError("Select a grade level."); return; }
-    if (form.scope === "class" && !form.class_id) { setError("Select a class section."); return; }
+    if (form.scope === "class" && !form.grade_level) { setError("Select a class."); return; }
     if (form.scope === "student" && !selectedStudent) { setError("Select a student first."); return; }
     setSaving(true); setError("");
     try {
@@ -270,9 +266,9 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
         academic_year_id: Number(form.academic_year_id),
         amount:           Number(form.amount),
         due_date:         form.due_date || undefined,
-        grade_level:      form.scope === "grade"   ? Number(form.grade_level) : null,
-        class_id:         form.scope === "class"   ? Number(form.class_id)    : null,
-        student_id:       form.scope === "student" ? selectedStudent!.id      : null,
+        grade_level:      form.scope === "class" ? Number(form.grade_level) : null,
+        class_id:         null,
+        student_id:       form.scope === "student" ? selectedStudent!.id : null,
         student_type:     form.student_type || null,
         term:             form.term ? Number(form.term) : undefined,
       });
@@ -313,26 +309,17 @@ function FeeStructureDialog({ feeTypes, years, onSave, onClose }: {
           <Field label="Applies To *">
             <select className={INPUT} value={form.scope} onChange={(e) => set("scope", e.target.value)}>
               <option value="all">All Students</option>
-              <option value="grade">Grade Level (all sections)</option>
-              <option value="class">Specific Class Section</option>
+              <option value="class">Specific Class</option>
               <option value="student">Specific Student</option>
             </select>
           </Field>
-          {form.scope === "grade" && (
-            <Field label="Grade Level *">
-              <select className={INPUT} value={form.grade_level} onChange={(e) => set("grade_level", e.target.value)}>
-                <option value="">— Select grade —</option>
-                {gradeGroups.map((g) => (
-                  <option key={g.level} value={g.level}>{g.label} (all sections)</option>
-                ))}
-              </select>
-            </Field>
-          )}
           {form.scope === "class" && (
-            <Field label="Class Section *">
-              <select className={INPUT} value={form.class_id} onChange={(e) => set("class_id", e.target.value)}>
+            <Field label="Class *">
+              <select className={INPUT} value={form.grade_level} onChange={(e) => set("grade_level", e.target.value)}>
                 <option value="">— Select class —</option>
-                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {gradeGroups.map((g) => (
+                  <option key={g.level} value={g.level}>{g.label}</option>
+                ))}
               </select>
             </Field>
           )}
@@ -1792,7 +1779,7 @@ export default function FinancePage() {
                       {fs.student_name
                         ? <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{fs.student_name} <span className="opacity-60">({fs.student_admission_no})</span></span>
                         : fs.grade_name
-                        ? <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">{fs.grade_name} (all sections)</span>
+                        ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">{fs.grade_name}</span>
                         : fs.class_name
                         ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">{fs.class_name}</span>
                         : <span className="text-gray-400 text-xs">All students</span>
