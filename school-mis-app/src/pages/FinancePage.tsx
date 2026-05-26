@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap, Lock, Unlock, ArrowRightLeft, Clock, CheckCircle, XCircle, Trash2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap, Lock, Unlock, ArrowRightLeft, Clock, CheckCircle, XCircle, Trash2, FileText, ShieldCheck, Copy } from "lucide-react";
 import { downloadCSV } from "@/utils/export";
 import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, createWaiver, deleteWaiver, carryForward, getLockedPeriods, lockPeriod, unlockPeriod, getLateFeeRules, createLateFeeRule, deleteLateFeeRule, applyLateFees, getInstallments, createInstallmentPlan, getPendingApprovals, approveAction, rejectAction, type Payment, type FinanceSummary, type StudentBill, type DebtorRow, type WaiverRecord, type LockedPeriod, type LateFeeRule, type InstallmentRow, type PendingApproval } from "@/api/finance";
+import { getInvoices, createInvoice, approveInvoice, issueControlNumber, payInvoice, voidInvoice, getInvoiceAudit, type Invoice, type AuditEntry } from "@/api/invoices";
 import { getStudents } from "@/api/students";
 import { getFeeStructures, getFeeTypes, createFeeStructure, createFeeType, getAcademicYears, type FeeStructure, type FeeType, type AcademicYear } from "@/api/settings";
 import { getClasses } from "@/api/grades";
@@ -25,7 +26,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-type Tab = "payments" | "fees" | "student-bill" | "outstanding" | "manage" | "approvals";
+type Tab = "payments" | "fees" | "student-bill" | "outstanding" | "manage" | "approvals" | "invoices";
 
 // ── Payment dialog ──────────────────────────────────────────────────────────
 
@@ -1090,6 +1091,456 @@ function ApprovalsTab() {
   );
 }
 
+// ── Invoices tab ────────────────────────────────────────────────────────────
+
+const STATUS_COLORS: Record<string, string> = {
+  draft:          "bg-gray-100 text-gray-600",
+  approved:       "bg-blue-100 text-blue-700",
+  partially_paid: "bg-amber-100 text-amber-700",
+  paid:           "bg-emerald-100 text-emerald-700",
+  voided:         "bg-red-100 text-red-600",
+  cancelled:      "bg-gray-100 text-gray-500",
+};
+
+function CreateInvoiceDialog({ onSave, onClose }: { onSave: () => void; onClose: () => void }) {
+  const toast = useToast();
+  const [admNo, setAdmNo]     = useState("");
+  const [studentId, setStudentId] = useState<number | null>(null);
+  const [studentLabel, setStudentLabel] = useState("");
+  const [lookupState, setLookupState] = useState<"idle" | "loading" | "found" | "error">("idle");
+  const [items, setItems]     = useState([{ description: "", amount: "", discount_amount: "0", quantity: "1" }]);
+  const [notes, setNotes]     = useState("");
+  const [saving, setSaving]   = useState(false);
+
+  const lookupStudent = async () => {
+    if (!admNo.trim()) return;
+    setLookupState("loading");
+    try {
+      const res = await getStudents({ search: admNo.trim(), per_page: 10 });
+      const s = res.items.find((x) => x.admission_no === admNo.trim()) ?? res.items[0];
+      if (s) {
+        setStudentId(s.id);
+        setStudentLabel(`${s.first_name} ${s.last_name} (${s.admission_no})`);
+        setLookupState("found");
+      } else {
+        setStudentId(null); setStudentLabel(""); setLookupState("error");
+      }
+    } catch { setStudentId(null); setStudentLabel(""); setLookupState("error"); }
+  };
+
+  const setItem = (i: number, k: string, v: string) =>
+    setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
+
+  const addItem  = () => setItems((p) => [...p, { description: "", amount: "", discount_amount: "0", quantity: "1" }]);
+  const removeItem = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
+
+  const total = items.reduce((s, it) => {
+    const amt  = parseFloat(it.amount) || 0;
+    const disc = parseFloat(it.discount_amount) || 0;
+    const qty  = parseInt(it.quantity) || 1;
+    return s + (amt - disc) * qty;
+  }, 0);
+
+  const submit = async () => {
+    if (!studentId) { toast.error("Look up a student first"); return; }
+    for (const it of items) {
+      if (!it.description.trim() || !it.amount || parseFloat(it.amount) <= 0) {
+        toast.error("Each line item needs a description and a positive amount"); return;
+      }
+    }
+    setSaving(true);
+    try {
+      await createInvoice({
+        student_id: studentId,
+        notes: notes || undefined,
+        items: items.map((it) => ({
+          description:     it.description,
+          amount:          parseFloat(it.amount),
+          discount_amount: parseFloat(it.discount_amount) || 0,
+          quantity:        parseInt(it.quantity) || 1,
+        })),
+      });
+      toast.success("Invoice created");
+      onSave();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail ?? "Failed to create invoice");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Create Invoice</h2>
+        <div className="space-y-3">
+          <Field label="Student (admission no) *">
+            <div className="flex gap-2">
+              <input className={INPUT} value={admNo} placeholder="e.g. ADM001"
+                onChange={(e) => { setAdmNo(e.target.value); setLookupState("idle"); setStudentId(null); setStudentLabel(""); }}
+                onKeyDown={(e) => e.key === "Enter" && lookupStudent()} />
+              <Button variant="outline" size="sm" onClick={lookupStudent} disabled={lookupState === "loading"}>{lookupState === "loading" ? "…" : "Find"}</Button>
+            </div>
+            {lookupState === "found" && <p className="text-xs text-green-600 mt-1">✓ {studentLabel}</p>}
+            {lookupState === "error"  && <p className="text-xs text-red-600 mt-1">Student not found</p>}
+          </Field>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-medium text-gray-600">Line Items *</label>
+              <button type="button" onClick={addItem} className="text-xs text-violet-600 hover:underline">+ Add item</button>
+            </div>
+            <div className="space-y-2">
+              {items.map((it, i) => (
+                <div key={i} className="grid grid-cols-[1fr_100px_80px_24px] gap-2 items-end">
+                  <div>
+                    {i === 0 && <div className="text-2xs text-gray-400 mb-0.5">Description</div>}
+                    <input className={INPUT} value={it.description} placeholder="e.g. Tuition Fee Term 1"
+                      onChange={(e) => setItem(i, "description", e.target.value)} />
+                  </div>
+                  <div>
+                    {i === 0 && <div className="text-2xs text-gray-400 mb-0.5">Amount (TZS)</div>}
+                    <input type="number" min="0" className={INPUT} value={it.amount} placeholder="0"
+                      onChange={(e) => setItem(i, "amount", e.target.value)} />
+                  </div>
+                  <div>
+                    {i === 0 && <div className="text-2xs text-gray-400 mb-0.5">Discount</div>}
+                    <input type="number" min="0" className={INPUT} value={it.discount_amount} placeholder="0"
+                      onChange={(e) => setItem(i, "discount_amount", e.target.value)} />
+                  </div>
+                  <button type="button" onClick={() => removeItem(i)}
+                    className={`text-gray-300 hover:text-red-500 mt-auto mb-1.5 transition-colors ${items.length === 1 ? "invisible" : ""}`}>×</button>
+                </div>
+              ))}
+            </div>
+            <div className="text-right text-xs text-gray-500 mt-1.5">
+              Total: <span className="font-semibold text-gray-800">{fmt(total)}</span>
+            </div>
+          </div>
+
+          <Field label="Notes">
+            <input className={INPUT} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes…" />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Create Invoice"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvoicePayDialog({ invoice, onSave, onClose }: { invoice: Invoice; onSave: () => void; onClose: () => void }) {
+  const toast = useToast();
+  const net = invoice.total_amount - invoice.discount_amount - invoice.paid_amount;
+  const [form, setForm] = useState({
+    control_number: invoice.control_number ?? "",
+    amount: net.toFixed(2),
+    payment_date: new Date().toISOString().slice(0, 10),
+    method: "Cash",
+    reference_no: "",
+    notes: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.control_number.trim()) { toast.error("Enter the control number"); return; }
+    if (!form.amount || parseFloat(form.amount) <= 0) { toast.error("Enter a valid amount"); return; }
+    setSaving(true);
+    try {
+      const res = await payInvoice(invoice.id, {
+        control_number: form.control_number.trim(),
+        amount: parseFloat(form.amount),
+        payment_date: form.payment_date,
+        method: form.method,
+        reference_no: form.reference_no || undefined,
+        notes: form.notes || undefined,
+      });
+      toast.success(`Payment recorded — balance: ${fmt(res.remaining_balance)}`);
+      onSave();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail ?? "Payment failed");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Record Payment</h2>
+        <p className="text-sm text-gray-500 mb-4">{invoice.invoice_no} · {invoice.student_name} · Remaining: <strong>{fmt(net)}</strong></p>
+        <div className="space-y-3">
+          <Field label="Control Number *">
+            <input className={INPUT + " font-mono"} value={form.control_number}
+              onChange={(e) => set("control_number", e.target.value)} placeholder="SCH-YYYY-…" />
+          </Field>
+          <Field label="Amount (TZS) *">
+            <input type="number" min="1" className={INPUT} value={form.amount} onChange={(e) => set("amount", e.target.value)} />
+          </Field>
+          <Field label="Payment Date *">
+            <input type="date" className={INPUT} value={form.payment_date} onChange={(e) => set("payment_date", e.target.value)} />
+          </Field>
+          <Field label="Method">
+            <select className={INPUT} value={form.method} onChange={(e) => set("method", e.target.value)}>
+              <option>Cash</option>
+              <option>Mobile Money</option>
+              <option>Bank Transfer</option>
+              <option>Cheque</option>
+            </select>
+          </Field>
+          <Field label="Reference No">
+            <input className={INPUT} value={form.reference_no} onChange={(e) => set("reference_no", e.target.value)} placeholder="Transaction reference…" />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>{saving ? "Processing…" : "Record Payment"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AuditModal({ invoice, onClose }: { invoice: Invoice; onClose: () => void }) {
+  const [log, setLog] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    getInvoiceAudit(invoice.id).then(setLog).catch(() => {}).finally(() => setLoading(false));
+  }, [invoice.id]);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-gray-900">Audit Trail — {invoice.invoice_no}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        {loading ? (
+          <div className="h-24 bg-gray-50 rounded-xl animate-pulse" />
+        ) : log.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">No audit entries</p>
+        ) : (
+          <ol className="relative border-l border-gray-200 pl-5 space-y-4">
+            {log.map((e) => (
+              <li key={e.id} className="ml-1">
+                <div className="absolute -left-1.5 w-3 h-3 bg-violet-500 rounded-full mt-1" />
+                <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">{e.action.replace(/_/g, " ")}</p>
+                <p className="text-sm text-gray-800">{e.detail || "—"}</p>
+                <p className="text-2xs text-gray-400 mt-0.5">by <strong>{e.actor_name || "system"}</strong> · {e.created_at?.slice(0, 16).replace("T", " ")}</p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InvoicesTab() {
+  const { can, user } = useAuthStore();
+  const toast         = useToast();
+  const [invoices, setInvoices]   = useState<Invoice[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
+  const [createOpen, setCreateOpen]     = useState(false);
+  const [payDialog, setPayDialog]       = useState<Invoice | null>(null);
+  const [auditInv, setAuditInv]         = useState<Invoice | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    getInvoices({ limit: 200 })
+      .then(setInvoices).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+
+  const filtered = invoices.filter((inv) => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || inv.student_name.toLowerCase().includes(q) ||
+      inv.admission_no.toLowerCase().includes(q) ||
+      inv.invoice_no.toLowerCase().includes(q);
+    const matchStatus = !filterStatus || inv.status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  const handleApprove = async (inv: Invoice) => {
+    if (inv.created_by === user?.id) {
+      toast.error("Maker/checker rule: you cannot approve your own invoice");
+      return;
+    }
+    try {
+      await approveInvoice(inv.id);
+      toast.success("Invoice approved");
+      load();
+    } catch (e: any) { toast.error(e?.response?.data?.detail ?? "Failed to approve"); }
+  };
+
+  const handleIssueCtrl = async (inv: Invoice) => {
+    try {
+      const res = await issueControlNumber(inv.id);
+      if (res.already_issued) toast.info?.(`Control number already issued: ${res.control_number}`);
+      else toast.success("Control number issued");
+      load();
+    } catch (e: any) { toast.error(e?.response?.data?.detail ?? "Failed to issue control number"); }
+  };
+
+  const handleVoid = async (inv: Invoice) => {
+    const reason = prompt("Reason for voiding this invoice (required):");
+    if (!reason || reason.trim().length < 5) { toast.error("Please provide a reason (min 5 chars)"); return; }
+    try {
+      await voidInvoice(inv.id, reason.trim());
+      toast.success("Invoice voided");
+      load();
+    } catch (e: any) { toast.error(e?.response?.data?.detail ?? "Failed to void invoice"); }
+  };
+
+  const copyCtrl = (ctrl: string) => {
+    navigator.clipboard.writeText(ctrl).then(() => toast.success("Copied!")).catch(() => {});
+  };
+
+  const canCreate  = can("finance.payment.record");
+  const canApprove = can("finance.waiver.approve");
+  const canVoid    = can("finance.payment.void");
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="relative max-w-xs flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, adm no, invoice no…"
+              className="w-full h-9 pl-8 pr-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+          </div>
+          <select className="h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="approved">Approved</option>
+            <option value="partially_paid">Partially Paid</option>
+            <option value="paid">Paid</option>
+            <option value="voided">Voided</option>
+          </select>
+        </div>
+        {canCreate && (
+          <Button variant="primary" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>Create Invoice</Button>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <th className="px-4 py-3">Invoice</th>
+              <th className="px-4 py-3">Student</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-right">Total</th>
+              <th className="px-4 py-3 text-right">Paid</th>
+              <th className="px-4 py-3 text-right">Balance</th>
+              <th className="px-4 py-3">Control #</th>
+              <th className="px-4 py-3 w-40">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {loading
+              ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
+              : filtered.length === 0
+              ? (
+                <tr>
+                  <td colSpan={8} className="py-16">
+                    <EmptyState icon={FileText} title="No invoices found"
+                      description={search || filterStatus ? "Try adjusting your filters." : "Create your first invoice to get started."} />
+                  </td>
+                </tr>
+              )
+              : filtered.map((inv) => {
+                const balance = inv.total_amount - inv.discount_amount - inv.paid_amount;
+                return (
+                  <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-2.5">
+                      <p className="font-mono text-xs font-semibold text-gray-800">{inv.invoice_no}</p>
+                      <p className="text-2xs text-gray-400">{inv.created_at?.slice(0, 10)}</p>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-gray-900">{inv.student_name}</p>
+                      <p className="text-2xs text-gray-400">{inv.admission_no}</p>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[inv.status] ?? "bg-gray-100 text-gray-600"}`}>
+                        {inv.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-gray-700">{fmt(inv.total_amount)}</td>
+                    <td className="px-4 py-2.5 text-right text-emerald-700">{fmt(inv.paid_amount)}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-red-600">
+                      {balance > 0.01 ? fmt(balance) : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {inv.control_number ? (
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-2xs text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={inv.control_number}>
+                            {inv.control_number}
+                          </span>
+                          <button onClick={() => copyCtrl(inv.control_number!)} className="text-gray-300 hover:text-violet-600 transition-colors flex-shrink-0">
+                            <Copy size={11} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-300 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {inv.status === "draft" && canApprove && inv.created_by !== user?.id && (
+                          <button onClick={() => handleApprove(inv)}
+                            className="flex items-center gap-0.5 h-6 px-2 text-2xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 rounded transition-colors">
+                            <ShieldCheck size={10} /> Approve
+                          </button>
+                        )}
+                        {inv.status === "approved" && !inv.control_number && can("finance.payment.record") && (
+                          <button onClick={() => handleIssueCtrl(inv)}
+                            className="h-6 px-2 text-2xs font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 rounded transition-colors">
+                            Issue Ctrl #
+                          </button>
+                        )}
+                        {(inv.status === "approved" || inv.status === "partially_paid") && inv.control_number && can("finance.payment.record") && (
+                          <button onClick={() => setPayDialog(inv)}
+                            className="h-6 px-2 text-2xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded transition-colors">
+                            Pay
+                          </button>
+                        )}
+                        {inv.status !== "paid" && inv.status !== "voided" && inv.status !== "cancelled" && canVoid && (
+                          <button onClick={() => handleVoid(inv)}
+                            className="h-6 px-2 text-2xs font-medium bg-red-50 text-red-500 hover:bg-red-100 rounded transition-colors">
+                            Void
+                          </button>
+                        )}
+                        <button onClick={() => setAuditInv(inv)}
+                          className="h-6 px-2 text-2xs font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded transition-colors">
+                          Log
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+
+      {createOpen && (
+        <CreateInvoiceDialog onSave={() => { setCreateOpen(false); load(); }} onClose={() => setCreateOpen(false)} />
+      )}
+      {payDialog && (
+        <InvoicePayDialog invoice={payDialog} onSave={() => { setPayDialog(null); load(); }} onClose={() => setPayDialog(null)} />
+      )}
+      {auditInv && (
+        <AuditModal invoice={auditInv} onClose={() => setAuditInv(null)} />
+      )}
+    </div>
+  );
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function FinancePage() {
@@ -1133,6 +1584,7 @@ export default function FinancePage() {
     { key: "fees" as Tab,         label: "Fee Structures" },
     { key: "student-bill" as Tab, label: "Student Bill" },
     { key: "outstanding" as Tab,  label: "Outstanding Debts" },
+    { key: "invoices" as Tab,     label: "Invoices",         perm: "finance.view" },
     { key: "manage" as Tab,       label: "Period & Rules",   perm: "finance.structure.view" },
     { key: "approvals" as Tab,    label: "Approvals",        perm: "finance.view" },
   ].filter((t) => !t.perm || can(t.perm as string));
@@ -1258,6 +1710,7 @@ export default function FinancePage() {
 
       {tab === "student-bill" && <StudentBillPanel />}
       {tab === "outstanding"  && <OutstandingTab />}
+      {tab === "invoices"     && <InvoicesTab />}
       {tab === "manage"       && <ManageTab years={years} />}
       {tab === "approvals"    && <ApprovalsTab />}
 

@@ -69,6 +69,12 @@ export interface FeeStructure {
   amount: number;
   due_date: string;
   term: number | null;
+  class_id: number | null;
+  class_name: string | null;
+  student_id: number | null;
+  student_name: string | null;
+  student_admission_no: string | null;
+  student_type: string | null;
 }
 
 export const getFeeTypes = () =>
@@ -80,5 +86,13 @@ export const createFeeType = (body: { name: string; description?: string }) =>
 export const getFeeStructures = () =>
   api.get<FeeStructure[]>("/settings/fee-structures").then((r) => r.data);
 
-export const createFeeStructure = (body: { fee_type_id: number; academic_year_id: number; amount: number; due_date?: string; term?: number; class_id?: number | null; student_id?: number | null }) =>
-  api.post<FeeStructure>("/settings/fee-structures", body).then((r) => r.data);
+export const createFeeStructure = (body: {
+  fee_type_id: number;
+  academic_year_id: number;
+  amount: number;
+  due_date?: string;
+  term?: number;
+  class_id?: number | null;
+  student_id?: number | null;
+  student_type?: string | null;
+}) => api.post<FeeStructure>("/settings/fee-structures", body).then((r) => r.data);

@@ -5,6 +5,7 @@ All business logic lives in backend.services.finance_service.FinanceService.
 This module: validates input schemas, checks permissions, calls service, returns JSON.
 """
 
+import datetime
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
@@ -101,8 +102,8 @@ class BillingGenerateBody(BaseModel):
 @router.post("/billing/generate")
 def generate_bills(body: BillingGenerateBody, user: Usr):
     require_permission(user, "finance.billing.generate")
-    import uuid
     from backend.core.db import _get_conn
+    from backend.core.control_number import generate_control_number
     conn = _get_conn()
 
     # Fetch fee structures for this year
@@ -157,17 +158,21 @@ def generate_bills(body: BillingGenerateBody, user: Usr):
             if existing:
                 skipped += 1
                 continue
-            control_no = f"BILL/{body.academic_year_id}/{uuid.uuid4().hex[:8].upper()}"
-            conn.execute(
+            # Reserve the row first to get an id, then generate the HMAC-bound control number
+            cur2 = conn.execute(
                 """INSERT INTO student_bills
                    (student_id, fee_structure_id, academic_year_id, control_number, amount_due, due_date)
                    VALUES (?,?,?,?,?,?)""",
-                (s["id"], fs["id"], body.academic_year_id, control_no, fs["amount"], fs["due_date"]),
+                (s["id"], fs["id"], body.academic_year_id, "PENDING", fs["amount"], fs["due_date"]),
             )
+            bill_id = cur2.lastrowid
+            control_no = generate_control_number(bill_id, datetime.date.today().year)
+            conn.execute("UPDATE student_bills SET control_number=? WHERE id=?", (control_no, bill_id))
             created += 1
 
     conn.commit()
     return {"created": created, "skipped": skipped}
+
 
 
 # ── Outstanding debtors ───────────────────────────────────────────────────────
@@ -483,8 +488,8 @@ class CarryForwardBody(BaseModel):
 @router.post("/carry-forward")
 def carry_forward(body: CarryForwardBody, user: Usr):
     require_permission(user, "finance.billing.generate")
-    import uuid
     from backend.core.db import _get_conn
+    from backend.core.control_number import generate_control_number
     conn = _get_conn()
 
     # Ensure "Balance B/F" fee type exists
@@ -540,11 +545,13 @@ def carry_forward(body: CarryForwardBody, user: Usr):
         if existing:
             skipped += 1
             continue
-        ctrl = f"BF/{body.to_year_id}/{uuid.uuid4().hex[:8].upper()}"
-        conn.execute(
+        # Insert with placeholder, then generate HMAC-bound control number using the row id
+        cur2 = conn.execute(
             "INSERT INTO student_bills (student_id, fee_structure_id, academic_year_id, control_number, amount_due) VALUES (?,?,?,?,?)",
-            (r["student_id"], bf_fs_id, body.to_year_id, ctrl, round(r["balance"], 2)),
+            (r["student_id"], bf_fs_id, body.to_year_id, "PENDING", round(r["balance"], 2)),
         )
+        ctrl = generate_control_number(cur2.lastrowid, body.to_year_id)
+        conn.execute("UPDATE student_bills SET control_number=? WHERE id=?", (ctrl, cur2.lastrowid))
         created += 1
 
     conn.commit()
@@ -698,9 +705,13 @@ def apply_late_fees(user: Usr, academic_year_id: int = Query(None), dry_run: boo
             else:
                 late_amt = rule["charge_amount"]
 
-            # Check if late fee already applied for this bill+rule combo
-            tag = f"LATE:{bill['id']}:{rule['id']}"
-            existing = conn.execute("SELECT id FROM student_bills WHERE control_number=?", (tag,)).fetchone()
+            # Check if late fee already applied for this bill+rule combo using a
+            # stable idempotency key stored in notes (not in control_number)
+            idempotency_key = f"LATE:{bill['id']}:{rule['id']}"
+            existing = conn.execute(
+                "SELECT id FROM student_bills WHERE notes=? AND student_id=?",
+                (idempotency_key, bill["student_id"]),
+            ).fetchone()
             if existing:
                 continue
 
@@ -726,10 +737,13 @@ def apply_late_fees(user: Usr, academic_year_id: int = Query(None), dry_run: boo
                 ).fetchone()
 
             if not dry_run:
-                conn.execute(
-                    "INSERT INTO student_bills (student_id, fee_structure_id, academic_year_id, control_number, amount_due) VALUES (?,?,?,?,?)",
-                    (bill["student_id"], lf_fs["id"], bill["academic_year_id"], tag, late_amt),
+                from backend.core.control_number import generate_control_number as _gcn
+                cur_lf = conn.execute(
+                    "INSERT INTO student_bills (student_id, fee_structure_id, academic_year_id, control_number, amount_due, notes) VALUES (?,?,?,?,?,?)",
+                    (bill["student_id"], lf_fs["id"], bill["academic_year_id"], "PENDING", late_amt, idempotency_key),
                 )
+                ctrl_lf = _gcn(cur_lf.lastrowid)
+                conn.execute("UPDATE student_bills SET control_number=? WHERE id=?", (ctrl_lf, cur_lf.lastrowid))
             applied += 1
 
     if not dry_run:

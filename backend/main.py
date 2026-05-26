@@ -17,7 +17,7 @@ from backend.routers import (
     auth, grades, students, dashboard, classes,
     teachers, attendance, finance, library, transport,
     inventory, health, welfare, promotion, accounting,
-    reports, settings, rbac,
+    reports, settings, rbac, invoices,
 )
 from backend.routers import notifications, audit
 from backend.routers import enrollments, guardians, timetable, report_cards
@@ -56,6 +56,11 @@ async def lifespan(app: FastAPI):
         _mod5 = importlib.util.module_from_spec(_spec5)
         _spec5.loader.exec_module(_mod5)
         _mod5.run()
+        _mig6_path = os.path.join(os.path.dirname(__file__), "migrations", "006_secure_finance.py")
+        _spec6 = importlib.util.spec_from_file_location("migration_006", _mig6_path)
+        _mod6 = importlib.util.module_from_spec(_spec6)
+        _spec6.loader.exec_module(_mod6)
+        _mod6.run()
     except Exception as e:
         log.warning("Migration warning (may already be applied): %s", e)
 
@@ -130,6 +135,7 @@ app.include_router(guardians.router,     prefix="/api/guardians")
 app.include_router(timetable.router,     prefix="/api/timetable")
 app.include_router(report_cards.router,  prefix="/api/report-cards")
 app.include_router(rbac.router,          prefix="/api/rbac")
+app.include_router(invoices.router,      prefix="/api/invoices")
 
 
 @app.get("/api/health")
