@@ -157,6 +157,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Subscription enforcement middleware ────────────────────────────────────────
+_SUBSCRIPTION_EXEMPT = (
+    "/api/auth/",
+    "/api/setup/",
+    "/api/subscription/",
+    "/api/health",
+    "/assets/",
+    "/favicon",
+    "/manifest",
+    "/robots",
+)
+
+@app.middleware("http")
+async def subscription_middleware(request: Request, call_next):
+    path = request.url.path
+    if any(path.startswith(p) for p in _SUBSCRIPTION_EXEMPT) or not path.startswith("/api/"):
+        return await call_next(request)
+
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return await call_next(request)
+
+    token = auth_header[7:]
+    try:
+        from backend.deps import get_user_from_token
+        from backend.routers.subscription import get_subscription_info
+        user = get_user_from_token(token)
+        if user and user.get("role") != "admin":
+            sub = get_subscription_info(user.get("school_id"))
+            if not sub.get("is_active", True):
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "detail": {
+                            "code": "subscription_expired",
+                            "message": sub.get("warning") or "Subscription expired. Contact your administrator.",
+                            "plan": sub.get("plan"),
+                            "status": sub.get("status"),
+                        }
+                    },
+                )
+    except Exception:
+        pass  # never block a request due to middleware errors
+
+    return await call_next(request)
+
+
 # ── Domain exception → HTTP response ──────────────────────────────────────────
 from backend.core.exceptions import AppError
 
