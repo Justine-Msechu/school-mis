@@ -116,9 +116,9 @@ class ActivatePayload(BaseModel):
 
 @router.post("/activate")
 def activate_subscription(body: ActivatePayload, user: Usr):
-    """Admin-only: set or change a school's subscription plan."""
-    if user.get("role") != "admin":
-        raise HTTPException(403, "Only admins can manage subscriptions.")
+    """Superadmin-only: set or change a school's subscription plan."""
+    if user.get("role") != "superadmin":
+        raise HTTPException(403, "Only the platform administrator can activate subscriptions.")
     if body.plan not in PLANS:
         raise HTTPException(400, f"Unknown plan '{body.plan}'. Valid: {list(PLANS)}")
 

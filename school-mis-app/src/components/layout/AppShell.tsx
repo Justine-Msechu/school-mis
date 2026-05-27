@@ -67,7 +67,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {needsPlanSelection && <PlanSelectionModal />}
-      {locked && <SubscriptionLockScreen onUnlocked={() => { setLocked(false); fetchPlan(); }} />}
+      {locked && <SubscriptionLockScreen />}
       {isImpersonating && <ImpersonationBanner />}
       <div className="flex flex-1 min-h-0 overflow-hidden">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
