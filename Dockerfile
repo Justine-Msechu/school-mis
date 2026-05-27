@@ -10,9 +10,9 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# System deps needed by bcrypt
+# System deps: libffi for bcrypt, libpq-dev for psycopg2, curl for healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libffi-dev curl \
+    libffi-dev libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies (backend only — no PyQt6)
@@ -37,14 +37,11 @@ COPY --from=frontend-build /app/school-mis-app/dist /app/static
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 ENV SCHOOL_MIS_STATIC_DIR=/app/static
-ENV SCHOOL_MIS_DB_PATH=/data/school_mis.db
-
-# Database lives in a named volume so it survives container rebuilds/updates
-VOLUME ["/data"]
+# DATABASE_URL is supplied at runtime via docker-compose.yml environment section
 
 EXPOSE 8765
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD curl -sf http://localhost:8765/api/setup/status || exit 1
+  CMD curl -sf http://localhost:8765/api/health || exit 1
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8765", "--workers", "2"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8765", "--workers", "8"]

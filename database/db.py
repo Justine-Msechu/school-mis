@@ -1,14 +1,32 @@
 """
 School MIS — Database Layer  (v3)
 Added: finance, welfare, inventory, accounting, reporting domains.
+
+Dual-mode: if DATABASE_URL is set (PostgreSQL/Docker) all queries go through
+backend.core.db (psycopg2 pool + auto-conversion layer).
+Otherwise the original SQLite path is used (desktop app / local dev).
 """
 
-import sqlite3, os, hashlib, secrets
+import os, hashlib, secrets
 
-DB_PATH = os.environ.get(
-    "SCHOOL_MIS_DB_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), "school_mis.db"),
-)
+_DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if _DATABASE_URL:
+    # PostgreSQL mode: import all DB helpers from the pool layer.
+    # The function definitions below are still executed but guarded by _DATABASE_URL
+    # checks at their start, so these imports take precedence.
+    from backend.core.db import (                           # noqa: F401
+        fetch_one, fetch_all, execute, execute_many,
+        row_to_dict, rows_to_dicts,
+    )
+    import sqlite3  # still imported so the module doesn't crash on bare import
+    DB_PATH = None
+else:
+    import sqlite3
+    DB_PATH = os.environ.get(
+        "SCHOOL_MIS_DB_PATH",
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "school_mis.db"),
+    )
 
 # Roles are pure display labels — no logic, no permissions.
 # All permission assignments live in the `role_permissions` DB table
@@ -133,6 +151,9 @@ _DEFAULT_ROLE_PERMISSIONS = {
 
 
 def get_connection():
+    if _DATABASE_URL:
+        from backend.core.db import _get_conn
+        return _get_conn()
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -142,6 +163,10 @@ def get_connection():
 
 
 def initialize_database():
+    if _DATABASE_URL:
+        from backend.pg_schema import run as _pg_run
+        _pg_run()
+        return
     conn = get_connection()
     cur  = conn.cursor()
 
@@ -1013,32 +1038,39 @@ def set_config(key, value):
 def is_setup_complete():
     return get_config("setup_complete") == "1"
 
-# ── Generic query helpers ─────────────────────────────────────────────────────
-def fetch_all(sql, params=()):
-    conn = get_connection()
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
-    return rows
+# ── Generic query helpers (SQLite only — PG versions imported at module top) ───
+if not _DATABASE_URL:
+    def fetch_all(sql, params=()):
+        conn = get_connection()
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+        return rows
 
-def fetch_one(sql, params=()):
-    conn = get_connection()
-    row = conn.execute(sql, params).fetchone()
-    conn.close()
-    return row
+    def fetch_one(sql, params=()):
+        conn = get_connection()
+        row = conn.execute(sql, params).fetchone()
+        conn.close()
+        return row
 
-def execute(sql, params=()):
-    conn = get_connection()
-    cur = conn.execute(sql, params)
-    conn.commit()
-    last_id = cur.lastrowid
-    conn.close()
-    return last_id
+    def execute(sql, params=()):
+        conn = get_connection()
+        cur = conn.execute(sql, params)
+        conn.commit()
+        last_id = cur.lastrowid
+        conn.close()
+        return last_id
 
-def execute_many(sql, data):
-    conn = get_connection()
-    conn.executemany(sql, data)
-    conn.commit()
-    conn.close()
+    def execute_many(sql, data):
+        conn = get_connection()
+        conn.executemany(sql, data)
+        conn.commit()
+        conn.close()
+
+    def row_to_dict(row):
+        return dict(row) if row else None
+
+    def rows_to_dicts(rows):
+        return [dict(r) for r in rows]
 
 
 def db_write(sql, params=(), action="", table="", record_id=None, detail="",

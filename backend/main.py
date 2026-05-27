@@ -38,18 +38,31 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: run migrations, configure DB, register event handlers."""
-    # 0. Initialize base schema (creates all core tables if they don't exist)
-    try:
-        from database.db import initialize_database
-        initialize_database()
-    except Exception as _e:
-        log.warning("Base schema init warning: %s", _e)
+    """Startup: initialise schema, run migrations, register event handlers."""
+    import os as _os
+
+    _use_pg = bool(_os.environ.get("DATABASE_URL"))
+
+    # 0. Schema initialisation
+    if _use_pg:
+        # PostgreSQL: create all tables via pg_schema (idempotent)
+        try:
+            from backend.pg_schema import run as _pg_init
+            await asyncio.to_thread(_pg_init)
+        except Exception as _e:
+            log.warning("PostgreSQL schema init warning: %s", _e)
+    else:
+        # SQLite: original initialize_database()
+        try:
+            from database.db import initialize_database
+            await asyncio.to_thread(initialize_database)
+        except Exception as _e:
+            log.warning("Base schema init warning: %s", _e)
 
     # 1. Run all migrations — each is isolated so one failure never blocks the rest
-    import importlib.util, os as _os
+    import importlib.util
     _mig_dir = _os.path.join(_os.path.dirname(__file__), "migrations")
-    _migrations = sorted([
+    _migrations = [
         "001_architecture_v2", "002_phase2", "003_structural_fixes",
         "004_id_generation", "005_rbac_tables", "006_secure_finance",
         "007_fee_structure_student_columns", "008_fee_structure_grade_level",
@@ -58,7 +71,7 @@ async def lifespan(app: FastAPI):
         "015_ngo", "016_student_sponsorship", "017_welfare_extended",
         "018_security", "019_subscription_v2", "020_superadmin",
         "021_multitenant_fix", "022_platform_features",
-    ])
+    ]
     for _mig_name in _migrations:
         _path = _os.path.join(_mig_dir, f"{_mig_name}.py")
         if not _os.path.exists(_path):
@@ -67,34 +80,35 @@ async def lifespan(app: FastAPI):
             _spec = importlib.util.spec_from_file_location(_mig_name, _path)
             _mod  = importlib.util.module_from_spec(_spec)
             _spec.loader.exec_module(_mod)
-            _mod.run()
+            await asyncio.to_thread(_mod.run)
         except Exception as _e:
             log.warning("Migration %s skipped/warned: %s", _mig_name, _e)
 
-    # Init payment providers from env vars
+    # 2. Init payment providers from env vars
     try:
         from backend.subscriptions.providers.registry import init_providers
         init_providers()
     except Exception as e:
         log.warning("Payment provider init warning: %s", e)
 
-    # 2. Configure SQLite pragmas on the thread-local connection
-    from backend.core.db import _get_conn
-    conn = _get_conn()
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA foreign_keys=ON")
+    # 3. SQLite-only: set WAL pragmas + register notification service
+    if not _use_pg:
+        try:
+            from database.db import get_connection as _sqlite_conn
+            conn = _sqlite_conn()
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            try:
+                from backend.services.notification_service import NotificationService
+                NotificationService(conn).register()
+                log.info("NotificationService registered")
+            except Exception as e:
+                log.warning("NotificationService registration failed: %s", e)
+        except Exception as e:
+            log.warning("SQLite post-init warning: %s", e)
 
-    # 3. Register notification service event handlers
-    try:
-        from backend.services.notification_service import NotificationService
-        notif_svc = NotificationService(conn)
-        notif_svc.register()
-        log.info("NotificationService event handlers registered")
-    except Exception as e:
-        log.warning("NotificationService registration failed: %s", e)
-
-    log.info("School MIS API v5.1 started")
+    log.info("School MIS API v5.1 started (db=%s)", "postgresql" if _use_pg else "sqlite")
     yield
     log.info("School MIS API shutting down")
 

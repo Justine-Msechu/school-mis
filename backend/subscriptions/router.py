@@ -46,8 +46,7 @@ async def select_initial_plan(body: SelectInitialPlanRequest, user: Usr):
     - others → marks as pending-payment, notifies superadmin
     """
     import asyncio
-    from database.db import fetch_one as _fo, execute as _ex
-    from backend.core.db import fetch_one as cfo, execute as cex
+    from backend.core.db import fetch_one, execute
 
     if user.get("role") not in ("admin",):
         raise HTTPException(403, "Only school admins can select a plan")

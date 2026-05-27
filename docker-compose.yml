@@ -1,35 +1,73 @@
 version: "3.9"
 
 services:
+
+  # ── PostgreSQL 15 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: school-mis-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       school_mis
+      POSTGRES_USER:     school_mis
+      POSTGRES_PASSWORD: school_mis_secret
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_mis -d school_mis"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 15s
+
+  # ── FastAPI backend (8 uvicorn workers) ───────────────────────────────────
   school-mis:
     build: .
     image: school-mis:latest
-    container_name: school-mis
+    container_name: school-mis-app
     restart: unless-stopped
-    ports:
-      - "8765:8765"
-    volumes:
-      - db_data:/data        # SQLite database — persists across updates
-      - uploads:/app/uploads # Uploaded files (photos, documents)
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
-      - SCHOOL_MIS_DB_PATH=/data/school_mis.db
+      DATABASE_URL: postgresql://school_mis:school_mis_secret@postgres:5432/school_mis
       # Optional: payment gateway keys
-      # - FLW_SECRET_KEY=your_flutterwave_key
-      # - PAYSTACK_SECRET_KEY=your_paystack_key
+      # FLW_SECRET_KEY:      your_flutterwave_key
+      # PAYSTACK_SECRET_KEY: your_paystack_key
+    volumes:
+      - uploads:/app/uploads
+    expose:
+      - "8765"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8765/api/setup/status"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8765/api/health"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+      timeout:  10s
+      retries:  3
+      start_period: 20s
 
-  # ── Optional: Cloudflare Tunnel for external access ───────────────────────
-  # Gives you a public HTTPS URL without opening any router ports.
+  # ── Nginx reverse proxy (port 80 → app:8765) ──────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: school-mis-nginx
+    restart: unless-stopped
+    depends_on:
+      school-mis:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout:  5s
+      retries:  3
+
+  # ── Optional: Cloudflare Tunnel for external HTTPS access ─────────────────
   # Steps:
-  #   1. Create a free account at https://cloudflare.com
-  #   2. Dashboard → Zero Trust → Networks → Tunnels → Create tunnel
-  #   3. Copy the tunnel token and set it below
-  #   4. Uncomment this block, then: docker compose up -d
+  #   1. cloudflare.com → Zero Trust → Networks → Tunnels → Create tunnel
+  #   2. Copy token, set TUNNEL_TOKEN below, uncomment block
+  #   3. docker compose up -d
   #
   # cloudflare-tunnel:
   #   image: cloudflare/cloudflared:latest
@@ -39,9 +77,9 @@ services:
   #   environment:
   #     - TUNNEL_TOKEN=${TUNNEL_TOKEN}
   #   depends_on:
-  #     school-mis:
+  #     nginx:
   #       condition: service_healthy
 
 volumes:
-  db_data:
-  uploads:
+  pg_data:    # PostgreSQL data — persists across container rebuilds
+  uploads:    # Uploaded files (photos, documents)
