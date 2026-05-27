@@ -1,46 +1,61 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import AppShell from "@/components/layout/AppShell";
-import LoginPage from "@/pages/LoginPage";
-import SetupPage from "@/pages/SetupPage";
-import DashboardPage from "@/pages/DashboardPage";
-import GradesPage from "@/pages/grades/GradesPage";
-import StudentsPage from "@/pages/StudentsPage";
-import TeachersPage from "@/pages/TeachersPage";
-import ClassesPage from "@/pages/ClassesPage";
-import AttendancePage from "@/pages/AttendancePage";
-import FinancePage from "@/pages/FinancePage";
-import LibraryPage from "@/pages/LibraryPage";
-import AccountingPage from "@/pages/AccountingPage";
-import TransportPage from "@/pages/TransportPage";
-import InventoryPage from "@/pages/InventoryPage";
-import HealthPage from "@/pages/HealthPage";
-import WelfarePage from "@/pages/WelfarePage";
-import PromotionPage from "@/pages/PromotionPage";
-import ReportsPage from "@/pages/ReportsPage";
-import SettingsPage from "@/pages/SettingsPage";
-import AuditLogPage from "@/pages/AuditLogPage";
-import EnrollmentPage from "@/pages/EnrollmentPage";
-import GuardiansPage from "@/pages/GuardiansPage";
-import ReportCardsPage from "@/pages/ReportCardsPage";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+
+// ── Always-eager: tiny shells needed on every page ───────────────────────────
+import AppShell         from "@/components/layout/AppShell";
+import SuperAdminShell  from "@/components/layout/SuperAdminShell";
 import ForceChangePassword from "@/components/ui/ForceChangePassword";
-import RbacPage from "@/pages/RbacPage";
-import PayrollPage from "@/pages/PayrollPage";
-import NGOPage from "@/pages/NGOPage";
-import SubscriptionPage from "@/pages/SubscriptionPage";
-import LandingPage from "@/pages/LandingPage";
-import RegisterPage from "@/pages/RegisterPage";
-import SuperAdminPage from "@/pages/SuperAdminPage";
-import SuperAdminShell from "@/components/layout/SuperAdminShell";
-import PlatformDashboard from "@/pages/platform/PlatformDashboard";
-import PlatformSettingsPage from "@/pages/platform/PlatformSettingsPage";
-import PlatformFeaturesPage from "@/pages/platform/PlatformFeaturesPage";
-import PlatformAnnouncementsPage from "@/pages/platform/PlatformAnnouncementsPage";
 import { getSetupStatus } from "@/api/setup";
 import { useImpersonationStore } from "@/stores/impersonationStore";
 
-// ── Lazy setup check — only runs when user actually navigates to /setup ───────
+// ── Lazy pages — each becomes its own JS chunk ────────────────────────────────
+const LoginPage                 = lazy(() => import("@/pages/LoginPage"));
+const SetupPage                 = lazy(() => import("@/pages/SetupPage"));
+const LandingPage               = lazy(() => import("@/pages/LandingPage"));
+const RegisterPage              = lazy(() => import("@/pages/RegisterPage"));
+const DashboardPage             = lazy(() => import("@/pages/DashboardPage"));
+const GradesPage                = lazy(() => import("@/pages/grades/GradesPage"));
+const StudentsPage              = lazy(() => import("@/pages/StudentsPage"));
+const TeachersPage              = lazy(() => import("@/pages/TeachersPage"));
+const ClassesPage               = lazy(() => import("@/pages/ClassesPage"));
+const AttendancePage            = lazy(() => import("@/pages/AttendancePage"));
+const FinancePage               = lazy(() => import("@/pages/FinancePage"));
+const LibraryPage               = lazy(() => import("@/pages/LibraryPage"));
+const AccountingPage            = lazy(() => import("@/pages/AccountingPage"));
+const TransportPage             = lazy(() => import("@/pages/TransportPage"));
+const InventoryPage             = lazy(() => import("@/pages/InventoryPage"));
+const HealthPage                = lazy(() => import("@/pages/HealthPage"));
+const WelfarePage               = lazy(() => import("@/pages/WelfarePage"));
+const PromotionPage             = lazy(() => import("@/pages/PromotionPage"));
+const ReportsPage               = lazy(() => import("@/pages/ReportsPage"));
+const SettingsPage              = lazy(() => import("@/pages/SettingsPage"));
+const AuditLogPage              = lazy(() => import("@/pages/AuditLogPage"));
+const EnrollmentPage            = lazy(() => import("@/pages/EnrollmentPage"));
+const GuardiansPage             = lazy(() => import("@/pages/GuardiansPage"));
+const ReportCardsPage           = lazy(() => import("@/pages/ReportCardsPage"));
+const RbacPage                  = lazy(() => import("@/pages/RbacPage"));
+const PayrollPage               = lazy(() => import("@/pages/PayrollPage"));
+const NGOPage                   = lazy(() => import("@/pages/NGOPage"));
+const SubscriptionPage          = lazy(() => import("@/pages/SubscriptionPage"));
+const SuperAdminPage            = lazy(() => import("@/pages/SuperAdminPage"));
+const PlatformDashboard         = lazy(() => import("@/pages/platform/PlatformDashboard"));
+const PlatformSettingsPage      = lazy(() => import("@/pages/platform/PlatformSettingsPage"));
+const PlatformFeaturesPage      = lazy(() => import("@/pages/platform/PlatformFeaturesPage"));
+const PlatformAnnouncementsPage = lazy(() => import("@/pages/platform/PlatformAnnouncementsPage"));
+const ErrorLogsPage             = lazy(() => import("@/pages/platform/ErrorLogsPage"));
+
+// ── Shared page-level loading fallback ───────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
+// ── Lazy setup check — only runs when user navigates to /setup ────────────────
 function SetupRoute() {
   const [state, setState] = useState<"loading" | "needed" | "done">("loading");
 
@@ -88,6 +103,7 @@ function AuthenticatedApp() {
           <Route path="/platform/features"      element={<PlatformFeaturesPage />} />
           <Route path="/platform/announcements" element={<PlatformAnnouncementsPage />} />
           <Route path="/platform/audit"         element={<AuditLogPage />} />
+          <Route path="/platform/errors"        element={<ErrorLogsPage />} />
           <Route path="/platform/settings"      element={<PlatformSettingsPage />} />
           <Route path="/*"                      element={<Navigate to="/platform" replace />} />
         </Routes>
@@ -127,27 +143,28 @@ function AuthenticatedApp() {
   );
 }
 
-// App has NO async state — isLoggedIn + user come from localStorage synchronously,
-// so the correct page renders on the very first paint with no flicker.
 export default function App() {
   const { isLoggedIn, user } = useAuthStore();
-  // Superadmin lands on /platform; everyone else on /
   const home = user?.role === "superadmin" ? "/platform" : "/";
 
   return (
     <BrowserRouter>
       <ForceChangePassword />
-      <Routes>
-        <Route path="/landing"  element={<LandingPage />} />
-        <Route path="/register" element={isLoggedIn ? <Navigate to={home} replace /> : <RegisterPage />} />
-        <Route path="/setup"    element={<SetupRoute />} />
-        <Route path="/login"    element={isLoggedIn ? <Navigate to={home} replace /> : <LoginPage />} />
-        <Route path="/*"        element={
-          !isLoggedIn
-            ? <LandingPage />
-            : <PrivateRoute><AuthenticatedApp /></PrivateRoute>
-        } />
-      </Routes>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/landing"  element={<LandingPage />} />
+            <Route path="/register" element={isLoggedIn ? <Navigate to={home} replace /> : <RegisterPage />} />
+            <Route path="/setup"    element={<SetupRoute />} />
+            <Route path="/login"    element={isLoggedIn ? <Navigate to={home} replace /> : <LoginPage />} />
+            <Route path="/*"        element={
+              !isLoggedIn
+                ? <LandingPage />
+                : <PrivateRoute><AuthenticatedApp /></PrivateRoute>
+            } />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

@@ -30,6 +30,7 @@ from backend.routers import ngo
 from backend.routers import setup as setup_router
 from backend.routers import subscription as subscription_router
 from backend.routers import schools as schools_router
+from backend.routers import error_logs as error_logs_router
 from backend.subscriptions.router import router as new_subscription_router
 from backend.subscriptions.webhooks.router import router as webhooks_router
 
@@ -70,7 +71,7 @@ async def lifespan(app: FastAPI):
         "012_inventory_upgrade", "013_inventory_classification",
         "015_ngo", "016_student_sponsorship", "017_welfare_extended",
         "018_security", "019_subscription_v2", "020_superadmin",
-        "021_multitenant_fix", "022_platform_features",
+        "021_multitenant_fix", "022_platform_features", "023_error_logs",
     ]
     for _mig_name in _migrations:
         _path = _os.path.join(_mig_dir, f"{_mig_name}.py")
@@ -138,6 +139,7 @@ _SUBSCRIPTION_EXEMPT = (
     "/api/superadmin/",
     "/api/webhooks/",
     "/api/ai/",
+    "/api/error-logs/report",
     "/api/health",
     "/assets/",
     "/favicon",
@@ -211,6 +213,28 @@ async def app_error_handler(request, exc: AppError):
     )
 
 
+# ── Global 500 error capture ──────────────────────────────────────────────────
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    try:
+        from backend.routers.error_logs import log_backend_error
+        from backend.deps import get_user_from_token
+        auth_header = request.headers.get("authorization", "")
+        user = None
+        if auth_header.startswith("Bearer "):
+            try:
+                user = await asyncio.to_thread(get_user_from_token, auth_header[7:])
+            except Exception:
+                pass
+        await asyncio.to_thread(log_backend_error, request=request, exc=exc, user=user)
+    except Exception:
+        pass
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. The issue has been logged."},
+    )
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 app.include_router(auth.router,          prefix="/api/auth")
 app.include_router(grades.router,        prefix="/api/grades")
@@ -246,6 +270,7 @@ app.include_router(subscription_router.router,  prefix="/api/subscription")
 app.include_router(new_subscription_router,     prefix="/api/subscriptions")
 app.include_router(webhooks_router,             prefix="/api/webhooks")
 app.include_router(ai.router,                   prefix="/api/ai")
+app.include_router(error_logs_router.router,    prefix="/api/error-logs")
 
 
 @app.get("/api/health")
