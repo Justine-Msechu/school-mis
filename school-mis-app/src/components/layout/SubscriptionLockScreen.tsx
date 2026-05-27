@@ -1,4 +1,4 @@
-import { Lock, PhoneCall } from "lucide-react";
+import { Lock, PhoneCall, ExternalLink } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useSubscriptionStore } from "@/stores/subscriptionStore";
 
@@ -12,7 +12,6 @@ export default function SubscriptionLockScreen() {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/95 p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="bg-red-600 px-6 py-6 text-white text-center">
           <Lock size={36} className="mx-auto mb-3" />
           <h2 className="text-xl font-bold">Subscription Expired</h2>
@@ -22,11 +21,8 @@ export default function SubscriptionLockScreen() {
         </div>
 
         <div className="p-6 space-y-4">
-          {/* Info row */}
           <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-700">
-            <p>
-              Current plan: <span className="font-semibold capitalize">{plan}</span>
-            </p>
+            <p>Current plan: <span className="font-semibold capitalize">{plan}</span></p>
             {daysLeft !== null && (
               <p className="mt-0.5 text-red-600 font-medium">
                 {daysLeft === 0 ? "Expired today" : `Expired ${Math.abs(daysLeft)} day(s) ago`}
@@ -34,17 +30,24 @@ export default function SubscriptionLockScreen() {
             )}
           </div>
 
-          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-4 text-sm text-amber-900 space-y-2">
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-4 text-sm text-amber-900">
             <div className="flex items-start gap-2">
               <PhoneCall size={16} className="mt-0.5 flex-shrink-0 text-amber-600" />
               <p>Contact the platform administrator to renew and restore access.</p>
             </div>
-            {role === "admin" && (
-              <p className="text-xs text-amber-700 pl-6">
-                Go to <strong>Settings → Subscription</strong> to view payment options.
-              </p>
-            )}
           </div>
+
+          {role === "admin" && (
+            <a
+              href="/landing#pricing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full h-10 rounded-xl border border-violet-300 bg-violet-50 text-violet-700 text-sm font-medium hover:bg-violet-100 transition-colors"
+            >
+              <ExternalLink size={14} />
+              View plans &amp; pricing
+            </a>
+          )}
         </div>
       </div>
     </div>
