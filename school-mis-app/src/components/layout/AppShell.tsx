@@ -20,7 +20,9 @@ interface PlanRestriction {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { refreshPermissions } = useAuthStore();
-  const fetchPlan = useSubscriptionStore((s) => s.fetch);
+  const fetchPlan   = useSubscriptionStore((s) => s.fetch);
+  const isActive    = useSubscriptionStore((s) => s.isActive);
+  const subStatus   = useSubscriptionStore((s) => s.status);
   const needsPlanSelection = useSubscriptionStore((s) => s.needsPlanSelection);
   const { active: isImpersonating } = useImpersonationStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -31,6 +33,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     refreshPermissions();
     fetchPlan();
   }, []);
+
+  // Lock the app as soon as the store reports the subscription is inactive
+  useEffect(() => {
+    if (!isActive && subStatus !== "pending") {
+      setLocked(true);
+    }
+  }, [isActive, subStatus]);
 
   useEffect(() => {
     const onExpired = () => setLocked(true);
@@ -58,7 +67,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {needsPlanSelection && <PlanSelectionModal />}
-      {locked && <SubscriptionLockScreen onUnlocked={() => setLocked(false)} />}
+      {locked && <SubscriptionLockScreen onUnlocked={() => { setLocked(false); fetchPlan(); }} />}
       {isImpersonating && <ImpersonationBanner />}
       <div className="flex flex-1 min-h-0 overflow-hidden">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />

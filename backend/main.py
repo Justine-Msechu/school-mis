@@ -161,7 +161,7 @@ async def subscription_middleware(request: Request, call_next):
         from backend.routers.subscription import get_subscription_info
         from backend.subscriptions.plan_config import plan_allows_path, min_plan_for_path
         user = await asyncio.to_thread(get_user_from_token, token)
-        if user and user.get("role") not in ("admin", "superadmin"):
+        if user and user.get("role") != "superadmin":
             sub = await asyncio.to_thread(get_subscription_info, user.get("school_id"))
 
             # 1. Check subscription is active
