@@ -7,10 +7,13 @@ Migration 004 — Auto-generated IDs
   4. Backfill existing students admission_no sequence counter
 """
 
-import sqlite3, datetime
+import os, sqlite3, datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent.parent / "school_mis.db"
+DB_PATH = Path(os.environ.get(
+    "SCHOOL_MIS_DB_PATH",
+    str(Path(__file__).parent.parent.parent / "school_mis.db"),
+))
 
 
 def _conn():

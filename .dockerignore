@@ -1,13 +1,32 @@
+# Frontend build artifacts
 school-mis-app/node_modules
 school-mis-app/dist
-venv
+
+# Desktop app — exclude everything except services/, policy/, auth/ (needed by backend)
+desktop_app/
+!desktop_app/services/
+!desktop_app/policy/
+!desktop_app/auth/
+
+# Python artifacts
 __pycache__
 *.pyc
 *.pyo
-school_mis.db
-school_mis.db-shm
-school_mis.db-wal
+venv/
+.venv/
+
+# Database files (data volume handles persistence)
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime data
 exports/
 uploads/
-*.db
+
+# Dev/CI
 .git
+.gitignore
+*.log
+.env
+*.env

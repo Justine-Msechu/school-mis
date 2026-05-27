@@ -36,6 +36,9 @@ export const useThemeStore = create<ThemeState>()(
         set({ theme: t });
       },
     }),
-    { name: "mis-theme" }
+    {
+      name: "mis-theme",
+      skipHydration: true, // pre-read synchronously above; skip async re-hydration
+    }
   )
 );

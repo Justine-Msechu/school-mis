@@ -17,10 +17,13 @@ All statements use CREATE TABLE IF NOT EXISTS — safe to run multiple times.
 """
 
 import sqlite3
-import sys
+import os, sys
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent.parent / "school_mis.db"
+DB_PATH = Path(os.environ.get(
+    "SCHOOL_MIS_DB_PATH",
+    str(Path(__file__).parent.parent.parent / "school_mis.db"),
+))
 
 MIGRATIONS = [
 

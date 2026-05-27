@@ -88,15 +88,4 @@ def run():
 
         conn.commit()
 
-    # Run on migration DB
-    conn1 = _get_conn()
-    _run_on(conn1)
-
-    # Run on production DB
-    import os
-    prod = os.path.join(os.path.dirname(__file__), "..", "..", "school_mis.db")
-    prod = os.path.normpath(prod)
-    if os.path.exists(prod):
-        conn2 = sqlite3.connect(prod)
-        _run_on(conn2)
-        conn2.close()
+    _run_on(_get_conn())

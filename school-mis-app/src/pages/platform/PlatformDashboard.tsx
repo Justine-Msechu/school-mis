@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Building2, Users, CheckCircle, Clock, XCircle,
   TrendingUp, RefreshCw, ArrowRight, AlertTriangle,
-  LogIn, BarChart3,
+  LogIn, BarChart3, GraduationCap, BookOpen, PauseCircle,
 } from "lucide-react";
 import { getPlatformStats, type PlatformStats } from "@/api/schools";
 import { useImpersonationStore } from "@/stores/impersonationStore";
@@ -49,12 +49,15 @@ export default function PlatformDashboard() {
   };
 
   const statCards = stats ? [
-    { label: "Total Schools",  value: stats.total_schools, icon: Building2,    color: "#7C3AED" },
-    { label: "Active",         value: stats.active,        icon: CheckCircle,  color: "#059669" },
-    { label: "On Trial",       value: stats.trial,         icon: Clock,        color: "#0891B2" },
-    { label: "Expired",        value: stats.expired,       icon: XCircle,      color: "#DC2626" },
-    { label: "Total Users",    value: stats.total_users,   icon: Users,        color: "#F59E0B" },
-    { label: "New This Week",  value: stats.new_this_week, icon: TrendingUp,   color: "#10B981" },
+    { label: "Total Schools",  value: stats.total_schools,  icon: Building2,      color: "#7C3AED" },
+    { label: "Active",         value: stats.active,         icon: CheckCircle,    color: "#059669" },
+    { label: "On Trial",       value: stats.trial,          icon: Clock,          color: "#0891B2" },
+    { label: "Expired",        value: stats.expired,        icon: XCircle,        color: "#DC2626" },
+    { label: "Suspended",      value: stats.suspended ?? 0, icon: PauseCircle,    color: "#F59E0B" },
+    { label: "New This Week",  value: stats.new_this_week,  icon: TrendingUp,     color: "#10B981" },
+    { label: "Total Users",    value: stats.total_users,    icon: Users,          color: "#6366F1" },
+    { label: "Total Students", value: stats.total_students, icon: GraduationCap,  color: "#0891B2" },
+    { label: "Total Teachers", value: stats.total_teachers, icon: BookOpen,       color: "#7C3AED" },
   ] : [];
 
   return (
@@ -119,7 +122,7 @@ export default function PlatformDashboard() {
           )}
 
           {/* Stat cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9 gap-4">
             {statCards.map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3"
@@ -214,12 +217,14 @@ export default function PlatformDashboard() {
           </div>
 
           {/* Quick links */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { label: "Manage Schools",     desc: "View and manage all schools",     to: "/platform/schools",  color: "#7C3AED" },
               { label: "Audit Log",          desc: "Track platform activity",         to: "/platform/audit",    color: "#0891B2" },
-              { label: "Register a School",  desc: "Manually add a new school",       to: "/register",          color: "#059669" },
-              { label: "Platform Settings",  desc: "Configure platform defaults",     to: "/platform/settings", color: "#F59E0B" },
+              { label: "Register a School",  desc: "Manually add a new school",       to: "/register",               color: "#059669" },
+              { label: "Module Access",      desc: "Control plan feature flags",      to: "/platform/features",      color: "#7C3AED" },
+              { label: "Announcements",      desc: "Broadcast notices to schools",    to: "/platform/announcements", color: "#F59E0B" },
+              { label: "Platform Settings",  desc: "Admin account settings",          to: "/platform/settings",      color: "#6366F1" },
             ].map(({ label, desc, to, color }) => (
               <button
                 key={to}

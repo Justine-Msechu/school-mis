@@ -35,8 +35,30 @@ import SuperAdminPage from "@/pages/SuperAdminPage";
 import SuperAdminShell from "@/components/layout/SuperAdminShell";
 import PlatformDashboard from "@/pages/platform/PlatformDashboard";
 import PlatformSettingsPage from "@/pages/platform/PlatformSettingsPage";
+import PlatformFeaturesPage from "@/pages/platform/PlatformFeaturesPage";
+import PlatformAnnouncementsPage from "@/pages/platform/PlatformAnnouncementsPage";
 import { getSetupStatus } from "@/api/setup";
 import { useImpersonationStore } from "@/stores/impersonationStore";
+
+// ── Lazy setup check — only runs when user actually navigates to /setup ───────
+function SetupRoute() {
+  const [state, setState] = useState<"loading" | "needed" | "done">("loading");
+
+  useEffect(() => {
+    getSetupStatus()
+      .then((s) => setState(s.needs_setup ? "needed" : "done"))
+      .catch(() => setState("done"));
+  }, []);
+
+  if (state === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  return state === "needed" ? <SetupPage /> : <Navigate to="/login" replace />;
+}
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuthStore();
@@ -53,49 +75,48 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return user?.role === "admin" || user?.role === "superadmin" ? <>{children}</> : <Navigate to="/" replace />;
 }
 
-
 function AuthenticatedApp() {
   const { user } = useAuthStore();
   const { active: isImpersonating } = useImpersonationStore();
 
-  // Superadmin not currently impersonating a school → platform shell
   if (user?.role === "superadmin" && !isImpersonating) {
     return (
       <SuperAdminShell>
         <Routes>
-          <Route path="/platform"          element={<PlatformDashboard />} />
-          <Route path="/platform/schools"  element={<SuperAdminPage />} />
-          <Route path="/platform/audit"    element={<AuditLogPage />} />
-          <Route path="/platform/settings" element={<PlatformSettingsPage />} />
-          <Route path="/*"                 element={<Navigate to="/platform" replace />} />
+          <Route path="/platform"               element={<PlatformDashboard />} />
+          <Route path="/platform/schools"       element={<SuperAdminPage />} />
+          <Route path="/platform/features"      element={<PlatformFeaturesPage />} />
+          <Route path="/platform/announcements" element={<PlatformAnnouncementsPage />} />
+          <Route path="/platform/audit"         element={<AuditLogPage />} />
+          <Route path="/platform/settings"      element={<PlatformSettingsPage />} />
+          <Route path="/*"                      element={<Navigate to="/platform" replace />} />
         </Routes>
       </SuperAdminShell>
     );
   }
 
-  // Regular school staff OR superadmin impersonating a school
   return (
     <AppShell>
       <Routes>
-        <Route path="/"            element={<DashboardPage />} />
-        <Route path="/grades/*"    element={<PermRoute perm="grades.view"><GradesPage /></PermRoute>} />
-        <Route path="/students"    element={<PermRoute perm="student.view"><StudentsPage /></PermRoute>} />
-        <Route path="/teachers"    element={<PermRoute perm="teachers.view"><TeachersPage /></PermRoute>} />
-        <Route path="/classes"     element={<PermRoute perm="classes.view"><ClassesPage /></PermRoute>} />
-        <Route path="/attendance"  element={<PermRoute perm="attendance.view"><AttendancePage /></PermRoute>} />
-        <Route path="/library"     element={<PermRoute perm="library.view"><LibraryPage /></PermRoute>} />
-        <Route path="/finance"     element={<PermRoute perm="finance.view"><FinancePage /></PermRoute>} />
-        <Route path="/accounting"  element={<PermRoute perm="accounting.view"><AccountingPage /></PermRoute>} />
-        <Route path="/transport"   element={<PermRoute perm="transport.view"><TransportPage /></PermRoute>} />
-        <Route path="/inventory"   element={<PermRoute perm="inventory.view"><InventoryPage /></PermRoute>} />
-        <Route path="/health"      element={<PermRoute perm="health.view"><HealthPage /></PermRoute>} />
-        <Route path="/welfare"     element={<PermRoute perm="welfare.view"><WelfarePage /></PermRoute>} />
-        <Route path="/promotion"   element={<PermRoute perm="student.promote"><PromotionPage /></PermRoute>} />
-        <Route path="/reports"     element={<PermRoute perm="reports.view"><ReportsPage /></PermRoute>} />
-        <Route path="/settings"    element={<PermRoute perm="settings.view"><SettingsPage /></PermRoute>} />
-        <Route path="/audit"       element={<PermRoute perm="audit.view"><AuditLogPage /></PermRoute>} />
-        <Route path="/enrollment"  element={<PermRoute perm="enrollment.view"><EnrollmentPage /></PermRoute>} />
-        <Route path="/guardians"   element={<PermRoute perm="guardian.view"><GuardiansPage /></PermRoute>} />
+        <Route path="/"             element={<DashboardPage />} />
+        <Route path="/grades/*"     element={<PermRoute perm="grades.view"><GradesPage /></PermRoute>} />
+        <Route path="/students"     element={<PermRoute perm="student.view"><StudentsPage /></PermRoute>} />
+        <Route path="/teachers"     element={<PermRoute perm="teachers.view"><TeachersPage /></PermRoute>} />
+        <Route path="/classes"      element={<PermRoute perm="classes.view"><ClassesPage /></PermRoute>} />
+        <Route path="/attendance"   element={<PermRoute perm="attendance.view"><AttendancePage /></PermRoute>} />
+        <Route path="/library"      element={<PermRoute perm="library.view"><LibraryPage /></PermRoute>} />
+        <Route path="/finance"      element={<PermRoute perm="finance.view"><FinancePage /></PermRoute>} />
+        <Route path="/accounting"   element={<PermRoute perm="accounting.view"><AccountingPage /></PermRoute>} />
+        <Route path="/transport"    element={<PermRoute perm="transport.view"><TransportPage /></PermRoute>} />
+        <Route path="/inventory"    element={<PermRoute perm="inventory.view"><InventoryPage /></PermRoute>} />
+        <Route path="/health"       element={<PermRoute perm="health.view"><HealthPage /></PermRoute>} />
+        <Route path="/welfare"      element={<PermRoute perm="welfare.view"><WelfarePage /></PermRoute>} />
+        <Route path="/promotion"    element={<PermRoute perm="student.promote"><PromotionPage /></PermRoute>} />
+        <Route path="/reports"      element={<PermRoute perm="reports.view"><ReportsPage /></PermRoute>} />
+        <Route path="/settings"     element={<PermRoute perm="settings.view"><SettingsPage /></PermRoute>} />
+        <Route path="/audit"        element={<PermRoute perm="audit.view"><AuditLogPage /></PermRoute>} />
+        <Route path="/enrollment"   element={<PermRoute perm="enrollment.view"><EnrollmentPage /></PermRoute>} />
+        <Route path="/guardians"    element={<PermRoute perm="guardian.view"><GuardiansPage /></PermRoute>} />
         <Route path="/report-cards" element={<PermRoute perm="report_cards.view"><ReportCardsPage /></PermRoute>} />
         <Route path="/rbac"         element={<AdminRoute><RbacPage /></AdminRoute>} />
         <Route path="/payroll"      element={<PermRoute perm="payroll.view"><PayrollPage /></PermRoute>} />
@@ -106,52 +127,26 @@ function AuthenticatedApp() {
   );
 }
 
+// App has NO async state — isLoggedIn + user come from localStorage synchronously,
+// so the correct page renders on the very first paint with no flicker.
 export default function App() {
-  const { isLoggedIn } = useAuthStore();
-  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    getSetupStatus()
-      .then((s) => setNeedsSetup(s.needs_setup))
-      .catch(() => setNeedsSetup(false));
-  }, []);
-
-  if (needsSetup === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const { isLoggedIn, user } = useAuthStore();
+  // Superadmin lands on /platform; everyone else on /
+  const home = user?.role === "superadmin" ? "/platform" : "/";
 
   return (
     <BrowserRouter>
       <ForceChangePassword />
       <Routes>
-        {/* Public pages */}
-        <Route path="/landing" element={<LandingPage />} />
-        <Route path="/register" element={isLoggedIn ? <Navigate to="/" replace /> : <RegisterPage />} />
-
-        {/* Setup wizard */}
-        <Route path="/setup" element={needsSetup ? <SetupPage /> : <Navigate to="/login" replace />} />
-
-        {/* Login */}
-        <Route path="/login" element={
-          needsSetup ? <Navigate to="/setup" replace /> :
-          isLoggedIn ? <Navigate to="/" replace /> :
-          <LoginPage />
+        <Route path="/landing"  element={<LandingPage />} />
+        <Route path="/register" element={isLoggedIn ? <Navigate to={home} replace /> : <RegisterPage />} />
+        <Route path="/setup"    element={<SetupRoute />} />
+        <Route path="/login"    element={isLoggedIn ? <Navigate to={home} replace /> : <LoginPage />} />
+        <Route path="/*"        element={
+          !isLoggedIn
+            ? <LandingPage />
+            : <PrivateRoute><AuthenticatedApp /></PrivateRoute>
         } />
-
-        {/* Authenticated area */}
-        <Route
-          path="/*"
-          element={
-            needsSetup ? <Navigate to="/setup" replace /> :
-            <PrivateRoute>
-              <AuthenticatedApp />
-            </PrivateRoute>
-          }
-        />
       </Routes>
     </BrowserRouter>
   );

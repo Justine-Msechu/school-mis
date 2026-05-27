@@ -2,15 +2,28 @@
 Schools router — public registration + superadmin platform management.
 
 Public:
-  POST /api/schools/register   — self-service school + admin creation
+  POST /api/schools/register
 
 Superadmin only:
-  GET  /api/superadmin/stats                      — platform-wide stats
-  GET  /api/superadmin/schools                    — list all schools
-  PUT  /api/superadmin/schools/{id}/subscription  — change plan / status
+  GET  /api/superadmin/stats
+  GET  /api/superadmin/schools
+  PUT  /api/superadmin/schools/{id}/subscription
+  POST /api/superadmin/schools/{id}/suspend
+  POST /api/superadmin/schools/{id}/activate
+  POST /api/superadmin/schools/{id}/reset-admin-password
+  GET  /api/superadmin/feature-flags
+  PUT  /api/superadmin/feature-flags/{plan}/{module}
+  GET  /api/superadmin/announcements
+  POST /api/superadmin/announcements
+  DELETE /api/superadmin/announcements/{id}
+
+School-accessible:
+  GET  /api/announcements   — active announcements for current school's plan
 """
 
 import asyncio
+import secrets
+import string
 from datetime import datetime, timedelta
 
 import bcrypt
@@ -24,8 +37,11 @@ router = APIRouter()
 
 BCRYPT_COST = 12
 
+VALID_PLANS    = ("basic", "standard", "premium", "trial")
+VALID_STATUSES = ("active", "trial", "expired", "cancelled", "suspended")
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+
+# ── Auth helpers ───────────────────────────────────────────────────────────────
 
 def _require_superadmin(user: dict = Depends(require_auth)) -> dict:
     if user.get("role") != "superadmin":
@@ -81,7 +97,7 @@ async def register_school(body: RegisterPayload):
                 registration_number, school_address, school_location, country,
                 website, login_header_message, admin_name,
                 plan, max_users, is_active, subscription_status, trial_ends, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'trial', 50, 1, 'trial', ?, datetime('now'))""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'trial', 50, 0, 'pending', ?, datetime('now'))""",
             (
                 body.school_name, body.school_email, body.contact_phone,
                 body.school_type, body.school_ownership,
@@ -117,8 +133,12 @@ async def register_school(body: RegisterPayload):
                 "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
                 (user_id, admin_role["id"]),
             )
-        return {"ok": True, "school_name": body.school_name, "trial_ends": trial_ends,
-                "message": "Registration successful. You can now log in with your admin account."}
+        return {
+            "ok": True,
+            "school_name": body.school_name,
+            "trial_ends": trial_ends,
+            "message": "Registration successful. You can now log in with your admin account.",
+        }
 
     return await asyncio.to_thread(_db)
 
@@ -128,39 +148,51 @@ async def register_school(body: RegisterPayload):
 @router.get("/superadmin/stats")
 async def platform_stats(_user: dict = Depends(_require_superadmin)):
     def _db():
-        total    = (fetch_one("SELECT COUNT(*) AS n FROM schools", ()) or {}).get("n", 0)
-        active   = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE subscription_status='active'", ()) or {}).get("n", 0)
-        trial    = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE subscription_status='trial'", ()) or {}).get("n", 0)
-        expired  = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE subscription_status IN ('expired','cancelled')", ()) or {}).get("n", 0)
-        new_week = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE created_at >= datetime('now','-7 days')", ()) or {}).get("n", 0)
-        total_users = (fetch_one("SELECT COUNT(*) AS n FROM users WHERE role != 'superadmin' AND is_active=1", ()) or {}).get("n", 0)
-        expiring_soon = (fetch_one(
+        def _n(sql, params=()):
+            row = fetch_one(sql, params)
+            return row["n"] if row else 0
+
+        total         = _n("SELECT COUNT(*) AS n FROM schools")
+        active        = _n("SELECT COUNT(*) AS n FROM schools WHERE subscription_status='active'")
+        trial         = _n("SELECT COUNT(*) AS n FROM schools WHERE subscription_status='trial'")
+        expired       = _n("SELECT COUNT(*) AS n FROM schools WHERE subscription_status IN ('expired','cancelled')")
+        suspended     = _n("SELECT COUNT(*) AS n FROM schools WHERE subscription_status='suspended'")
+        new_week      = _n("SELECT COUNT(*) AS n FROM schools WHERE created_at >= datetime('now','-7 days')")
+        total_users   = _n("SELECT COUNT(*) AS n FROM users WHERE role != 'superadmin' AND is_active=1")
+        total_students = _n("SELECT COUNT(*) AS n FROM students WHERE is_active=1")
+        total_teachers = _n("SELECT COUNT(*) AS n FROM teachers WHERE is_active=1")
+        expiring_soon = _n(
             "SELECT COUNT(*) AS n FROM schools "
             "WHERE subscription_status='trial' "
-            "AND trial_ends BETWEEN date('now') AND date('now','+7 days')", ()
-        ) or {}).get("n", 0)
+            "AND trial_ends BETWEEN date('now') AND date('now','+7 days')"
+        )
 
         plan_rows = fetch_all("SELECT plan, COUNT(*) AS n FROM schools GROUP BY plan", ())
         by_plan   = {r["plan"]: r["n"] for r in plan_rows}
 
         recent = fetch_all(
             """SELECT s.id, s.name, s.plan, s.subscription_status, s.created_at, s.admin_name
-               FROM schools s ORDER BY s.created_at DESC LIMIT 5""", (),
+               FROM schools s ORDER BY s.created_at DESC LIMIT 5""",
+            (),
         )
         expiring_list = fetch_all(
             """SELECT id, name, plan, subscription_status, trial_ends, admin_name
                FROM schools
                WHERE subscription_status='trial'
                AND trial_ends BETWEEN date('now') AND date('now','+7 days')
-               ORDER BY trial_ends ASC""", (),
+               ORDER BY trial_ends ASC""",
+            (),
         )
         return {
             "total_schools":   total,
             "active":          active,
             "trial":           trial,
             "expired":         expired,
+            "suspended":       suspended,
             "new_this_week":   new_week,
             "total_users":     total_users,
+            "total_students":  total_students,
+            "total_teachers":  total_teachers,
             "expiring_soon":   expiring_soon,
             "by_plan":         by_plan,
             "recent_schools":  [dict(r) for r in recent],
@@ -193,21 +225,21 @@ async def list_schools(_user: dict = Depends(_require_superadmin)):
 # ── Superadmin: update a school's subscription ─────────────────────────────────
 
 class SubscriptionUpdate(BaseModel):
-    plan:   str
-    status: str
+    plan:       str
+    status:     str
     trial_ends: str | None = None
 
     @field_validator("plan")
     @classmethod
     def valid_plan(cls, v: str) -> str:
-        if v not in ("basic", "standard", "premium", "trial"):
+        if v not in VALID_PLANS:
             raise ValueError("Invalid plan.")
         return v
 
     @field_validator("status")
     @classmethod
     def valid_status(cls, v: str) -> str:
-        if v not in ("active", "trial", "expired", "cancelled"):
+        if v not in VALID_STATUSES:
             raise ValueError("Invalid status.")
         return v
 
@@ -243,6 +275,243 @@ async def update_school_subscription(
                     "UPDATE subscriptions_v2 SET status=?, cancel_at_period_end=0 WHERE id=?",
                     (body.status, existing["id"]),
                 )
-        return {"ok": True, "school_id": school_id, "plan": body.plan, "status": body.status}
+        return {"ok": True}
+
+    return await asyncio.to_thread(_db)
+
+
+# ── Superadmin: suspend / activate school ─────────────────────────────────────
+
+@router.post("/superadmin/schools/{school_id}/suspend")
+async def suspend_school(school_id: int, _user: dict = Depends(_require_superadmin)):
+    def _db():
+        school = fetch_one("SELECT id FROM schools WHERE id=?", (school_id,))
+        if not school:
+            raise HTTPException(404, "School not found.")
+        execute(
+            "UPDATE schools SET subscription_status='suspended', is_active=0 WHERE id=?",
+            (school_id,),
+        )
+        return {"ok": True}
+
+    return await asyncio.to_thread(_db)
+
+
+@router.post("/superadmin/schools/{school_id}/activate")
+async def activate_school(school_id: int, _user: dict = Depends(_require_superadmin)):
+    def _db():
+        school = fetch_one("SELECT id, plan FROM schools WHERE id=?", (school_id,))
+        if not school:
+            raise HTTPException(404, "School not found.")
+        execute(
+            "UPDATE schools SET subscription_status='active', is_active=1 WHERE id=?",
+            (school_id,),
+        )
+        return {"ok": True}
+
+    return await asyncio.to_thread(_db)
+
+
+# ── Superadmin: reset school admin password ────────────────────────────────────
+
+@router.post("/superadmin/schools/{school_id}/reset-admin-password")
+async def reset_admin_password(school_id: int, _user: dict = Depends(_require_superadmin)):
+    def _db():
+        admin = fetch_one(
+            "SELECT id FROM users WHERE school_id=? AND role='admin' AND is_active=1 LIMIT 1",
+            (school_id,),
+        )
+        if not admin:
+            raise HTTPException(404, "No active admin found for this school.")
+
+        alphabet = string.ascii_letters + string.digits
+        new_pw = "".join(secrets.choice(alphabet) for _ in range(12))
+        pw_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt(rounds=BCRYPT_COST)).decode()
+        execute(
+            "UPDATE users SET password_hash=?, salt='', pw_scheme='bcrypt', must_change_pw=1 WHERE id=?",
+            (pw_hash, admin["id"]),
+        )
+        return {"ok": True, "temp_password": new_pw}
+
+    return await asyncio.to_thread(_db)
+
+
+# ── Superadmin: feature flags ─────────────────────────────────────────────────
+
+@router.get("/superadmin/feature-flags")
+async def get_feature_flags(_user: dict = Depends(_require_superadmin)):
+    def _db():
+        rows = fetch_all(
+            "SELECT plan, module, enabled FROM platform_feature_flags ORDER BY plan, module",
+            (),
+        )
+        result: dict[str, dict[str, bool]] = {}
+        for r in rows:
+            plan = r["plan"]
+            if plan not in result:
+                result[plan] = {}
+            result[plan][r["module"]] = bool(r["enabled"])
+        return result
+
+    return await asyncio.to_thread(_db)
+
+
+class FlagUpdate(BaseModel):
+    enabled: bool
+
+
+@router.put("/superadmin/feature-flags/{plan}/{module}")
+async def set_feature_flag(
+    plan: str,
+    module: str,
+    body: FlagUpdate,
+    _user: dict = Depends(_require_superadmin),
+):
+    def _db():
+        if plan not in VALID_PLANS:
+            raise HTTPException(400, "Invalid plan.")
+        execute(
+            """INSERT INTO platform_feature_flags (plan, module, enabled)
+               VALUES (?, ?, ?)
+               ON CONFLICT(plan, module) DO UPDATE SET enabled=excluded.enabled""",
+            (plan, module, 1 if body.enabled else 0),
+        )
+        return {"ok": True}
+
+    return await asyncio.to_thread(_db)
+
+
+# ── Superadmin: announcements ─────────────────────────────────────────────────
+
+class AnnouncementPayload(BaseModel):
+    title:       str
+    body:        str
+    priority:    str = "normal"
+    target_plan: str = "all"
+    expires_at:  str | None = None
+
+    @field_validator("priority")
+    @classmethod
+    def valid_priority(cls, v: str) -> str:
+        if v not in ("normal", "warning", "critical"):
+            raise ValueError("Invalid priority.")
+        return v
+
+    @field_validator("target_plan")
+    @classmethod
+    def valid_target(cls, v: str) -> str:
+        if v not in ("all", *VALID_PLANS):
+            raise ValueError("Invalid target plan.")
+        return v
+
+
+@router.get("/superadmin/announcements")
+async def list_announcements(_user: dict = Depends(_require_superadmin)):
+    def _db():
+        rows = fetch_all(
+            "SELECT * FROM platform_announcements ORDER BY created_at DESC",
+            (),
+        )
+        return [dict(r) for r in rows]
+
+    return await asyncio.to_thread(_db)
+
+
+@router.post("/superadmin/announcements")
+async def create_announcement(
+    body: AnnouncementPayload,
+    _user: dict = Depends(_require_superadmin),
+):
+    def _db():
+        ann_id = execute(
+            """INSERT INTO platform_announcements
+               (title, body, priority, target_plan, expires_at, is_active)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (body.title, body.body, body.priority, body.target_plan, body.expires_at),
+        )
+        return {"ok": True, "id": ann_id}
+
+    return await asyncio.to_thread(_db)
+
+
+@router.delete("/superadmin/announcements/{ann_id}")
+async def delete_announcement(ann_id: int, _user: dict = Depends(_require_superadmin)):
+    def _db():
+        row = fetch_one("SELECT id FROM platform_announcements WHERE id=?", (ann_id,))
+        if not row:
+            raise HTTPException(404, "Announcement not found.")
+        execute("DELETE FROM platform_announcements WHERE id=?", (ann_id,))
+        return {"ok": True}
+
+    return await asyncio.to_thread(_db)
+
+
+# ── School-accessible: request plan upgrade ───────────────────────────────────
+
+class UpgradeRequestPayload(BaseModel):
+    plan_name: str
+    interval:  str = "monthly"
+
+    @field_validator("plan_name")
+    @classmethod
+    def valid_plan(cls, v: str) -> str:
+        if v not in VALID_PLANS:
+            raise ValueError("Invalid plan.")
+        return v
+
+
+@router.post("/subscriptions/request-upgrade")
+async def request_plan_upgrade(body: UpgradeRequestPayload, user: dict = Depends(require_auth)):
+    def _db():
+        school_id = user.get("school_id")
+        if not school_id:
+            raise HTTPException(400, "No school associated with this account.")
+        if user.get("role") != "admin":
+            raise HTTPException(403, "Only school administrators can request plan upgrades.")
+
+        school = fetch_one("SELECT name FROM schools WHERE id=?", (school_id,))
+        school_name = school["name"] if school else f"School #{school_id}"
+
+        # Create a platform announcement so the superadmin sees it
+        tbl = fetch_one("SELECT name FROM sqlite_master WHERE type='table' AND name='platform_announcements'", ())
+        if tbl:
+            execute(
+                """INSERT INTO platform_announcements
+                   (title, body, priority, target_plan, is_active)
+                   VALUES (?, ?, 'warning', 'all', 1)""",
+                (
+                    f"Upgrade Request: {school_name}",
+                    f"{school_name} has requested a plan upgrade to {body.plan_name.title()} "
+                    f"({body.interval}). They have confirmed sending payment. "
+                    f"Please verify and activate via Platform Admin → Manage Schools.",
+                ),
+            )
+        return {"ok": True, "message": "Your upgrade request has been sent to the platform administrator."}
+
+    return await asyncio.to_thread(_db)
+
+
+# ── School-accessible: active announcements ───────────────────────────────────
+
+@router.get("/announcements")
+async def get_active_announcements(user: dict = Depends(require_auth)):
+    def _db():
+        school = fetch_one("SELECT plan FROM schools WHERE id=?", (user.get("school_id"),)) if user.get("school_id") else None
+        plan = school["plan"] if school else None
+
+        rows = fetch_all(
+            """SELECT id, title, body, priority, target_plan, created_at, expires_at
+               FROM platform_announcements
+               WHERE is_active=1
+               AND (expires_at IS NULL OR expires_at >= date('now'))
+               ORDER BY created_at DESC""",
+            (),
+        )
+        result = []
+        for r in rows:
+            tp = r["target_plan"]
+            if tp == "all" or tp == plan:
+                result.append(dict(r))
+        return result
 
     return await asyncio.to_thread(_db)

@@ -19,10 +19,13 @@ New tables:
   portal_auth_tokens       — parent/student portal session tokens
 """
 
-import sqlite3, sys
+import os, sqlite3, sys
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent.parent / "school_mis.db"
+DB_PATH = Path(os.environ.get(
+    "SCHOOL_MIS_DB_PATH",
+    str(Path(__file__).parent.parent.parent / "school_mis.db"),
+))
 
 MIGRATIONS = [
 

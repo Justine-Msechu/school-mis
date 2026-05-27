@@ -15,10 +15,13 @@ Addresses every red flag from the structural audit:
  9.  password_changes — new table to track forced password changes
 """
 
-import sqlite3
+import os, sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent.parent / "school_mis.db"
+DB_PATH = Path(os.environ.get(
+    "SCHOOL_MIS_DB_PATH",
+    str(Path(__file__).parent.parent.parent / "school_mis.db"),
+))
 
 
 def _conn():

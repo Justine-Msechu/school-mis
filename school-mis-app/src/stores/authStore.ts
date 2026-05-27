@@ -75,15 +75,20 @@ export const useAuthStore = create<AuthState>()(
             user: s.user ? { ...s.user, permissions: fresh.permissions } : s.user,
             mustChangePw: fresh.must_change_pw,
           }));
-        } catch {
-          // 401 = token invalid (server restarted) → force logout
-          get().logout();
+        } catch (err: unknown) {
+          // Only force-logout on 401 (token genuinely invalid).
+          // Network errors or 5xx on startup must NOT log the user out.
+          const status = (err as { response?: { status?: number } })?.response?.status;
+          if (status === 401) get().logout();
         }
       },
     }),
     {
       name: "mis-auth",
       partialize: (s) => ({ user: s.user, token: s.token, mustChangePw: s.mustChangePw }),
+      // We already pre-read localStorage synchronously via _readPersisted() above,
+      // so skip Zustand's own async hydration pass which would cause a second render.
+      skipHydration: true,
     }
   )
 );

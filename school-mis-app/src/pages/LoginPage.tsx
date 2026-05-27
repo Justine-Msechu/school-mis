@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { BookOpen, Eye, EyeOff } from "lucide-react";
 import { login } from "@/api/auth";
 import { useAuthStore } from "@/stores/authStore";
@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       const { token, user, must_change_pw } = await login(username.trim(), password);
       storeLogin(user, token, must_change_pw);
-      navigate("/");
+      navigate(user.role === "superadmin" ? "/platform" : "/");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       setError(msg ?? "Invalid username or password.");
@@ -94,7 +94,13 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-slate-500 mt-6">
+        <p className="text-center text-sm text-slate-400 mt-5">
+          New school?{" "}
+          <Link to="/register" className="text-violet-400 hover:text-violet-300 font-medium">Register here</Link>
+          {" · "}
+          <Link to="/" className="text-slate-500 hover:text-slate-300">Back to Home</Link>
+        </p>
+        <p className="text-center text-xs text-slate-600 mt-3">
           School MIS v5.0 · Offline-first · SQLite
         </p>
       </div>

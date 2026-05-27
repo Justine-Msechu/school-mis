@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   getPlans, getStatus, getInvoices, getHistory,
-  createCheckout, manualActivate, cancelSubscription,
+  createCheckout, cancelSubscription, requestPlanUpgrade,
   type Plan, type SubscriptionStatus, type Invoice, type HistoryEntry,
 } from "@/api/subscriptions";
 import { getProviders } from "@/api/subscriptions";
@@ -143,8 +143,7 @@ function CheckoutModal({
   const [selectedProvider, setSelectedProvider] = useState(providers[0] || "");
   const [loading, setLoading]  = useState(false);
   const [error, setError]      = useState("");
-  const [manualMode, setManualMode] = useState(false);
-  const [manualDone, setManualDone] = useState(false);
+  const [requested, setRequested] = useState(false);
 
   const providerInfo: Record<string, { label: string; logo: string; desc: string }> = {
     flutterwave: { label: "Flutterwave", logo: "🔶", desc: "M-Pesa, Tigo, Airtel, Card" },
@@ -167,27 +166,14 @@ function CheckoutModal({
     }
   };
 
-  const handleManual = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await manualActivate({ plan_name: plan.name, interval });
-      setManualDone(true);
-      setTimeout(() => window.location.reload(), 1500);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail ?? "Activation failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (manualDone) {
+  if (requested) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
         <div className="bg-white rounded-2xl p-8 text-center max-w-sm w-full">
           <CheckCircle2 size={48} className="mx-auto mb-3 text-emerald-500" />
-          <p className="text-lg font-bold text-gray-900">Subscription Activated!</p>
-          <p className="text-sm text-gray-500 mt-1">Reloading…</p>
+          <p className="text-lg font-bold text-gray-900">Request Sent!</p>
+          <p className="text-sm text-gray-500 mt-1">The platform administrator has been notified. Your plan will be activated once payment is confirmed.</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-xl">Close</button>
         </div>
       </div>
     );
@@ -220,7 +206,7 @@ function CheckoutModal({
             <span className="text-lg font-extrabold text-violet-900">{FMT.format(plan.price_amount)}</span>
           </div>
 
-          {providers.length > 0 && !manualMode ? (
+          {providers.length > 0 ? (
             <>
               <p className="text-sm font-medium text-gray-700">Select payment method</p>
               <div className="space-y-2">
@@ -255,29 +241,34 @@ function CheckoutModal({
                 {loading ? <><RefreshCw size={15} className="animate-spin"/>Processing…</> : <><ExternalLink size={15}/>Proceed to Payment</>}
               </button>
 
-              <button onClick={() => setManualMode(true)} className="w-full text-xs text-gray-400 hover:text-gray-600 text-center">
-                Activate manually (offline payment)
-              </button>
             </>
           ) : (
-            <>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
-                <p className="font-medium mb-1">Manual Activation</p>
-                <p className="text-xs">Use this after confirming payment through bank transfer or other offline method. This is an admin action and is logged.</p>
-              </div>
+            /* No payment providers configured */
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center space-y-2">
+              <p className="text-sm font-semibold text-blue-900">Bank Transfer / Offline Payment</p>
+              <p className="text-xs text-blue-700">
+                To activate the <strong>{plan.display_name}</strong> plan, make a bank transfer or
+                mobile money payment of <strong>{FMT.format(plan.price_amount)}</strong> and
+                contact your platform administrator with the payment reference.
+              </p>
+              <p className="text-xs text-blue-700">
+                The administrator will activate your plan once payment is confirmed.
+              </p>
               <button
-                onClick={handleManual}
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    await requestPlanUpgrade({ plan_name: plan.name, interval });
+                  } catch { /* still show confirmation even if request fails */ }
+                  setLoading(false);
+                  setRequested(true);
+                }}
                 disabled={loading}
-                className="w-full h-11 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+                className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
               >
-                {loading ? <><RefreshCw size={15} className="animate-spin"/>Activating…</> : <>Activate Manually</>}
+                {loading ? "Sending…" : "I've Sent Payment — Notify Admin"}
               </button>
-              {providers.length > 0 && (
-                <button onClick={() => setManualMode(false)} className="w-full text-xs text-gray-400 hover:text-gray-600 text-center">
-                  ← Back to payment options
-                </button>
-              )}
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -522,10 +513,8 @@ export default function SubscriptionPage() {
 
           {providers.length === 0 && isAdmin && (
             <div className="text-center py-4 text-sm text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-              No payment providers are configured on the server.
-              Set <code className="bg-gray-100 px-1 rounded">FLW_SECRET_KEY</code> or{" "}
-              <code className="bg-gray-100 px-1 rounded">PAYSTACK_SECRET_KEY</code> environment variables to enable online payments.
-              <br/>You can still activate manually below.
+              Online payments are not yet configured on this platform.
+              Select a plan and follow the bank transfer instructions to upgrade.
             </div>
           )}
         </div>

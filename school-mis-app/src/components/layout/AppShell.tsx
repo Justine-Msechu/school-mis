@@ -6,6 +6,7 @@ import SubscriptionLockScreen from "./SubscriptionLockScreen";
 import PlanUpgradeOverlay from "./PlanUpgradeOverlay";
 import ImpersonationBanner from "./ImpersonationBanner";
 import AiChat from "@/components/ai/AiChat";
+import PlanSelectionModal from "@/components/subscription/PlanSelectionModal";
 import { useAuthStore } from "@/stores/authStore";
 import { useSubscriptionStore } from "@/stores/subscriptionStore";
 import { useImpersonationStore } from "@/stores/impersonationStore";
@@ -20,6 +21,7 @@ interface PlanRestriction {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { refreshPermissions } = useAuthStore();
   const fetchPlan = useSubscriptionStore((s) => s.fetch);
+  const needsPlanSelection = useSubscriptionStore((s) => s.needsPlanSelection);
   const { active: isImpersonating } = useImpersonationStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -55,6 +57,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
+      {needsPlanSelection && <PlanSelectionModal />}
       {locked && <SubscriptionLockScreen onUnlocked={() => setLocked(false)} />}
       {isImpersonating && <ImpersonationBanner />}
       <div className="flex flex-1 min-h-0 overflow-hidden">

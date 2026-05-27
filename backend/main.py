@@ -7,8 +7,12 @@ from datetime import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-# Make the parent directory importable so existing services/db/auth work
+# Make project root importable (database/, auth/, etc.)
 sys.path.insert(0, str(Path(__file__).parent.parent))
+# Make desktop_app importable so services/ (transport_service, accounting_service, etc.) resolve
+_desktop = Path(__file__).parent.parent / "desktop_app"
+if _desktop.exists():
+    sys.path.insert(0, str(_desktop))
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +39,13 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: run migrations, configure DB, register event handlers."""
+    # 0. Initialize base schema (creates all core tables if they don't exist)
+    try:
+        from database.db import initialize_database
+        initialize_database()
+    except Exception as _e:
+        log.warning("Base schema init warning: %s", _e)
+
     # 1. Run all migrations — each is isolated so one failure never blocks the rest
     import importlib.util, os as _os
     _mig_dir = _os.path.join(_os.path.dirname(__file__), "migrations")
@@ -46,7 +57,7 @@ async def lifespan(app: FastAPI):
         "012_inventory_upgrade", "013_inventory_classification",
         "015_ngo", "016_student_sponsorship", "017_welfare_extended",
         "018_security", "019_subscription_v2", "020_superadmin",
-        "021_multitenant_fix",
+        "021_multitenant_fix", "022_platform_features",
     ])
     for _mig_name in _migrations:
         _path = _os.path.join(_mig_dir, f"{_mig_name}.py")

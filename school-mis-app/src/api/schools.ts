@@ -37,12 +37,6 @@ export interface SubscriptionUpdate {
   trial_ends?: string;
 }
 
-export const registerSchool = (body: RegisterSchoolPayload) =>
-  api.post<{ ok: boolean; school_name: string; trial_ends: string; message: string }>(
-    "/schools/register",
-    body,
-  );
-
 export interface RecentSchool {
   id:                  number;
   name:                string;
@@ -62,23 +56,86 @@ export interface ExpiringSchool {
 }
 
 export interface PlatformStats {
-  total_schools:  number;
-  active:         number;
-  trial:          number;
-  expired:        number;
-  new_this_week:  number;
-  total_users:    number;
-  expiring_soon:  number;
-  by_plan:        Record<string, number>;
-  recent_schools: RecentSchool[];
-  expiring_list:  ExpiringSchool[];
+  total_schools:   number;
+  active:          number;
+  trial:           number;
+  expired:         number;
+  suspended:       number;
+  new_this_week:   number;
+  total_users:     number;
+  total_students:  number;
+  total_teachers:  number;
+  expiring_soon:   number;
+  by_plan:         Record<string, number>;
+  recent_schools:  RecentSchool[];
+  expiring_list:   ExpiringSchool[];
 }
 
-export const getSuperAdminSchools = () =>
-  api.get<SchoolRow[]>("/superadmin/schools");
+export type FeatureFlags = Record<string, Record<string, boolean>>;
+
+export interface Announcement {
+  id:          number;
+  title:       string;
+  body:        string;
+  priority:    "normal" | "warning" | "critical";
+  target_plan: string;
+  created_at:  string;
+  expires_at:  string | null;
+  is_active?:  number;
+}
+
+export interface AnnouncementPayload {
+  title:        string;
+  body:         string;
+  priority:     "normal" | "warning" | "critical";
+  target_plan:  string;
+  expires_at?:  string | null;
+}
+
+// ── Public ────────────────────────────────────────────────────────────────────
+
+export const registerSchool = (body: RegisterSchoolPayload) =>
+  api.post<{ ok: boolean; school_name: string; trial_ends: string; message: string }>(
+    "/schools/register",
+    body,
+  );
+
+// ── Superadmin ────────────────────────────────────────────────────────────────
 
 export const getPlatformStats = () =>
   api.get<PlatformStats>("/superadmin/stats");
 
+export const getSuperAdminSchools = () =>
+  api.get<SchoolRow[]>("/superadmin/schools");
+
 export const updateSchoolSubscription = (schoolId: number, body: SubscriptionUpdate) =>
   api.put<{ ok: boolean }>(`/superadmin/schools/${schoolId}/subscription`, body);
+
+export const suspendSchool = (schoolId: number) =>
+  api.post<{ ok: boolean }>(`/superadmin/schools/${schoolId}/suspend`);
+
+export const activateSchool = (schoolId: number) =>
+  api.post<{ ok: boolean }>(`/superadmin/schools/${schoolId}/activate`);
+
+export const resetAdminPassword = (schoolId: number) =>
+  api.post<{ ok: boolean; temp_password: string }>(`/superadmin/schools/${schoolId}/reset-admin-password`);
+
+export const getFeatureFlags = () =>
+  api.get<FeatureFlags>("/superadmin/feature-flags");
+
+export const setFeatureFlag = (plan: string, module: string, enabled: boolean) =>
+  api.put<{ ok: boolean }>(`/superadmin/feature-flags/${plan}/${module}`, { enabled });
+
+export const listAnnouncements = () =>
+  api.get<Announcement[]>("/superadmin/announcements");
+
+export const createAnnouncement = (body: AnnouncementPayload) =>
+  api.post<{ ok: boolean; id: number }>("/superadmin/announcements", body);
+
+export const deleteAnnouncement = (id: number) =>
+  api.delete<{ ok: boolean }>(`/superadmin/announcements/${id}`);
+
+// ── School-facing ─────────────────────────────────────────────────────────────
+
+export const getActiveAnnouncements = () =>
+  api.get<Announcement[]>("/announcements");

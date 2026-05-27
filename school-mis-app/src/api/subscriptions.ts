@@ -72,5 +72,8 @@ export const verifyPayment    = (tx_ref: string) => api.post("/subscriptions/ver
 export const manualActivate   = (data: {plan_name: string; interval: string; days?: number}) =>
   api.post("/subscriptions/activate", data).then(r => r.data);
 
+export const requestPlanUpgrade = (data: {plan_name: string; interval: string}) =>
+  api.post("/subscriptions/request-upgrade", data).then(r => r.data);
+
 export const cancelSubscription = (reason = "") =>
   api.post("/subscriptions/cancel", {reason}).then(r => r.data);

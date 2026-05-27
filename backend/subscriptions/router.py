@@ -26,6 +26,9 @@ class ManualActivateRequest(BaseModel):
 class CancelRequest(BaseModel):
     reason: str = ""
 
+class SelectInitialPlanRequest(BaseModel):
+    plan_name: str  # "trial" | "basic" | "standard" | "premium"
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +36,77 @@ class CancelRequest(BaseModel):
 def list_plans():
     """All available plans with pricing. Public."""
     return svc.get_all_plans()
+
+@router.post("/select-initial-plan")
+async def select_initial_plan(body: SelectInitialPlanRequest, user: Usr):
+    """
+    Called once after registration to choose a starting plan.
+    Only works while the school's subscription_status is 'pending'.
+    - trial  → activates immediately, 30-day free trial
+    - others → marks as pending-payment, notifies superadmin
+    """
+    import asyncio
+    from database.db import fetch_one as _fo, execute as _ex
+    from backend.core.db import fetch_one as cfo, execute as cex
+
+    if user.get("role") not in ("admin",):
+        raise HTTPException(403, "Only school admins can select a plan")
+
+    org_id = user.get("school_id")
+    if not org_id:
+        raise HTTPException(400, "No school associated with this account")
+
+    school = await asyncio.to_thread(
+        lambda: fetch_one("SELECT * FROM schools WHERE id=?", (org_id,))
+    )
+    if not school:
+        raise HTTPException(404, "School not found")
+
+    current_status = school["subscription_status"] if school else None
+    if current_status != "pending":
+        raise HTTPException(400, "Plan has already been selected")
+
+    plan_name = body.plan_name.lower()
+    if plan_name not in ("trial", "basic", "standard", "premium"):
+        raise HTTPException(400, "Invalid plan name")
+
+    if plan_name == "trial":
+        from datetime import datetime, timedelta
+        trial_ends = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
+        await asyncio.to_thread(
+            lambda: execute(
+                "UPDATE schools SET plan='trial', subscription_status='trial', is_active=1, trial_ends=? WHERE id=?",
+                (trial_ends, org_id),
+            )
+        )
+        return {"status": "trial", "plan": "trial", "trial_ends": trial_ends,
+                "message": "30-day free trial activated. Welcome!"}
+
+    # Paid plan — mark as pending payment, notify superadmin
+    await asyncio.to_thread(
+        lambda: execute(
+            "UPDATE schools SET plan=?, subscription_status='pending', is_active=0 WHERE id=?",
+            (plan_name, org_id),
+        )
+    )
+    # Create announcement so superadmin sees the request
+    school_name = school["name"] if school else f"School #{org_id}"
+    await asyncio.to_thread(
+        lambda: execute(
+            """INSERT OR IGNORE INTO platform_announcements
+               (title, body, priority, target_plan, created_by, expires_at)
+               VALUES (?, ?, 'warning', 'all', 1, date('now','+30 days'))""",
+            (
+                f"Plan Request: {school_name}",
+                f"{school_name} selected the {plan_name.title()} plan and is awaiting payment confirmation. Please activate once payment is received.",
+            ),
+        )
+    )
+    return {
+        "status": "pending",
+        "plan": plan_name,
+        "message": f"Your {plan_name.title()} plan request has been submitted. The platform admin will activate it once payment is confirmed.",
+    }
 
 @router.get("/providers")
 def list_providers():
@@ -93,11 +167,15 @@ async def verify_payment(tx_ref: str, user: Usr):
 @router.post("/activate")
 def manual_activate(body: ManualActivateRequest, user: Usr):
     """
-    Admin manual activation — for testing or offline payments.
-    In production, use this for bank transfer payments after manual verification.
+    Superadmin-only manual activation for offline/bank-transfer payments.
+    School admins cannot self-activate — payment or superadmin approval required.
     """
-    if user.get("role") != "admin":
-        raise HTTPException(403, "Only admins can activate subscriptions")
+    if user.get("role") != "superadmin":
+        raise HTTPException(
+            403,
+            "Plan upgrades require payment or superadmin approval. "
+            "Contact the platform administrator to activate your subscription."
+        )
     org_id = user.get("school_id") or _default_org_id()
     if not org_id:
         raise HTTPException(400, "No school configured for this account")

@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import {
   LayoutDashboard, Building2, Shield, Settings,
-  LogOut, BookOpen, X, Menu, Palette,
+  LogOut, BookOpen, X, Menu, Palette, Layers, Megaphone,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, THEMES } from "@/stores/themeStore";
@@ -11,10 +11,12 @@ import { logout } from "@/api/auth";
 import "@/stores/themeStore";
 
 const NAV = [
-  { icon: LayoutDashboard, label: "Dashboard",  to: "/platform" },
-  { icon: Building2,       label: "Schools",    to: "/platform/schools" },
-  { icon: Shield,          label: "Audit Log",  to: "/platform/audit" },
-  { icon: Settings,        label: "Settings",   to: "/platform/settings" },
+  { icon: LayoutDashboard, label: "Dashboard",       to: "/platform" },
+  { icon: Building2,       label: "Schools",         to: "/platform/schools" },
+  { icon: Layers,          label: "Module Access",   to: "/platform/features" },
+  { icon: Megaphone,       label: "Announcements",   to: "/platform/announcements" },
+  { icon: Shield,          label: "Audit Log",       to: "/platform/audit" },
+  { icon: Settings,        label: "Settings",        to: "/platform/settings" },
 ];
 
 function PlatformSidebar({ onClose }: { onClose: () => void }) {

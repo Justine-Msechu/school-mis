@@ -3,13 +3,45 @@ version: "3.9"
 services:
   school-mis:
     build: .
+    image: school-mis:latest
+    container_name: school-mis
     restart: unless-stopped
     ports:
-      - "8765:8765"     # backend API + static files
+      - "8765:8765"
     volumes:
-      - db_data:/data   # SQLite database persists here
+      - db_data:/data        # SQLite database — persists across updates
+      - uploads:/app/uploads # Uploaded files (photos, documents)
     environment:
       - SCHOOL_MIS_DB_PATH=/data/school_mis.db
+      # Optional: payment gateway keys
+      # - FLW_SECRET_KEY=your_flutterwave_key
+      # - PAYSTACK_SECRET_KEY=your_paystack_key
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8765/api/setup/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Optional: Cloudflare Tunnel for external access ───────────────────────
+  # Gives you a public HTTPS URL without opening any router ports.
+  # Steps:
+  #   1. Create a free account at https://cloudflare.com
+  #   2. Dashboard → Zero Trust → Networks → Tunnels → Create tunnel
+  #   3. Copy the tunnel token and set it below
+  #   4. Uncomment this block, then: docker compose up -d
+  #
+  # cloudflare-tunnel:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: school-mis-tunnel
+  #   restart: unless-stopped
+  #   command: tunnel --no-autoupdate run
+  #   environment:
+  #     - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+  #   depends_on:
+  #     school-mis:
+  #       condition: service_healthy
 
 volumes:
   db_data:
+  uploads:

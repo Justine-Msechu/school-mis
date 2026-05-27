@@ -75,14 +75,5 @@ def run():
 
         conn.commit()
 
-    # Apply to both DB paths
     from backend.core.db import _get_conn
     _apply(_get_conn())
-
-    prod = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "school_mis.db")
-    )
-    if os.path.exists(prod):
-        c2 = sqlite3.connect(prod)
-        _apply(c2)
-        c2.close()
