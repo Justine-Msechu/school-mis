@@ -34,19 +34,14 @@ export default function SubscriptionLockScreen() {
             )}
           </div>
 
-          {/* Same message for all roles — only superadmin can activate */}
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-4 text-sm text-amber-900 space-y-2">
             <div className="flex items-start gap-2">
               <PhoneCall size={16} className="mt-0.5 flex-shrink-0 text-amber-600" />
-              <p>
-                Only the <strong>platform administrator</strong> can reactivate this subscription.
-                Please contact them to renew your plan and restore access.
-              </p>
+              <p>Contact the platform administrator to renew and restore access.</p>
             </div>
             {role === "admin" && (
               <p className="text-xs text-amber-700 pl-6">
-                As school admin you can view your subscription page — go to{" "}
-                <strong>Settings → Subscription</strong> to see payment options and contact details.
+                Go to <strong>Settings → Subscription</strong> to view payment options.
               </p>
             )}
           </div>
