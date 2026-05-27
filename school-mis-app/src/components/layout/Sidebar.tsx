@@ -7,11 +7,19 @@ import {
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
   UserCheck, FileText, UsersRound, ShieldCheck, Banknote, Handshake, X,
-  CreditCard,
+  CreditCard, Lock,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useSubscriptionStore } from "@/stores/subscriptionStore";
 import { logout } from "@/api/auth";
+
+// Modules blocked per plan — must match backend plan_config.py
+const PLAN_RESTRICTED: Record<string, string[]> = {
+  basic:    ["/payroll", "/welfare", "/transport", "/inventory", "/library", "/ngo", "/accounting"],
+  standard: [],
+  premium:  [],
+};
 
 interface NavItem {
   icon: LucideIcon;
@@ -81,7 +89,7 @@ const NAV_GROUPS: NavGroupDef[] = [
   },
 ];
 
-function NavItemEl({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
+function NavItemEl({ item, onNavigate, locked }: { item: NavItem; onNavigate: () => void; locked?: boolean }) {
   const Icon = item.icon;
   return (
     <NavLink
@@ -91,14 +99,17 @@ function NavItemEl({ item, onNavigate }: { item: NavItem; onNavigate: () => void
       className={({ isActive }) =>
         clsx(
           "flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm transition-colors relative",
-          isActive
-            ? "bg-white/14 text-white font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-0.5 before:bg-violet-400 before:rounded-full"
-            : "text-sidebar-text hover:bg-white/8 hover:text-gray-200"
+          locked
+            ? "text-sidebar-text/40 cursor-default"
+            : isActive
+              ? "bg-white/14 text-white font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-0.5 before:bg-violet-400 before:rounded-full"
+              : "text-sidebar-text hover:bg-white/8 hover:text-gray-200"
         )
       }
     >
       <Icon size={16} className="flex-shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate flex-1">{item.label}</span>
+      {locked && <Lock size={10} className="flex-shrink-0 opacity-50" />}
     </NavLink>
   );
 }
@@ -106,6 +117,8 @@ function NavItemEl({ item, onNavigate }: { item: NavItem; onNavigate: () => void
 function NavGroupEl({ group, onNavigate }: { group: NavGroupDef; onNavigate: () => void }) {
   const [open, setOpen] = useState(true);
   const { can, user } = useAuthStore();
+  const plan = useSubscriptionStore((s) => s.plan);
+  const restricted = PLAN_RESTRICTED[plan] ?? [];
 
   const visible = group.items.filter((i) => {
     if (i.roles && !i.roles.includes(user?.role ?? "")) return false;
@@ -133,7 +146,12 @@ function NavGroupEl({ group, onNavigate }: { group: NavGroupDef; onNavigate: () 
       {open && (
         <div className="flex flex-col gap-0.5">
           {visible.map((item) => (
-            <NavItemEl key={item.to} item={item} onNavigate={onNavigate} />
+            <NavItemEl
+              key={item.to}
+              item={item}
+              onNavigate={onNavigate}
+              locked={user?.role !== "admin" && restricted.some(p => item.to.startsWith(p))}
+            />
           ))}
         </div>
       )}

@@ -23,10 +23,12 @@ api.interceptors.response.use(
       window.location.href = "/login";
     }
     if (err.response?.status === 402) {
-      // Broadcast subscription expiry — AppShell listens and shows lock screen
-      window.dispatchEvent(new CustomEvent("subscription:expired", {
-        detail: err.response.data?.detail ?? {},
-      }));
+      const detail = err.response.data?.detail ?? {};
+      if (detail.code === "plan_restricted") {
+        window.dispatchEvent(new CustomEvent("plan:restricted", { detail }));
+      } else {
+        window.dispatchEvent(new CustomEvent("subscription:expired", { detail }));
+      }
     }
     return Promise.reject(err);
   }

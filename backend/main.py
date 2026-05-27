@@ -129,9 +129,12 @@ async def subscription_middleware(request: Request, call_next):
     try:
         from backend.deps import get_user_from_token
         from backend.routers.subscription import get_subscription_info
+        from backend.subscriptions.plan_config import plan_allows_path, min_plan_for_path
         user = get_user_from_token(token)
         if user and user.get("role") != "admin":
             sub = get_subscription_info(user.get("school_id"))
+
+            # 1. Check subscription is active
             if not sub.get("is_active", True):
                 return JSONResponse(
                     status_code=402,
@@ -141,6 +144,22 @@ async def subscription_middleware(request: Request, call_next):
                             "message": sub.get("warning") or "Subscription expired. Contact your administrator.",
                             "plan": sub.get("plan"),
                             "status": sub.get("status"),
+                        }
+                    },
+                )
+
+            # 2. Check plan allows this path
+            plan_name = sub.get("plan", "trial")
+            if not plan_allows_path(plan_name, path):
+                required = min_plan_for_path(path)
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "detail": {
+                            "code": "plan_restricted",
+                            "message": f"This feature requires the {required.title()} plan or higher.",
+                            "current_plan": plan_name,
+                            "required_plan": required,
                         }
                     },
                 )
