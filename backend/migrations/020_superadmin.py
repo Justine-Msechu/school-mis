@@ -14,9 +14,17 @@ def run():
     # ── Extend schools table ───────────────────────────────────────────────────
     cols = {r["name"] for r in fetch_all("PRAGMA table_info(schools)", ())}
     for col, defn in [
-        ("email",         "TEXT"),
-        ("contact_phone", "TEXT"),
-        ("admin_name",    "TEXT"),
+        ("email",                "TEXT"),
+        ("contact_phone",        "TEXT"),
+        ("admin_name",           "TEXT"),
+        ("school_type",          "TEXT DEFAULT 'primary'"),
+        ("school_ownership",     "TEXT DEFAULT 'private'"),
+        ("registration_number",  "TEXT"),
+        ("school_address",       "TEXT"),
+        ("school_location",      "TEXT"),
+        ("country",              "TEXT DEFAULT 'Tanzania'"),
+        ("website",              "TEXT"),
+        ("login_header_message", "TEXT"),
     ]:
         if col not in cols:
             execute(f"ALTER TABLE schools ADD COLUMN {col} {defn}", ())

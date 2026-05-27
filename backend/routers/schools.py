@@ -34,12 +34,22 @@ def _require_superadmin(user: dict = Depends(require_auth)) -> dict:
 # ── Public: school self-registration ──────────────────────────────────────────
 
 class RegisterPayload(BaseModel):
-    school_name:    str
-    school_email:   str = ""
-    contact_phone:  str = ""
-    admin_fullname: str
-    admin_username: str
-    admin_password: str
+    # School info
+    school_name:          str
+    school_type:          str = "primary"
+    school_ownership:     str = "private"
+    registration_number:  str = ""
+    school_email:         str = ""
+    contact_phone:        str = ""
+    school_address:       str = ""
+    school_location:      str = ""
+    country:              str = "Tanzania"
+    website:              str = ""
+    login_header_message: str = ""
+    # Admin account
+    admin_fullname:       str
+    admin_username:       str
+    admin_password:       str
 
     @field_validator("school_name", "admin_fullname", "admin_username")
     @classmethod
@@ -58,7 +68,6 @@ class RegisterPayload(BaseModel):
 
 @router.post("/schools/register")
 def register_school(body: RegisterPayload):
-    # Duplicate checks
     if fetch_one("SELECT id FROM schools WHERE name=?", (body.school_name,)):
         raise HTTPException(400, "A school with that name is already registered.")
     if fetch_one("SELECT id FROM users WHERE username=?", (body.admin_username,)):
@@ -68,14 +77,20 @@ def register_school(body: RegisterPayload):
 
     school_id = execute(
         """INSERT INTO schools
-           (name, email, contact_phone, plan, max_users, is_active,
-            subscription_status, trial_ends, created_at)
-           VALUES (?, ?, ?, 'trial', 50, 1, 'trial', ?, datetime('now'))""",
-        (body.school_name, body.school_email, body.contact_phone, trial_ends),
+           (name, email, contact_phone, school_type, school_ownership,
+            registration_number, school_address, school_location, country,
+            website, login_header_message, admin_name,
+            plan, max_users, is_active, subscription_status, trial_ends, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'trial', 50, 1, 'trial', ?, datetime('now'))""",
+        (
+            body.school_name, body.school_email, body.contact_phone,
+            body.school_type, body.school_ownership,
+            body.registration_number, body.school_address, body.school_location,
+            body.country, body.website, body.login_header_message,
+            body.admin_fullname, trial_ends,
+        ),
     )
 
-    # Seed school_config for this school (shared table uses a school_id scope
-    # if the column exists; otherwise we skip — single-tenant installs ignore it)
     config_cols = {r["name"] for r in fetch_all("PRAGMA table_info(school_config)", ())}
     if "school_id" in config_cols:
         for key, value in [
@@ -104,9 +119,6 @@ def register_school(body: RegisterPayload):
             "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
             (user_id, admin_role["id"]),
         )
-
-    # Also update schools.admin_name for the superadmin view
-    execute("UPDATE schools SET admin_name=? WHERE id=?", (body.admin_fullname, school_id))
 
     return {
         "ok": True,

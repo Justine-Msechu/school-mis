@@ -1,12 +1,20 @@
 import api from "./client";
 
 export interface RegisterSchoolPayload {
-  school_name:    string;
-  school_email?:  string;
-  contact_phone?: string;
-  admin_fullname: string;
-  admin_username: string;
-  admin_password: string;
+  school_name:           string;
+  school_type?:          string;
+  school_ownership?:     string;
+  registration_number?:  string;
+  school_email?:         string;
+  contact_phone?:        string;
+  school_address?:       string;
+  school_location?:      string;
+  country?:              string;
+  website?:              string;
+  login_header_message?: string;
+  admin_fullname:        string;
+  admin_username:        string;
+  admin_password:        string;
 }
 
 export interface SchoolRow {
