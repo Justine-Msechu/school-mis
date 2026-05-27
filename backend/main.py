@@ -1,6 +1,7 @@
 """FastAPI backend — enterprise-grade, clean architecture."""
 
 import sys
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from backend.routers import enrollments, guardians, timetable, report_cards
 from backend.routers import ngo
 from backend.routers import setup as setup_router
 from backend.routers import subscription as subscription_router
+from backend.routers import schools as schools_router
 from backend.subscriptions.router import router as new_subscription_router
 from backend.subscriptions.webhooks.router import router as webhooks_router
 
@@ -43,7 +45,7 @@ async def lifespan(app: FastAPI):
         "009_payroll", "010_payroll_prorate", "011_payroll_permissions",
         "012_inventory_upgrade", "013_inventory_classification",
         "015_ngo", "016_student_sponsorship", "017_welfare_extended",
-        "018_security", "019_subscription_v2",
+        "018_security", "019_subscription_v2", "020_superadmin",
     ])
     for _mig_name in _migrations:
         _path = _os.path.join(_mig_dir, f"{_mig_name}.py")
@@ -104,8 +106,10 @@ app.add_middleware(
 _SUBSCRIPTION_EXEMPT = (
     "/api/auth/",
     "/api/setup/",
+    "/api/schools/register",
     "/api/subscription/",
     "/api/subscriptions/",
+    "/api/superadmin/",
     "/api/webhooks/",
     "/api/ai/",
     "/api/health",
@@ -130,9 +134,9 @@ async def subscription_middleware(request: Request, call_next):
         from backend.deps import get_user_from_token
         from backend.routers.subscription import get_subscription_info
         from backend.subscriptions.plan_config import plan_allows_path, min_plan_for_path
-        user = get_user_from_token(token)
-        if user and user.get("role") != "admin":
-            sub = get_subscription_info(user.get("school_id"))
+        user = await asyncio.to_thread(get_user_from_token, token)
+        if user and user.get("role") not in ("admin", "superadmin"):
+            sub = await asyncio.to_thread(get_subscription_info, user.get("school_id"))
 
             # 1. Check subscription is active
             if not sub.get("is_active", True):
@@ -209,6 +213,7 @@ app.include_router(subjects.router,      prefix="/api/subjects")
 app.include_router(invoices.router,      prefix="/api/invoices")
 app.include_router(payroll.router,       prefix="/api/payroll")
 app.include_router(ngo.router,           prefix="/api")
+app.include_router(schools_router.router,        prefix="/api")
 app.include_router(setup_router.router,         prefix="/api/setup")
 app.include_router(subscription_router.router,  prefix="/api/subscription")
 app.include_router(new_subscription_router,     prefix="/api/subscriptions")

@@ -14,6 +14,7 @@ DB_PATH = os.environ.get(
 # All permission assignments live in the `role_permissions` DB table
 # and are managed exclusively through the Roles & Access UI.
 ROLES = {
+    "superadmin":     {"label": "Platform Admin",   "color": "#DC2626"},
     "admin":          {"label": "Administrator",    "color": "#7C3AED"},
     "head_teacher":   {"label": "Head Teacher",     "color": "#059669"},
     "academic":       {"label": "Academic Officer", "color": "#0891B2"},

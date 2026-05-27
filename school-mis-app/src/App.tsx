@@ -29,6 +29,9 @@ import RbacPage from "@/pages/RbacPage";
 import PayrollPage from "@/pages/PayrollPage";
 import NGOPage from "@/pages/NGOPage";
 import SubscriptionPage from "@/pages/SubscriptionPage";
+import LandingPage from "@/pages/LandingPage";
+import RegisterPage from "@/pages/RegisterPage";
+import SuperAdminPage from "@/pages/SuperAdminPage";
 import { getSetupStatus } from "@/api/setup";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -44,6 +47,11 @@ function PermRoute({ perm, children }: { perm: string; children: React.ReactNode
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
   return user?.role === "admin" ? <>{children}</> : <Navigate to="/" replace />;
+}
+
+function SuperAdminRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuthStore();
+  return user?.role === "superadmin" ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -70,6 +78,10 @@ export default function App() {
     <BrowserRouter>
       <ForceChangePassword />
       <Routes>
+        {/* Public pages — always accessible */}
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/register" element={isLoggedIn ? <Navigate to="/" replace /> : <RegisterPage />} />
+
         {/* Setup wizard — only accessible when system is not yet initialized */}
         <Route path="/setup" element={needsSetup ? <SetupPage /> : <Navigate to="/login" replace />} />
 
@@ -111,6 +123,7 @@ export default function App() {
                   <Route path="/payroll"       element={<PermRoute perm="payroll.view"><PayrollPage /></PermRoute>} />
                   <Route path="/ngo"           element={<PermRoute perm="ngo.view"><NGOPage /></PermRoute>} />
                   <Route path="/subscription"  element={<AdminRoute><SubscriptionPage /></AdminRoute>} />
+                  <Route path="/superadmin"    element={<SuperAdminRoute><SuperAdminPage /></SuperAdminRoute>} />
                 </Routes>
               </AppShell>
             </PrivateRoute>
