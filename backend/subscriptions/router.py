@@ -29,6 +29,10 @@ class CancelRequest(BaseModel):
 class SelectInitialPlanRequest(BaseModel):
     plan_name: str  # "trial" | "basic" | "standard" | "premium"
 
+class RequestUpgradeRequest(BaseModel):
+    plan_name: str
+    interval:  str = "monthly"
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -201,6 +205,36 @@ def cancel_subscription(body: CancelRequest, user: Usr):
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+@router.post("/request-upgrade")
+def request_plan_upgrade(body: RequestUpgradeRequest, user: Usr):
+    """
+    School admin notifies superadmin they want to upgrade.
+    Used when no online payment provider is configured (bank transfer flow).
+    """
+    if user.get("role") != "admin":
+        raise HTTPException(403, "Only admins can request plan upgrades")
+    org_id = user.get("school_id")
+    if not org_id:
+        raise HTTPException(400, "No school associated with this account")
+
+    from backend.core.db import fetch_one as _fo, execute as _ex
+    school = _fo("SELECT name FROM schools WHERE id=?", (org_id,))
+    school_name = school["name"] if school else f"School #{org_id}"
+    actor_id    = user.get("id", 1)
+
+    _ex(
+        """INSERT OR IGNORE INTO platform_announcements
+           (title, body, priority, target_plan, created_by, expires_at)
+           VALUES (?, ?, 'warning', 'all', ?, date('now','+30 days'))""",
+        (
+            f"Plan Upgrade Request: {school_name}",
+            f"{school_name} has requested the {body.plan_name.title()} plan "
+            f"({body.interval}). Please contact them to arrange payment and activate.",
+            actor_id,
+        ),
+    )
+    return {"ok": True, "message": "Your upgrade request has been sent to the platform administrator."}
 
 @router.get("/invoices")
 def invoice_history(user: Usr, page: int = 1):

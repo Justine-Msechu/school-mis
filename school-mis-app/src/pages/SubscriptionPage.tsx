@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   getPlans, getStatus, getInvoices, getHistory,
-  createCheckout, cancelSubscription, requestPlanUpgrade,
+  createCheckout, cancelSubscription, requestPlanUpgrade, verifyPayment,
   type Plan, type SubscriptionStatus, type Invoice, type HistoryEntry,
 } from "@/api/subscriptions";
 import { getProviders } from "@/api/subscriptions";
@@ -294,9 +294,15 @@ export default function SubscriptionPage() {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
-    Promise.all([
+    // Handle redirect back from payment gateway — verify before loading status
+    const params  = new URLSearchParams(window.location.search);
+    const txRef   = params.get("tx_ref") || params.get("reference");
+    const doVerify = params.get("verify") === "1" && txRef;
+
+    const loadAll = () => Promise.all([
       getStatus(), getPlans(), getProviders(), getInvoices(), getHistory(),
     ]).then(([s, p, prov, inv, hist]) => {
       setStatus(s);
@@ -308,10 +314,27 @@ export default function SubscriptionPage() {
       setError(e?.response?.data?.detail ?? e?.message ?? "Failed to load subscription data.");
     }).finally(() => setLoading(false));
 
-    // Handle redirect back from checkout
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("verify") && params.get("tx_ref")) {
-      // handled below
+    if (doVerify) {
+      setVerifying(true);
+      verifyPayment(txRef!)
+        .then((res) => {
+          if (res?.status === "active") {
+            setToast("Payment confirmed! Your subscription is now active.");
+          } else {
+            setToast("Payment received — activation may take a moment. Refresh if needed.");
+          }
+        })
+        .catch(() => {
+          setToast("Could not verify payment status. Please refresh the page.");
+        })
+        .finally(() => {
+          setVerifying(false);
+          // Clean the URL so a page refresh doesn't re-verify
+          window.history.replaceState({}, "", window.location.pathname);
+          loadAll();
+        });
+    } else {
+      loadAll();
     }
   }, []);
 
@@ -330,10 +353,11 @@ export default function SubscriptionPage() {
     }
   };
 
-  if (loading) {
+  if (loading || verifying) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
         <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+        {verifying && <p className="text-sm text-gray-500">Verifying your payment…</p>}
       </div>
     );
   }
