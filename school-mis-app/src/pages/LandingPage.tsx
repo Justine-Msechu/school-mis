@@ -25,6 +25,53 @@ const STATS = [
   { value: "24/7",   label: "Support Available" },
 ];
 
+const PLANS = [
+  {
+    name: "Basic",
+    color: "#0891B2",
+    desc: "Perfect for small schools just getting started.",
+    features: [
+      "Up to 25 staff accounts",
+      "Up to 300 students",
+      "Students, Classes & Attendance",
+      "Grades & Report Cards",
+      "Basic Finance & Fees",
+      "Email support",
+    ],
+  },
+  {
+    name: "Standard",
+    color: "#7C3AED",
+    desc: "Everything you need to run a full school.",
+    popular: true,
+    features: [
+      "Up to 100 staff accounts",
+      "Up to 1,000 students",
+      "Everything in Basic",
+      "Payroll Management",
+      "Transport & Inventory",
+      "Library & Welfare",
+      "NGO Partners",
+      "Advanced Reports",
+      "Priority support",
+    ],
+  },
+  {
+    name: "Premium",
+    color: "#059669",
+    desc: "Unlimited power for large schools and networks.",
+    features: [
+      "Up to 500 staff accounts",
+      "Up to 5,000 students",
+      "Everything in Standard",
+      "AI Chat Assistant",
+      "Multi-school network",
+      "API access",
+      "Dedicated support",
+    ],
+  },
+];
+
 const HOW_IT_WORKS = [
   { step: "1", title: "Register your school",  desc: "Fill in your school details and create an admin account. Takes less than 5 minutes." },
   { step: "2", title: "Set up your school",    desc: "Add your classes, teachers, and students. Import existing data easily." },
@@ -37,10 +84,11 @@ export default function LandingPage() {
   const [contact, setContact] = useState({ name: "", email: "", phone: "", school: "", message: "" });
 
   const navLinks = [
-    { label: "Home",     href: "#home" },
-    { label: "Features", href: "#features" },
+    { label: "Home",         href: "#home" },
+    { label: "Features",     href: "#features" },
     { label: "How it works", href: "#how" },
-    { label: "Contact",  href: "#contact" },
+    { label: "Pricing",      href: "#pricing" },
+    { label: "Contact",      href: "#contact" },
   ];
 
   return (
@@ -204,8 +252,71 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Pricing ────────────────────────────────────────────────────────── */}
+      <section id="pricing" className="py-20 px-4 bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">Simple, transparent pricing</h2>
+            <p className="text-gray-500 max-w-xl mx-auto">
+              Choose the plan that fits your school. All plans include a 30-day free trial.
+              Contact us for exact pricing in your currency.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {PLANS.map((p) => (
+              <div
+                key={p.name}
+                className={`relative bg-white rounded-2xl border-2 p-6 flex flex-col shadow-sm ${
+                  p.popular ? "border-violet-500 shadow-violet-100" : "border-gray-100"
+                }`}
+              >
+                {p.popular && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                    Most Popular
+                  </span>
+                )}
+                <div className="mb-4">
+                  <div
+                    className="inline-block w-10 h-10 rounded-xl mb-3"
+                    style={{ backgroundColor: `${p.color}20` }}
+                  >
+                    <div
+                      className="w-full h-full rounded-xl flex items-center justify-center"
+                      style={{ color: p.color }}
+                    >
+                      <GraduationCap size={20} />
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">{p.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{p.desc}</p>
+                </div>
+                <ul className="space-y-2 flex-1 mb-6">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm text-gray-600">
+                      <Check size={14} className="mt-0.5 flex-shrink-0 text-green-500" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href="#contact"
+                  className="block text-center py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  style={
+                    p.popular
+                      ? { backgroundColor: p.color, color: "#fff" }
+                      : { border: `2px solid ${p.color}`, color: p.color }
+                  }
+                >
+                  Get in touch
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Contact ────────────────────────────────────────────────────────── */}
-      <section id="contact" className="py-20 px-4 bg-gray-50">
+      <section id="contact" className="py-20 px-4 bg-white">
         <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12">
           {/* Info */}
           <div>
