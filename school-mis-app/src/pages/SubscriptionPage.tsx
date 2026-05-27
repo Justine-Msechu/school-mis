@@ -297,6 +297,7 @@ export default function SubscriptionPage() {
   const [history,   setHistory]   = useState<HistoryEntry[]>([]);
   const [interval,  setInterval]  = useState<"monthly" | "yearly">("monthly");
   const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState("");
   const [tab,       setTab]       = useState<"plans" | "invoices" | "history">("plans");
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [cancelConfirm, setCancelConfirm] = useState(false);
@@ -309,9 +310,11 @@ export default function SubscriptionPage() {
     ]).then(([s, p, prov, inv, hist]) => {
       setStatus(s);
       setPlans(p);
-      setProviders(prov.providers);
-      setInvoices(inv.items);
-      setHistory(hist);
+      setProviders(prov.providers ?? []);
+      setInvoices(inv.items ?? []);
+      setHistory(hist ?? []);
+    }).catch((e) => {
+      setError(e?.response?.data?.detail ?? e?.message ?? "Failed to load subscription data.");
     }).finally(() => setLoading(false));
 
     // Handle redirect back from checkout
@@ -340,6 +343,27 @@ export default function SubscriptionPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto space-y-4">
+        <PageHeader title="Subscription" subtitle="Manage your plan, billing, and payment history" />
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-red-700">
+          <XCircle size={20} className="flex-shrink-0" />
+          <div>
+            <p className="font-semibold">Failed to load subscription</p>
+            <p className="text-sm mt-0.5">{error}</p>
+          </div>
+          <button
+            onClick={() => { setError(""); setLoading(true); window.location.reload(); }}
+            className="ml-auto flex items-center gap-1 text-sm font-medium hover:underline"
+          >
+            <RefreshCw size={14}/> Retry
+          </button>
+        </div>
       </div>
     );
   }

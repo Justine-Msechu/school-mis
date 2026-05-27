@@ -93,19 +93,14 @@
   }
   /* Modal card — sheet on mobile, centred card on sm+ */
   .modal-card {
-    @apply relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full
-           overflow-y-auto flex flex-col;
+    @apply relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full overflow-y-auto flex flex-col;
     max-height: 92vh;
     max-width: 100%;
   }
-  @screen sm {
-    .modal-card { max-width: 480px; }
-  }
   .modal-card-lg {
-    @apply modal-card;
-  }
-  @screen sm {
-    .modal-card-lg { max-width: 640px; }
+    @apply relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full overflow-y-auto flex flex-col;
+    max-height: 92vh;
+    max-width: 100%;
   }
 
   /* ── Touch-friendly button minimum ── */
@@ -144,72 +139,59 @@
   }
 }
 
-/* ── Dark mode global overrides ──────────────────────────────────────────── */
-/* Applied to common Tailwind utility classes inside the app shell */
-
-[data-theme="dark"] {
-  /* Backgrounds */
-  .bg-white          { background-color: var(--color-surface) !important; }
-  .bg-gray-50        { background-color: var(--color-surface-2) !important; }
-  .bg-gray-100       { background-color: #252d3d !important; }
-
-  /* Text */
-  .text-gray-900     { color: var(--color-on-surface) !important; }
-  .text-gray-800     { color: #e2e8f0 !important; }
-  .text-gray-700     { color: #cbd5e1 !important; }
-  .text-gray-600     { color: #94a3b8 !important; }
-  .text-gray-500     { color: #64748b !important; }
-  .text-gray-400     { color: #475569 !important; }
-
-  /* Borders */
-  .border-gray-200   { border-color: var(--color-border) !important; }
-  .border-gray-100   { border-color: #252d3d !important; }
-
-  /* Inputs */
-  input:not([type="checkbox"]):not([type="radio"]),
-  select,
-  textarea {
-    background-color: var(--color-input-bg) !important;
-    border-color: var(--color-border) !important;
-    color: var(--color-on-surface) !important;
-  }
-
-  /* Tables */
-  table { color: var(--color-on-surface); }
-  thead tr { background-color: #1a2035 !important; border-color: var(--color-border) !important; }
-  tbody tr:hover { background-color: var(--color-hover) !important; }
-  .divide-y > * { border-color: var(--color-border) !important; }
-  .divide-gray-100 > * { border-color: #252d3d !important; }
-
-  /* Cards and panels */
-  .rounded-xl.border,
-  .rounded-2xl.border { border-color: var(--color-border) !important; }
-
-  /* Hover states */
-  .hover\:bg-gray-50:hover { background-color: var(--color-hover) !important; }
-  .hover\:bg-gray-100:hover { background-color: #252d3d !important; }
-
-  /* Accent (violet → indigo) */
-  .text-violet-600  { color: var(--color-accent) !important; }
-  .bg-violet-600    { background-color: var(--color-accent) !important; }
-  .ring-violet-500  { --tw-ring-color: var(--color-accent) !important; }
-  .border-violet-200 { border-color: #312e81 !important; }
-  .bg-violet-50     { background-color: var(--color-accent-light) !important; }
-
-  /* Accent buttons keep their color but get a slight adjustment */
-  button[class*="bg-violet"] { background-color: var(--color-accent) !important; }
+@media (min-width: 640px) {
+  .modal-card    { max-width: 480px; }
+  .modal-card-lg { max-width: 640px; }
 }
+
+/* ── Dark mode global overrides ──────────────────────────────────────────── */
+[data-theme="dark"] .bg-white          { background-color: var(--color-surface) !important; }
+[data-theme="dark"] .bg-gray-50        { background-color: var(--color-surface-2) !important; }
+[data-theme="dark"] .bg-gray-100       { background-color: #252d3d !important; }
+
+[data-theme="dark"] .text-gray-900     { color: var(--color-on-surface) !important; }
+[data-theme="dark"] .text-gray-800     { color: #e2e8f0 !important; }
+[data-theme="dark"] .text-gray-700     { color: #cbd5e1 !important; }
+[data-theme="dark"] .text-gray-600     { color: #94a3b8 !important; }
+[data-theme="dark"] .text-gray-500     { color: #64748b !important; }
+[data-theme="dark"] .text-gray-400     { color: #475569 !important; }
+
+[data-theme="dark"] .border-gray-200   { border-color: var(--color-border) !important; }
+[data-theme="dark"] .border-gray-100   { border-color: #252d3d !important; }
+
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: var(--color-input-bg) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-on-surface) !important;
+}
+
+[data-theme="dark"] table                { color: var(--color-on-surface); }
+[data-theme="dark"] thead tr             { background-color: #1a2035 !important; border-color: var(--color-border) !important; }
+[data-theme="dark"] tbody tr:hover       { background-color: var(--color-hover) !important; }
+[data-theme="dark"] .divide-y > *        { border-color: var(--color-border) !important; }
+[data-theme="dark"] .divide-gray-100 > * { border-color: #252d3d !important; }
+
+[data-theme="dark"] .rounded-xl.border,
+[data-theme="dark"] .rounded-2xl.border  { border-color: var(--color-border) !important; }
+
+[data-theme="dark"] .hover\:bg-gray-50:hover  { background-color: var(--color-hover) !important; }
+[data-theme="dark"] .hover\:bg-gray-100:hover { background-color: #252d3d !important; }
+
+[data-theme="dark"] .text-violet-600           { color: var(--color-accent) !important; }
+[data-theme="dark"] .bg-violet-600             { background-color: var(--color-accent) !important; }
+[data-theme="dark"] .ring-violet-500           { --tw-ring-color: var(--color-accent) !important; }
+[data-theme="dark"] .border-violet-200         { border-color: #312e81 !important; }
+[data-theme="dark"] .bg-violet-50              { background-color: var(--color-accent-light) !important; }
+[data-theme="dark"] button[class*="bg-violet"] { background-color: var(--color-accent) !important; }
 
 /* ── Blue theme accent overrides ─────────────────────────────────────────── */
-[data-theme="blue"] {
-  .text-violet-600  { color: var(--color-accent) !important; }
-  .bg-violet-600    { background-color: var(--color-accent) !important; }
-  .ring-violet-500  { --tw-ring-color: var(--color-accent) !important; }
-  .border-violet-200 { border-color: #bae6fd !important; }
-  .bg-violet-50     { background-color: var(--color-accent-light) !important; }
-  .bg-violet-100    { background-color: #e0f2fe !important; }
-  button[class*="bg-violet"] { background-color: var(--color-accent) !important; }
-
-  /* Sidebar accent strip */
-  .before\:bg-violet-400::before { background-color: #38bdf8 !important; }
-}
+[data-theme="blue"] .text-violet-600           { color: var(--color-accent) !important; }
+[data-theme="blue"] .bg-violet-600             { background-color: var(--color-accent) !important; }
+[data-theme="blue"] .ring-violet-500           { --tw-ring-color: var(--color-accent) !important; }
+[data-theme="blue"] .border-violet-200         { border-color: #bae6fd !important; }
+[data-theme="blue"] .bg-violet-50              { background-color: var(--color-accent-light) !important; }
+[data-theme="blue"] .bg-violet-100             { background-color: #e0f2fe !important; }
+[data-theme="blue"] button[class*="bg-violet"] { background-color: var(--color-accent) !important; }
+[data-theme="blue"] .before\:bg-violet-400::before { background-color: #38bdf8 !important; }
