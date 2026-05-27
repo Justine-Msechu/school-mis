@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Building2, RefreshCw, CheckCircle, XCircle, Clock, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Building2, RefreshCw, CheckCircle, XCircle, Clock, Users, LogIn } from "lucide-react";
 import { getSuperAdminSchools, updateSchoolSubscription, type SchoolRow } from "@/api/schools";
+import { useImpersonationStore } from "@/stores/impersonationStore";
 
 const PLANS = ["trial", "basic", "standard", "premium"] as const;
 const STATUSES = ["trial", "active", "expired", "cancelled"] as const;
@@ -27,6 +29,8 @@ interface EditModal {
 }
 
 export default function SuperAdminPage() {
+  const navigate = useNavigate();
+  const { enter } = useImpersonationStore();
   const [schools, setSchools]     = useState<SchoolRow[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
@@ -170,12 +174,21 @@ export default function SuperAdminPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500">{s.admin_name ?? "—"}</td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => openModal(s)}
-                        className="px-3 py-1.5 text-xs font-medium text-violet-600 border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors"
-                      >
-                        Manage
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { enter(s.id, s.name); navigate("/"); }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-600 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                          title="Enter this school as Administrator"
+                        >
+                          <LogIn size={11} /> Enter
+                        </button>
+                        <button
+                          onClick={() => openModal(s)}
+                          className="px-3 py-1.5 text-xs font-medium text-violet-600 border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors"
+                        >
+                          Manage
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

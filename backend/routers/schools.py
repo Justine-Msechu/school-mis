@@ -128,6 +128,38 @@ def register_school(body: RegisterPayload):
     }
 
 
+# ── Superadmin: platform-wide stats ───────────────────────────────────────────
+
+@router.get("/superadmin/stats")
+def platform_stats(_user: dict = Depends(_require_superadmin)):
+    total    = (fetch_one("SELECT COUNT(*) AS n FROM schools", ()) or {}).get("n", 0)
+    active   = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE subscription_status='active'", ()) or {}).get("n", 0)
+    trial    = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE subscription_status='trial'", ()) or {}).get("n", 0)
+    expired  = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE subscription_status IN ('expired','cancelled')", ()) or {}).get("n", 0)
+    new_week = (fetch_one("SELECT COUNT(*) AS n FROM schools WHERE created_at >= datetime('now','-7 days')", ()) or {}).get("n", 0)
+    total_users = (fetch_one("SELECT COUNT(*) AS n FROM users WHERE role != 'superadmin' AND is_active=1", ()) or {}).get("n", 0)
+
+    plan_rows = fetch_all("SELECT plan, COUNT(*) AS n FROM schools GROUP BY plan", ())
+    by_plan = {r["plan"]: r["n"] for r in plan_rows}
+
+    recent = fetch_all(
+        """SELECT s.id, s.name, s.plan, s.subscription_status, s.created_at, s.admin_name
+           FROM schools s ORDER BY s.created_at DESC LIMIT 5""",
+        (),
+    )
+
+    return {
+        "total_schools":  total,
+        "active":         active,
+        "trial":          trial,
+        "expired":        expired,
+        "new_this_week":  new_week,
+        "total_users":    total_users,
+        "by_plan":        by_plan,
+        "recent_schools": [dict(r) for r in recent],
+    }
+
+
 # ── Superadmin: list all schools ───────────────────────────────────────────────
 
 @router.get("/superadmin/schools")

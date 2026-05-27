@@ -7,7 +7,7 @@ import {
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
   UserCheck, FileText, UsersRound, ShieldCheck, Banknote, Handshake, X,
-  CreditCard, Lock, Globe,
+  CreditCard, Lock,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
@@ -85,7 +85,6 @@ const NAV_GROUPS: NavGroupDef[] = [
       { icon: ShieldCheck, label: "Roles & Access", to: "/rbac",         roles: ["admin"] },
       { icon: Shield,      label: "Audit Log",      to: "/audit",        perm: "audit.view" },
       { icon: CreditCard,  label: "Subscription",   to: "/subscription", roles: ["admin"] },
-      { icon: Globe,       label: "Platform Admin",  to: "/superadmin",   roles: ["superadmin"] },
     ],
   },
 ];
@@ -122,7 +121,6 @@ function NavGroupEl({ group, onNavigate }: { group: NavGroupDef; onNavigate: () 
   const restricted = PLAN_RESTRICTED[plan] ?? [];
 
   const visible = group.items.filter((i) => {
-    if (user?.role === "superadmin") return true;
     if (i.roles && !i.roles.includes(user?.role ?? "")) return false;
     if (i.perm && !can(i.perm)) return false;
     return true;

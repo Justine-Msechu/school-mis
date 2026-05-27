@@ -4,9 +4,11 @@ import Topbar from "./Topbar";
 import SubscriptionBanner from "./SubscriptionBanner";
 import SubscriptionLockScreen from "./SubscriptionLockScreen";
 import PlanUpgradeOverlay from "./PlanUpgradeOverlay";
+import ImpersonationBanner from "./ImpersonationBanner";
 import AiChat from "@/components/ai/AiChat";
 import { useAuthStore } from "@/stores/authStore";
 import { useSubscriptionStore } from "@/stores/subscriptionStore";
+import { useImpersonationStore } from "@/stores/impersonationStore";
 import "@/stores/themeStore"; // ensure theme is applied on load
 
 interface PlanRestriction {
@@ -18,6 +20,7 @@ interface PlanRestriction {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { refreshPermissions } = useAuthStore();
   const fetchPlan = useSubscriptionStore((s) => s.fetch);
+  const { active: isImpersonating } = useImpersonationStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [locked, setLocked] = useState(false);
   const [planRestriction, setPlanRestriction] = useState<PlanRestriction | null>(null);
@@ -51,8 +54,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [children]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
       {locked && <SubscriptionLockScreen onUnlocked={() => setLocked(false)} />}
+      {isImpersonating && <ImpersonationBanner />}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
@@ -70,6 +75,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <AiChat />
+      </div>
     </div>
   );
 }

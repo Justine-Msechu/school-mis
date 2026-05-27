@@ -43,8 +43,22 @@ export const registerSchool = (body: RegisterSchoolPayload) =>
     body,
   );
 
+export interface PlatformStats {
+  total_schools:  number;
+  active:         number;
+  trial:          number;
+  expired:        number;
+  new_this_week:  number;
+  total_users:    number;
+  by_plan:        Record<string, number>;
+  recent_schools: Pick<SchoolRow, "id" | "name" | "plan" | "subscription_status" | "created_at" | "admin_name">[];
+}
+
 export const getSuperAdminSchools = () =>
   api.get<SchoolRow[]>("/superadmin/schools");
+
+export const getPlatformStats = () =>
+  api.get<PlatformStats>("/superadmin/stats");
 
 export const updateSchoolSubscription = (schoolId: number, body: SubscriptionUpdate) =>
   api.put<{ ok: boolean }>(`/superadmin/schools/${schoolId}/subscription`, body);

@@ -214,15 +214,15 @@ export default function LandingPage() {
             <div className="space-y-4">
               <div className="flex items-start gap-3">
                 <MapPin size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-gray-600">Dar es Salaam, Tanzania</p>
+                <p className="text-sm text-gray-600">Arusha, Tanzania</p>
               </div>
               <div className="flex items-start gap-3">
                 <Mail size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-gray-600">support@schoolmis.co.tz</p>
+                <p className="text-sm text-gray-600">support@youthtech.or.tz</p>
               </div>
               <div className="flex items-start gap-3">
                 <Phone size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-gray-600">+255 700 000 000</p>
+                <p className="text-sm text-gray-600">+255 764454097</p>
               </div>
             </div>
           </div>
