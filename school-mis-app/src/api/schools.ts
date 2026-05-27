@@ -43,6 +43,24 @@ export const registerSchool = (body: RegisterSchoolPayload) =>
     body,
   );
 
+export interface RecentSchool {
+  id:                  number;
+  name:                string;
+  plan:                string;
+  subscription_status: string;
+  created_at:          string | null;
+  admin_name:          string | null;
+}
+
+export interface ExpiringSchool {
+  id:                  number;
+  name:                string;
+  plan:                string;
+  subscription_status: string;
+  trial_ends:          string;
+  admin_name:          string | null;
+}
+
 export interface PlatformStats {
   total_schools:  number;
   active:         number;
@@ -50,8 +68,10 @@ export interface PlatformStats {
   expired:        number;
   new_this_week:  number;
   total_users:    number;
+  expiring_soon:  number;
   by_plan:        Record<string, number>;
-  recent_schools: Pick<SchoolRow, "id" | "name" | "plan" | "subscription_status" | "created_at" | "admin_name">[];
+  recent_schools: RecentSchool[];
+  expiring_list:  ExpiringSchool[];
 }
 
 export const getSuperAdminSchools = () =>

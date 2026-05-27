@@ -34,6 +34,7 @@ import RegisterPage from "@/pages/RegisterPage";
 import SuperAdminPage from "@/pages/SuperAdminPage";
 import SuperAdminShell from "@/components/layout/SuperAdminShell";
 import PlatformDashboard from "@/pages/platform/PlatformDashboard";
+import PlatformSettingsPage from "@/pages/platform/PlatformSettingsPage";
 import { getSetupStatus } from "@/api/setup";
 import { useImpersonationStore } from "@/stores/impersonationStore";
 
@@ -65,7 +66,7 @@ function AuthenticatedApp() {
           <Route path="/platform"          element={<PlatformDashboard />} />
           <Route path="/platform/schools"  element={<SuperAdminPage />} />
           <Route path="/platform/audit"    element={<AuditLogPage />} />
-          <Route path="/platform/settings" element={<SettingsPage />} />
+          <Route path="/platform/settings" element={<PlatformSettingsPage />} />
           <Route path="/*"                 element={<Navigate to="/platform" replace />} />
         </Routes>
       </SuperAdminShell>
