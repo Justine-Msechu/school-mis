@@ -193,13 +193,31 @@ def revoke_all_user_sessions(user_id: int) -> int:
 
 # ── FastAPI auth dependency ────────────────────────────────────────────────────
 
-def require_auth(authorization: Annotated[str | None, Header()] = None) -> dict:
+def require_auth(
+    authorization: Annotated[str | None, Header()] = None,
+    x_school_id:   Annotated[str | None, Header()] = None,
+) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
     token = authorization[7:]
     user  = get_user_from_token(token)
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired — please log in again")
+
+    # Superadmin school context: honour X-School-Id header so the platform owner
+    # can act on any school's data without changing their own account.
+    if user.get("role") == "superadmin":
+        if x_school_id:
+            try:
+                user["school_id"] = int(x_school_id)
+            except ValueError:
+                pass
+        if not user.get("school_id"):
+            from backend.core.db import fetch_one as _fo
+            first = _fo("SELECT id FROM schools ORDER BY id LIMIT 1", ())
+            if first:
+                user["school_id"] = first["id"]
+
     return user
 
 

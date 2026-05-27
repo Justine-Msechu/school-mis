@@ -14,6 +14,11 @@ def compute_effective_permissions(user_id: int) -> list[str]:
       + ALLOW overrides − DENY overrides
     Call this at login and store result in the token.
     """
+    # Superadmin: platform owner — unconditional wildcard, no DB lookup needed
+    user_row = fetch_one("SELECT role FROM users WHERE id=?", (user_id,))
+    if user_row and user_row["role"] == "superadmin":
+        return ["*"]
+
     # Admin wildcard: if any role grants '*', return immediately
     wildcard = fetch_one(
         """SELECT 1 FROM user_roles ur

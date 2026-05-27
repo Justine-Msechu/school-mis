@@ -122,6 +122,7 @@ function NavGroupEl({ group, onNavigate }: { group: NavGroupDef; onNavigate: () 
   const restricted = PLAN_RESTRICTED[plan] ?? [];
 
   const visible = group.items.filter((i) => {
+    if (user?.role === "superadmin") return true;
     if (i.roles && !i.roles.includes(user?.role ?? "")) return false;
     if (i.perm && !can(i.perm)) return false;
     return true;

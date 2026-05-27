@@ -46,7 +46,7 @@ function PermRoute({ perm, children }: { perm: string; children: React.ReactNode
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
-  return user?.role === "admin" ? <>{children}</> : <Navigate to="/" replace />;
+  return user?.role === "admin" || user?.role === "superadmin" ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 function SuperAdminRoute({ children }: { children: React.ReactNode }) {

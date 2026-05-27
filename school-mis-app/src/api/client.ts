@@ -10,6 +10,17 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem("mis_token") || localStorage.getItem("mis_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  // Superadmin school context: tell the backend which school to scope to
+  try {
+    const auth = JSON.parse(localStorage.getItem("mis-auth") || "{}");
+    if (auth?.state?.user?.role === "superadmin") {
+      const ctx = JSON.parse(localStorage.getItem("mis-school-ctx") || "{}");
+      const schoolId = ctx?.state?.schoolId;
+      if (schoolId) config.headers["X-School-Id"] = String(schoolId);
+    }
+  } catch { /* ignore */ }
+
   return config;
 });
 
