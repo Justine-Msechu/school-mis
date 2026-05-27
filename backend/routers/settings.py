@@ -1,22 +1,27 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from backend.core.db import execute, fetch_all, fetch_one
 from backend.deps import require_auth
 from backend.core.authz import authorize
-from database.db import fetch_all, fetch_one, execute, get_config, set_config, ROLES, hash_password
+from database.db import ROLES, hash_password, sync_user_role
 
 router = APIRouter(tags=["settings"])
 Usr = Annotated[dict, Depends(require_auth)]
 
-# Roles that are teacher-level (manageable by head_teacher / academic via teachers.manage perm)
-_TEACHER_ROLES = {"class_teacher", "subject_teacher"}
-# Roles that cannot be assigned by anyone other than admin
+_TEACHER_ROLES    = {"class_teacher", "subject_teacher"}
 _ADMIN_ONLY_ROLES = {"admin"}
 
 
+# ── School config ─────────────────────────────────────────────────────────────
+
 @router.get("/config")
 def get_all_config(user: Usr):
-    rows = fetch_all("SELECT key, value FROM school_config ORDER BY key")
+    school_id = user.get("school_id")
+    rows = fetch_all(
+        "SELECT key, value FROM school_config WHERE school_id=? ORDER BY key",
+        (school_id,),
+    )
     return {r["key"]: r["value"] for r in rows}
 
 
@@ -27,25 +32,33 @@ class ConfigBody(BaseModel):
 
 @router.post("/config")
 def set_config_endpoint(body: ConfigBody, user: Usr):
-    set_config(body.key, body.value)
+    school_id = user.get("school_id")
+    execute(
+        "INSERT INTO school_config(key, value, school_id) VALUES(?,?,?) "
+        "ON CONFLICT(key, school_id) DO UPDATE SET value=excluded.value",
+        (body.key, body.value, school_id),
+    )
     return {"ok": True}
 
 
+# ── Users ─────────────────────────────────────────────────────────────────────
+
 @router.get("/users")
 def list_users(user: Usr):
-    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_all      = authorize(user, "settings.users.manage")
     can_manage_teachers = authorize(user, "settings.teachers.manage")
-
     if not can_manage_all and not can_manage_teachers:
         raise HTTPException(403, "Insufficient permissions to list users")
 
+    school_id = user.get("school_id")
     rows = fetch_all(
-        "SELECT id, username, full_name, role, is_active, created_at FROM users ORDER BY full_name"
+        "SELECT id, username, full_name, role, is_active, created_at "
+        "FROM users WHERE school_id=? ORDER BY full_name",
+        (school_id,),
     )
     result = []
     for r in rows:
         d = dict(r)
-        # Users with only teacher management can only see teacher-role accounts
         if not can_manage_all and d["role"] not in _TEACHER_ROLES:
             continue
         d["role_label"] = ROLES.get(d["role"], {}).get("label", d["role"])
@@ -55,14 +68,13 @@ def list_users(user: Usr):
 
 @router.get("/roles")
 def get_roles(user: Usr):
-    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_all      = authorize(user, "settings.users.manage")
     can_manage_teachers = authorize(user, "settings.teachers.manage")
-
-    # Read from DB — roles are owned by the database, not the code
     rows = fetch_all(
-        """SELECT name AS key, label, color FROM roles
-           WHERE name NOT IN ('student_portal','parent_portal')
-           ORDER BY label"""
+        "SELECT name AS key, label, color FROM roles "
+        "WHERE name NOT IN ('student_portal','parent_portal','superadmin') "
+        "ORDER BY label",
+        (),
     )
     all_roles = [dict(r) for r in rows]
     if can_manage_all:
@@ -82,18 +94,12 @@ class UserPayload(BaseModel):
 
 @router.post("/users")
 def create_user(body: UserPayload, user: Usr):
-    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_all      = authorize(user, "settings.users.manage")
     can_manage_teachers = authorize(user, "settings.teachers.manage")
-
     if not can_manage_all and not can_manage_teachers:
         raise HTTPException(403, "Insufficient permissions to create users")
-
-    # Teacher-only managers can only create teacher-role accounts
     if not can_manage_all and body.role not in _TEACHER_ROLES:
         raise HTTPException(403, "You may only create class_teacher or subject_teacher accounts")
-
-    # Nobody (not even admin) can create another admin via this endpoint
-    # — admin accounts must be seeded directly
     if body.role in _ADMIN_ONLY_ROLES and not authorize(user, "*"):
         raise HTTPException(403, "Only administrators may create admin accounts")
 
@@ -101,17 +107,23 @@ def create_user(body: UserPayload, user: Usr):
         raise HTTPException(400, "Password required for new users")
     if len(body.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
-    existing = fetch_one("SELECT id FROM users WHERE username=?", (body.username,))
+
+    school_id = user.get("school_id")
+    existing = fetch_one(
+        "SELECT id FROM users WHERE username=? AND school_id=?",
+        (body.username, school_id),
+    )
     if existing:
         raise HTTPException(400, f"Username '{body.username}' is already taken")
+
     pw_hash, salt = hash_password(body.password)
     row_id = execute(
-        "INSERT INTO users (username, password_hash, salt, full_name, role, teacher_id, is_active, must_change_pw) VALUES (?,?,?,?,?,?,1,1)",
-        (body.username, pw_hash, salt, body.full_name, body.role, body.teacher_id),
+        "INSERT INTO users "
+        "(username, password_hash, salt, full_name, role, teacher_id, is_active, must_change_pw, school_id) "
+        "VALUES (?,?,?,?,?,?,1,1,?)",
+        (body.username, pw_hash, salt, body.full_name, body.role, body.teacher_id, school_id),
     )
-    # Sync new user into user_roles
     try:
-        from database.db import sync_user_role
         sync_user_role(row_id, body.role)
     except Exception:
         pass
@@ -138,24 +150,20 @@ class EditUserPayload(BaseModel):
 
 @router.put("/users/{uid}")
 def edit_user(uid: int, body: EditUserPayload, user: Usr):
-    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_all      = authorize(user, "settings.users.manage")
     can_manage_teachers = authorize(user, "settings.teachers.manage")
-
     if not can_manage_all and not can_manage_teachers:
         raise HTTPException(403, "Insufficient permissions to edit users")
 
-    target = fetch_one("SELECT role FROM users WHERE id=?", (uid,))
+    school_id = user.get("school_id")
+    target = fetch_one("SELECT role FROM users WHERE id=? AND school_id=?", (uid, school_id))
     if not target:
         raise HTTPException(404, "User not found")
-    target_role = target["role"]
 
-    # Teacher-only managers cannot edit non-teacher accounts
-    if not can_manage_all and target_role not in _TEACHER_ROLES:
+    if not can_manage_all and target["role"] not in _TEACHER_ROLES:
         raise HTTPException(403, "You can only edit teacher accounts")
-    # Teacher-only managers cannot assign non-teacher roles
     if not can_manage_all and body.role not in _TEACHER_ROLES:
         raise HTTPException(403, "You may only assign class_teacher or subject_teacher roles")
-    # Admin role assignment restricted to wildcards only
     if body.role in _ADMIN_ONLY_ROLES and not authorize(user, "*"):
         raise HTTPException(403, "Only administrators may assign the admin role")
 
@@ -172,19 +180,15 @@ def edit_user(uid: int, body: EditUserPayload, user: Usr):
             "UPDATE users SET full_name=?, role=?, teacher_id=? WHERE id=?",
             (body.full_name, body.role, body.teacher_id, uid),
         )
-    # Keep user_roles in sync with the updated role
     try:
-        from database.db import execute as db_execute, fetch_one as db_fetch_one
-        db_execute("DELETE FROM user_roles WHERE user_id=?", (uid,))
-        from database.db import sync_user_role
+        execute("DELETE FROM user_roles WHERE user_id=?", (uid,))
         sync_user_role(uid, body.role)
     except Exception:
         pass
     try:
         execute(
             "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
-            (user["id"], "user_edit", "users", uid,
-             f"Edited user id={uid} role→{body.role}"),
+            (user["id"], "user_edit", "users", uid, f"Edited user id={uid} role→{body.role}"),
         )
     except Exception:
         pass
@@ -193,21 +197,18 @@ def edit_user(uid: int, body: EditUserPayload, user: Usr):
 
 @router.post("/users/{uid}/toggle-active")
 def toggle_active(uid: int, user: Usr):
-    actor_id = user.get("id")
-    if uid == actor_id:
+    if uid == user.get("id"):
         raise HTTPException(400, "Cannot deactivate your own account")
 
-    can_manage_all = authorize(user, "settings.users.manage")
+    can_manage_all      = authorize(user, "settings.users.manage")
     can_manage_teachers = authorize(user, "settings.teachers.manage")
-
     if not can_manage_all and not can_manage_teachers:
         raise HTTPException(403, "Insufficient permissions")
 
-    target = fetch_one("SELECT role FROM users WHERE id=?", (uid,))
+    school_id = user.get("school_id")
+    target = fetch_one("SELECT role FROM users WHERE id=? AND school_id=?", (uid, school_id))
     if not target:
         raise HTTPException(404, "User not found")
-
-    # Teacher-only managers can only toggle teacher accounts
     if not can_manage_all and target["role"] not in _TEACHER_ROLES:
         raise HTTPException(403, "You can only toggle teacher accounts")
 
@@ -215,11 +216,15 @@ def toggle_active(uid: int, user: Usr):
     return {"ok": True}
 
 
-# ── Academic years ──────────────────────────────────────────────────────────
+# ── Academic years ────────────────────────────────────────────────────────────
 
 @router.get("/academic-years")
 def list_academic_years(user: Usr):
-    rows = fetch_all("SELECT * FROM academic_years ORDER BY start_date DESC")
+    school_id = user.get("school_id")
+    rows = fetch_all(
+        "SELECT * FROM academic_years WHERE school_id=? ORDER BY start_date DESC",
+        (school_id,),
+    )
     return [dict(r) for r in rows]
 
 
@@ -232,27 +237,29 @@ class AcademicYearPayload(BaseModel):
 
 @router.post("/academic-years")
 def create_academic_year(body: AcademicYearPayload, user: Usr):
+    school_id = user.get("school_id")
     if body.is_current:
-        execute("UPDATE academic_years SET is_current=0")
+        execute("UPDATE academic_years SET is_current=0 WHERE school_id=?", (school_id,))
     row_id = execute(
-        "INSERT INTO academic_years (label, start_date, end_date, is_current) VALUES (?,?,?,?)",
-        (body.label, body.start_date, body.end_date, int(body.is_current)),
+        "INSERT INTO academic_years (label, start_date, end_date, is_current, school_id) VALUES (?,?,?,?,?)",
+        (body.label, body.start_date, body.end_date, int(body.is_current), school_id),
     )
     return dict(fetch_one("SELECT * FROM academic_years WHERE id=?", (row_id,)))
 
 
 @router.put("/academic-years/{year_id}/set-current")
 def set_current_year(year_id: int, user: Usr):
-    execute("UPDATE academic_years SET is_current=0")
-    execute("UPDATE academic_years SET is_current=1 WHERE id=?", (year_id,))
+    school_id = user.get("school_id")
+    execute("UPDATE academic_years SET is_current=0 WHERE school_id=?", (school_id,))
+    execute("UPDATE academic_years SET is_current=1 WHERE id=? AND school_id=?", (year_id, school_id))
     return {"ok": True}
 
 
-# ── Fee types & structures ──────────────────────────────────────────────────
+# ── Fee types & structures ────────────────────────────────────────────────────
 
 @router.get("/fee-types")
 def list_fee_types(user: Usr):
-    rows = fetch_all("SELECT * FROM fee_types ORDER BY name")
+    rows = fetch_all("SELECT * FROM fee_types ORDER BY name", ())
     return [dict(r) for r in rows]
 
 
@@ -287,7 +294,8 @@ def list_fee_structures(user: Usr):
            LEFT JOIN classes c ON c.id = fs.class_id
            LEFT JOIN students s ON s.id = fs.student_id
            WHERE fs.deleted_at IS NULL
-           ORDER BY ay.label DESC, fs.term NULLS LAST, ft.name"""
+           ORDER BY ay.label DESC, fs.term NULLS LAST, ft.name""",
+        (),
     )
     return [dict(r) for r in rows]
 
@@ -298,10 +306,10 @@ class FeeStructurePayload(BaseModel):
     amount:           float
     due_date:         str = ""
     term:             int | None = None
-    grade_level:      int | None = None   # targets all class sections at this level
+    grade_level:      int | None = None
     class_id:         int | None = None
     student_id:       int | None = None
-    student_type:     str | None = None   # Day | Boarding | None = both
+    student_type:     str | None = None
 
 
 @router.post("/fee-structures")

@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
         "012_inventory_upgrade", "013_inventory_classification",
         "015_ngo", "016_student_sponsorship", "017_welfare_extended",
         "018_security", "019_subscription_v2", "020_superadmin",
+        "021_multitenant_fix",
     ])
     for _mig_name in _migrations:
         _path = _os.path.join(_mig_dir, f"{_mig_name}.py")
