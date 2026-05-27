@@ -1,3 +1,6 @@
+# ── Desktop app (legacy PyQt6 — kept locally, not pushed) ─────────
+desktop_app/
+
 # ── Database (each school has their own) ──────────────────────────
 school_mis.db
 school_mis.db-shm
