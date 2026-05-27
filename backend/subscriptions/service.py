@@ -327,19 +327,42 @@ class SubscriptionService:
 
     def _legacy_status(self, school: dict) -> dict:
         """Build status from legacy schools table for backward compatibility."""
-        plan   = school.get("plan", "trial")
-        status = school.get("subscription_status", "trial")
+        plan       = school.get("plan", "trial")
+        status     = school.get("subscription_status", "trial")
+        trial_ends = school.get("trial_ends")
+
+        days_left = self._days_left(trial_ends)
+        warning   = None
+
+        # Compute real expiry for trial plans
+        if trial_ends:
+            try:
+                delta = (datetime.strptime(trial_ends, "%Y-%m-%d") - datetime.utcnow()).days
+                if plan == "trial":
+                    if delta <= 0:
+                        status  = "expired"
+                        warning = "Your trial has expired. Please upgrade to continue using the system."
+                    elif delta <= 7:
+                        warning = f"Trial expires in {delta} day{'s' if delta != 1 else ''}. Upgrade to avoid interruption."
+            except ValueError:
+                pass
+
+        if status in ("expired", "inactive") and not warning:
+            warning = "Subscription has expired. Please renew to restore full access."
+
+        is_active = bool(school.get("is_active", 1)) and status not in ("expired", "inactive")
+
         return {
-            "plan_name":     plan,
-            "display_name":  plan.title(),
-            "status":        status,
-            "is_active":     bool(school.get("is_active", 1)),
-            "current_period_end": school.get("trial_ends"),
-            "days_left":     self._days_left(school.get("trial_ends")),
-            "warning":       None,
-            "grace_active":  False,
-            "providers":     available_providers(),
-            "color":         PLAN_COLORS.get(plan, "#94A3B8"),
+            "plan_name":          plan,
+            "display_name":       plan.title(),
+            "status":             status,
+            "is_active":          is_active,
+            "current_period_end": trial_ends,
+            "days_left":          days_left,
+            "warning":            warning,
+            "grace_active":       False,
+            "providers":          available_providers(),
+            "color":              PLAN_COLORS.get(plan, "#94A3B8"),
         }
 
     def _no_subscription_status(self) -> dict:

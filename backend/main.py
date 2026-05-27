@@ -158,11 +158,12 @@ async def subscription_middleware(request: Request, call_next):
     token = auth_header[7:]
     try:
         from backend.deps import get_user_from_token
-        from backend.routers.subscription import get_subscription_info
+        from backend.subscriptions.service import SubscriptionService
         from backend.subscriptions.plan_config import plan_allows_path, min_plan_for_path
         user = await asyncio.to_thread(get_user_from_token, token)
         if user and user.get("role") != "superadmin":
-            sub = await asyncio.to_thread(get_subscription_info, user.get("school_id"))
+            _svc = SubscriptionService()
+            sub  = await asyncio.to_thread(_svc.get_subscription_status, user.get("school_id"))
 
             # 1. Check subscription is active
             if not sub.get("is_active", True):
@@ -172,14 +173,14 @@ async def subscription_middleware(request: Request, call_next):
                         "detail": {
                             "code": "subscription_expired",
                             "message": sub.get("warning") or "Subscription expired. Contact your administrator.",
-                            "plan": sub.get("plan"),
+                            "plan": sub.get("plan_name"),
                             "status": sub.get("status"),
                         }
                     },
                 )
 
             # 2. Check plan allows this path
-            plan_name = sub.get("plan", "trial")
+            plan_name = sub.get("plan_name", "trial")
             if not plan_allows_path(plan_name, path):
                 required = min_plan_for_path(path)
                 return JSONResponse(
