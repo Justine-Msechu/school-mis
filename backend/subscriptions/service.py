@@ -56,9 +56,9 @@ class SubscriptionService:
 
         if not sub:
             # Fall back to legacy schools table
-            school = fetch_one("SELECT * FROM schools WHERE id=?", (org_id,))
-            if school:
-                return self._legacy_status(school)
+            school_row = fetch_one("SELECT * FROM schools WHERE id=?", (org_id,))
+            if school_row:
+                return self._legacy_status(dict(school_row))
             return self._no_subscription_status()
 
         d = dict(sub)
@@ -197,6 +197,7 @@ class SubscriptionService:
             execute(
                 """UPDATE subscriptions_v2
                    SET status='active', plan_id=?, provider='manual',
+                       cancel_at_period_end=0,
                        current_period_start=?, current_period_end=?,
                        grace_period_end=?, updated_at=?
                    WHERE id=?""",
@@ -207,16 +208,22 @@ class SubscriptionService:
                                  from_status=old_status, to_status="active",
                                  to_plan_id=plan["id"], triggered_by="admin", actor_id=actor_id)
         else:
-            sub_id = execute(
+            execute(
                 """INSERT INTO subscriptions_v2
                    (organization_id, plan_id, status, provider,
                     current_period_start, current_period_end, grace_period_end)
                    VALUES (?,?,'active','manual',?,?,?)""",
                 (org_id, plan["id"], now.isoformat(), end.isoformat(), grace.isoformat()),
             )
-            self._record_history(sub_id, org_id, "activated",
-                                 to_status="active", to_plan_id=plan["id"],
-                                 triggered_by="admin", actor_id=actor_id)
+            new_row = fetch_one(
+                "SELECT id FROM subscriptions_v2 WHERE organization_id=? ORDER BY created_at DESC LIMIT 1",
+                (org_id,),
+            )
+            sub_id = new_row["id"] if new_row else None
+            if sub_id:
+                self._record_history(sub_id, org_id, "activated",
+                                     to_status="active", to_plan_id=plan["id"],
+                                     triggered_by="admin", actor_id=actor_id)
 
         # Sync legacy schools table
         execute(
@@ -248,9 +255,10 @@ class SubscriptionService:
 
     def get_invoices(self, org_id: int, page: int = 1, per_page: int = 20) -> dict:
         offset = (page - 1) * per_page
-        total  = (fetch_one("SELECT COUNT(*) as n FROM invoices WHERE organization_id=?", (org_id,)) or {}).get("n", 0)
+        _total_row = fetch_one("SELECT COUNT(*) as n FROM sub_invoices WHERE organization_id=?", (org_id,))
+        total = _total_row["n"] if _total_row else 0
         rows   = fetch_all(
-            "SELECT * FROM invoices WHERE organization_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM sub_invoices WHERE organization_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
             (org_id, per_page, offset),
         )
         return {"total": total, "page": page, "per_page": per_page, "items": [dict(r) for r in rows]}

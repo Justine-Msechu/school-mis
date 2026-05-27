@@ -33,101 +33,29 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: run migrations, configure DB, register event handlers."""
-    # 1. Ensure all new tables exist
-    try:
-        import importlib.util, os
-        _mig_path = os.path.join(os.path.dirname(__file__), "migrations", "001_architecture_v2.py")
-        _spec = importlib.util.spec_from_file_location("migration_001", _mig_path)
-        _mod = importlib.util.module_from_spec(_spec)
-        _spec.loader.exec_module(_mod)
-        _mod.run()
-        _mig2_path = os.path.join(os.path.dirname(__file__), "migrations", "002_phase2.py")
-        _spec2 = importlib.util.spec_from_file_location("migration_002", _mig2_path)
-        _mod2 = importlib.util.module_from_spec(_spec2)
-        _spec2.loader.exec_module(_mod2)
-        _mod2.run()
-        _mig3_path = os.path.join(os.path.dirname(__file__), "migrations", "003_structural_fixes.py")
-        _spec3 = importlib.util.spec_from_file_location("migration_003", _mig3_path)
-        _mod3 = importlib.util.module_from_spec(_spec3)
-        _spec3.loader.exec_module(_mod3)
-        _mod3.run()
-        _mig4_path = os.path.join(os.path.dirname(__file__), "migrations", "004_id_generation.py")
-        _spec4 = importlib.util.spec_from_file_location("migration_004", _mig4_path)
-        _mod4 = importlib.util.module_from_spec(_spec4)
-        _spec4.loader.exec_module(_mod4)
-        _mod4.run()
-        _mig5_path = os.path.join(os.path.dirname(__file__), "migrations", "005_rbac_tables.py")
-        _spec5 = importlib.util.spec_from_file_location("migration_005", _mig5_path)
-        _mod5 = importlib.util.module_from_spec(_spec5)
-        _spec5.loader.exec_module(_mod5)
-        _mod5.run()
-        _mig6_path = os.path.join(os.path.dirname(__file__), "migrations", "006_secure_finance.py")
-        _spec6 = importlib.util.spec_from_file_location("migration_006", _mig6_path)
-        _mod6 = importlib.util.module_from_spec(_spec6)
-        _spec6.loader.exec_module(_mod6)
-        _mod6.run()
-        _mig7_path = os.path.join(os.path.dirname(__file__), "migrations", "007_fee_structure_student_columns.py")
-        _spec7 = importlib.util.spec_from_file_location("migration_007", _mig7_path)
-        _mod7 = importlib.util.module_from_spec(_spec7)
-        _spec7.loader.exec_module(_mod7)
-        _mod7.run()
-        _mig8_path = os.path.join(os.path.dirname(__file__), "migrations", "008_fee_structure_grade_level.py")
-        _spec8 = importlib.util.spec_from_file_location("migration_008", _mig8_path)
-        _mod8 = importlib.util.module_from_spec(_spec8)
-        _spec8.loader.exec_module(_mod8)
-        _mod8.run()
-        _mig9_path = os.path.join(os.path.dirname(__file__), "migrations", "009_payroll.py")
-        _spec9 = importlib.util.spec_from_file_location("migration_009", _mig9_path)
-        _mod9 = importlib.util.module_from_spec(_spec9)
-        _spec9.loader.exec_module(_mod9)
-        _mod9.run()
-        _mig10_path = os.path.join(os.path.dirname(__file__), "migrations", "010_payroll_prorate.py")
-        _spec10 = importlib.util.spec_from_file_location("migration_010", _mig10_path)
-        _mod10 = importlib.util.module_from_spec(_spec10)
-        _spec10.loader.exec_module(_mod10)
-        _mod10.run()
-        _mig11_path = os.path.join(os.path.dirname(__file__), "migrations", "011_payroll_permissions.py")
-        _spec11 = importlib.util.spec_from_file_location("migration_011", _mig11_path)
-        _mod11 = importlib.util.module_from_spec(_spec11)
-        _spec11.loader.exec_module(_mod11)
-        _mod11.run()
-        _mig12_path = os.path.join(os.path.dirname(__file__), "migrations", "012_inventory_upgrade.py")
-        _spec12 = importlib.util.spec_from_file_location("migration_012", _mig12_path)
-        _mod12 = importlib.util.module_from_spec(_spec12)
-        _spec12.loader.exec_module(_mod12)
-        _mod12.run()
-        _mig13_path = os.path.join(os.path.dirname(__file__), "migrations", "013_inventory_classification.py")
-        _spec13 = importlib.util.spec_from_file_location("migration_013", _mig13_path)
-        _mod13 = importlib.util.module_from_spec(_spec13)
-        _spec13.loader.exec_module(_mod13)
-        _mod13.run()
-        _mig15_path = os.path.join(os.path.dirname(__file__), "migrations", "015_ngo.py")
-        _spec15 = importlib.util.spec_from_file_location("migration_015", _mig15_path)
-        _mod15 = importlib.util.module_from_spec(_spec15)
-        _spec15.loader.exec_module(_mod15)
-        _mod15.run()
-        _mig16_path = os.path.join(os.path.dirname(__file__), "migrations", "016_student_sponsorship.py")
-        _spec16 = importlib.util.spec_from_file_location("migration_016", _mig16_path)
-        _mod16 = importlib.util.module_from_spec(_spec16)
-        _spec16.loader.exec_module(_mod16)
-        _mod16.run()
-        _mig17_path = os.path.join(os.path.dirname(__file__), "migrations", "017_welfare_extended.py")
-        _spec17 = importlib.util.spec_from_file_location("migration_017", _mig17_path)
-        _mod17 = importlib.util.module_from_spec(_spec17)
-        _spec17.loader.exec_module(_mod17)
-        _mod17.run()
-        _mig18_path = os.path.join(os.path.dirname(__file__), "migrations", "018_security.py")
-        _spec18 = importlib.util.spec_from_file_location("migration_018", _mig18_path)
-        _mod18 = importlib.util.module_from_spec(_spec18)
-        _spec18.loader.exec_module(_mod18)
-        _mod18.run()
-        _mig19_path = os.path.join(os.path.dirname(__file__), "migrations", "019_subscription_v2.py")
-        _spec19 = importlib.util.spec_from_file_location("migration_019", _mig19_path)
-        _mod19 = importlib.util.module_from_spec(_spec19)
-        _spec19.loader.exec_module(_mod19)
-        _mod19.run()
-    except Exception as e:
-        log.warning("Migration warning (may already be applied): %s", e)
+    # 1. Run all migrations — each is isolated so one failure never blocks the rest
+    import importlib.util, os as _os
+    _mig_dir = _os.path.join(_os.path.dirname(__file__), "migrations")
+    _migrations = sorted([
+        "001_architecture_v2", "002_phase2", "003_structural_fixes",
+        "004_id_generation", "005_rbac_tables", "006_secure_finance",
+        "007_fee_structure_student_columns", "008_fee_structure_grade_level",
+        "009_payroll", "010_payroll_prorate", "011_payroll_permissions",
+        "012_inventory_upgrade", "013_inventory_classification",
+        "015_ngo", "016_student_sponsorship", "017_welfare_extended",
+        "018_security", "019_subscription_v2",
+    ])
+    for _mig_name in _migrations:
+        _path = _os.path.join(_mig_dir, f"{_mig_name}.py")
+        if not _os.path.exists(_path):
+            continue
+        try:
+            _spec = importlib.util.spec_from_file_location(_mig_name, _path)
+            _mod  = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            _mod.run()
+        except Exception as _e:
+            log.warning("Migration %s skipped/warned: %s", _mig_name, _e)
 
     # Init payment providers from env vars
     try:

@@ -17,6 +17,7 @@ Rate limiting:
 """
 
 import hashlib
+import logging
 import secrets
 import time
 from collections import defaultdict
@@ -26,7 +27,9 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
 
-from database.db import execute, fetch_all, fetch_one
+from backend.core.db import execute, fetch_all, fetch_one
+
+log = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 TOKEN_TTL_HOURS    = 8
@@ -80,8 +83,8 @@ def create_token(user_dict: dict, ip: str | None = None, user_agent: str | None 
                     "UPDATE login_sessions SET is_active=0, invalidated_at=? WHERE id=?",
                     (_now_iso(), row["id"]),
                 )
-    except Exception:
-        pass  # non-critical — new session still created
+    except Exception as e:
+        log.warning("create_token: session cap check failed: %s", e)
 
     # ── Persist new session ────────────────────────────────────────────────
     try:
@@ -93,8 +96,8 @@ def create_token(user_dict: dict, ip: str | None = None, user_agent: str | None 
             (user_id, school_id, t_hash, token,
              ip, user_agent, _now_iso(), expires, _now_iso()),
         )
-    except Exception:
-        pass  # non-critical if login_sessions table not yet migrated
+    except Exception as e:
+        log.error("create_token: login_sessions INSERT failed: %s", e)
 
     return token
 

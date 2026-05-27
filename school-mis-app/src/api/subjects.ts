@@ -1,4 +1,4 @@
-import api from "./api";
+import api from "./client";
 
 export interface Subject {
   id: number;

@@ -61,9 +61,9 @@ def run():
     )
     """)
 
-    # ── invoices ─────────────────────────────────────────────────────────
+    # ── sub_invoices ─────────────────────────────────────────────────────
     execute("""
-    CREATE TABLE IF NOT EXISTS invoices (
+    CREATE TABLE IF NOT EXISTS sub_invoices (
         id                   TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
         organization_id      INTEGER NOT NULL REFERENCES schools(id),
         subscription_id      TEXT REFERENCES subscriptions_v2(id),
@@ -96,7 +96,7 @@ def run():
     CREATE TABLE IF NOT EXISTS payments (
         id                  TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
         organization_id     INTEGER NOT NULL REFERENCES schools(id),
-        invoice_id          TEXT REFERENCES invoices(id),
+        invoice_id          TEXT REFERENCES sub_invoices(id),
         subscription_id     TEXT REFERENCES subscriptions_v2(id),
 
         provider            TEXT NOT NULL,

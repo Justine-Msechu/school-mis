@@ -167,7 +167,7 @@ class WebhookHandler:
         # Create invoice
         inv_num = f"INV-{now.strftime('%Y%m')}-{str(sub_id)[:6].upper()}"
         inv_id  = execute(
-            """INSERT OR IGNORE INTO invoices
+            """INSERT OR IGNORE INTO sub_invoices
                (organization_id, subscription_id, provider, provider_invoice_id,
                 status, amount_due, amount_paid, currency,
                 billing_period_start, billing_period_end,

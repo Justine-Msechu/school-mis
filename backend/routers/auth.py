@@ -25,11 +25,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from backend.core.authz import compute_effective_permissions
+from backend.core.db import execute, fetch_all, fetch_one
 from backend.deps import (
     create_token, require_auth, revoke_token,
     revoke_all_user_sessions, hydrate_session, rate_limit,
 )
-from database.db import ROLES, execute, fetch_all, fetch_one
+from database.db import ROLES
 
 router = APIRouter(tags=["auth"])
 Usr = Annotated[dict, Depends(require_auth)]

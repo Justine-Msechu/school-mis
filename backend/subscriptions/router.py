@@ -41,11 +41,13 @@ def list_providers():
 
 @router.get("/status")
 def subscription_status(user: Usr):
-    return svc.get_subscription_status(user.get("school_id"))
+    org_id = user.get("school_id") or _default_org_id()
+    return svc.get_subscription_status(org_id)
 
 @router.get("/history")
 def subscription_history(user: Usr):
-    return svc.get_subscription_history(user.get("school_id"))
+    org_id = user.get("school_id") or _default_org_id()
+    return svc.get_subscription_history(org_id)
 
 @router.post("/create-checkout")
 async def create_checkout(body: CreateCheckoutRequest, user: Usr):
@@ -96,9 +98,12 @@ def manual_activate(body: ManualActivateRequest, user: Usr):
     """
     if user.get("role") != "admin":
         raise HTTPException(403, "Only admins can activate subscriptions")
+    org_id = user.get("school_id") or _default_org_id()
+    if not org_id:
+        raise HTTPException(400, "No school configured for this account")
     try:
         return svc.manual_activate(
-            org_id=   user["school_id"],
+            org_id=   org_id,
             plan_name=body.plan_name,
             interval= body.interval,
             actor_id= user["id"],
@@ -127,5 +132,12 @@ def invoice_history(user: Usr, page: int = 1):
 
 def _get_school(user: dict) -> dict:
     from database.db import fetch_one
-    row = fetch_one("SELECT * FROM schools WHERE id=?", (user.get("school_id"),))
+    org_id = user.get("school_id") or _default_org_id()
+    row = fetch_one("SELECT * FROM schools WHERE id=?", (org_id,))
     return dict(row) if row else {}
+
+
+def _default_org_id() -> int | None:
+    from database.db import fetch_one
+    row = fetch_one("SELECT id FROM schools ORDER BY id LIMIT 1", ())
+    return row["id"] if row else None
