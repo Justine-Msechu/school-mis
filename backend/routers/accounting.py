@@ -1,10 +1,9 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from backend.deps import require_auth, hydrate_session
-from services.accounting_service import accounting_service
-from services.base import ServiceError, PolicyViolation
-from database.db import fetch_all
+from backend.deps import require_auth
+from backend.core.security import require_permission
+from database.db import fetch_all, fetch_one, execute
 
 router = APIRouter(tags=["accounting"])
 Usr = Annotated[dict, Depends(require_auth)]
@@ -29,20 +28,52 @@ class ExpenseBody(BaseModel):
 
 @router.post("/expenses")
 def record_expense(body: ExpenseBody, user: Usr):
-    hydrate_session(user)
+    require_permission(user, "accounting.expense.record")
+    if not body.description.strip():
+        raise HTTPException(400, "Description is required.")
+    exp_id = execute(
+        """INSERT INTO expenses
+           (category, description, amount, expense_date, receipt_ref, recorded_by)
+           VALUES (?,?,?,?,?,?)""",
+        (body.category, body.description.strip(), body.amount, body.expense_date,
+         body.reference.strip() or None, user["id"]),
+    )
     try:
-        exp_id = accounting_service.record_expense(body.model_dump())
-        return {"id": exp_id, "ok": True}
-    except (ServiceError, PolicyViolation) as e:
-        from fastapi import HTTPException
-        raise HTTPException(400, str(e))
+        execute(
+            "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
+            (user["id"], "expense_recorded", "expenses", exp_id,
+             f"{body.category} {body.amount:,.0f} — {body.description.strip()[:60]}"),
+        )
+    except Exception:
+        pass
+    return {"id": exp_id, "ok": True}
 
 
 @router.get("/summary")
 def get_summary(user: Usr, period: str = Query("month")):
-    hydrate_session(user)
     try:
-        return accounting_service.get_summary(period)
+        require_permission(user, "accounting.view")
+        if period == "month":
+            df = "AND strftime('%Y-%m',payment_date)=strftime('%Y-%m','now')"
+            ef = "AND strftime('%Y-%m',expense_date)=strftime('%Y-%m','now')"
+            wf = "AND strftime('%Y-%m',fw.created_at)=strftime('%Y-%m','now')"
+        elif period == "year":
+            df = "AND strftime('%Y',payment_date)=strftime('%Y','now')"
+            ef = "AND strftime('%Y',expense_date)=strftime('%Y','now')"
+            wf = "AND strftime('%Y',fw.created_at)=strftime('%Y','now')"
+        else:
+            df = ef = wf = ""
+        income  = fetch_one(f"SELECT COALESCE(SUM(amount_paid),0) AS t FROM fee_payments WHERE 1=1 {df}")
+        expense = fetch_one(f"SELECT COALESCE(SUM(amount),0) AS t FROM expenses WHERE 1=1 {ef}")
+        waivers = fetch_one(
+            f"""SELECT COALESCE(SUM(sb.amount_due * fw.discount_percent/100),0) AS t
+                FROM fee_waivers fw JOIN student_bills sb ON sb.id=fw.bill_id
+                WHERE 1=1 {wf}"""
+        )
+        inc  = income["t"]  if income  else 0
+        exp  = expense["t"] if expense else 0
+        waiv = waivers["t"] if waivers else 0
+        return {"income": inc, "expense": exp, "surplus": inc - exp, "waivers": waiv}
     except Exception:
         return {}
 
