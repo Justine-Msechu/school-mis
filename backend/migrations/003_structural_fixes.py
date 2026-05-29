@@ -48,6 +48,11 @@ def _table_exists(cur, name):
 
 
 def run():
+    import os as _os
+    if _os.environ.get("DATABASE_URL", "").startswith("postgresql"):
+        print("  [003] structural fixes — skipped (PostgreSQL mode, handled by pg_schema)")
+        return
+
     conn = _conn()
     cur  = conn.cursor()
 
