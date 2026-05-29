@@ -1174,4 +1174,133 @@ def run() -> None:
     except Exception:
         pass
 
+    # 7. Seed RBAC: permissions, roles, role→permission mapping
+    try:
+        from database.db import ROLES, _DEFAULT_ROLE_PERMISSIONS
+
+        _ALL_PERMISSIONS = [
+            ("*",                            "system",      "*",              "Full system access",                 "GLOBAL"),
+            ("student.view",                 "student",     "view",           "View student records",               "GLOBAL"),
+            ("student.view.eligibility",     "student",     "eligibility",    "Eligibility check only",             "GLOBAL"),
+            ("student.create",               "student",     "create",         "Create student records",             "GLOBAL"),
+            ("student.edit",                 "student",     "edit",           "Edit student records",               "GLOBAL"),
+            ("student.delete",               "student",     "delete",         "Delete/deactivate students",         "GLOBAL"),
+            ("student.promote",              "student",     "promote",        "Promote students",                   "GLOBAL"),
+            ("teachers.view",                "teachers",    "view",           "View teacher records",               "GLOBAL"),
+            ("teachers.manage",              "teachers",    "manage",         "Create and edit teachers",           "GLOBAL"),
+            ("classes.view",                 "classes",     "view",           "View class information",             "GLOBAL"),
+            ("classes.manage",               "classes",     "manage",         "Create and edit classes",            "GLOBAL"),
+            ("timetable.view",               "timetable",   "view",           "View class timetables",              "GLOBAL"),
+            ("timetable.manage",             "timetable",   "manage",         "Create and edit timetable slots",    "GLOBAL"),
+            ("attendance.view",              "attendance",  "view",           "View attendance records",            "CLASS"),
+            ("attendance.mark",              "attendance",  "mark",           "Mark student attendance",            "CLASS"),
+            ("attendance.edit",              "attendance",  "edit",           "Edit past attendance",               "CLASS"),
+            ("attendance.report",            "attendance",  "report",         "Attendance reports",                 "GLOBAL"),
+            ("grades.view",                  "grades",      "view",           "View grades",                        "CLASS"),
+            ("grades.enter",                 "grades",      "enter",          "Enter and submit grades",            "CLASS"),
+            ("grades.write",                 "grades",      "write",          "Write grades",                       "CLASS"),
+            ("grades.submit",                "grades",      "submit",         "Submit grades for approval",         "CLASS"),
+            ("grades.approve",               "grades",      "approve",        "Approve submitted grades",           "GLOBAL"),
+            ("grades.publish",               "grades",      "publish",        "Publish approved grades",            "GLOBAL"),
+            ("grades.change_request",        "grades",      "change_req",     "Submit grade change requests",       "GLOBAL"),
+            ("grades.change_request.create", "grades",      "change_create",  "Create grade change requests",       "GLOBAL"),
+            ("grades.change_request.review", "grades",      "change_review",  "Approve grade change requests",      "GLOBAL"),
+            ("finance.view",                 "finance",     "view",           "View billing and payment status",    "GLOBAL"),
+            ("finance.structure.view",       "finance",     "struct.view",    "View fee structures",                "GLOBAL"),
+            ("finance.structure.manage",     "finance",     "struct.manage",  "Create/edit fee structures",         "GLOBAL"),
+            ("finance.billing.generate",     "finance",     "billing",        "Run billing engine",                 "GLOBAL"),
+            ("finance.payment.record",       "finance",     "pay.record",     "Record fee payments",                "GLOBAL"),
+            ("finance.payment.void",         "finance",     "pay.void",       "Void payments",                      "GLOBAL"),
+            ("finance.waiver.create",        "finance",     "waiver.create",  "Create fee waivers",                 "GLOBAL"),
+            ("finance.waiver.approve",       "finance",     "waiver.approve", "Approve fee waivers",                "GLOBAL"),
+            ("finance.report",               "finance",     "report",         "View financial reports",             "GLOBAL"),
+            ("inventory.view",               "inventory",   "view",           "View inventory stock",               "GLOBAL"),
+            ("inventory.stock.add",          "inventory",   "stock.add",      "Record incoming stock",              "GLOBAL"),
+            ("inventory.stock.adjust",       "inventory",   "stock.adjust",   "Adjust stock levels",                "GLOBAL"),
+            ("inventory.stock.manage",       "inventory",   "stock.manage",   "Manage inventory items",             "GLOBAL"),
+            ("inventory.issue",              "inventory",   "issue",          "Issue items to students",            "GLOBAL"),
+            ("inventory.return",             "inventory",   "return",         "Record item returns",                "GLOBAL"),
+            ("inventory.report",             "inventory",   "report",         "View inventory reports",             "GLOBAL"),
+            ("welfare.view",                 "welfare",     "view",           "View welfare records",               "GLOBAL"),
+            ("welfare.classify",             "welfare",     "classify",       "Classify students",                  "GLOBAL"),
+            ("welfare.edit",                 "welfare",     "edit",           "Edit welfare records",               "GLOBAL"),
+            ("welfare.verify",               "welfare",     "verify",         "Verify welfare status",              "GLOBAL"),
+            ("welfare.sponsor.manage",       "welfare",     "sponsor",        "Manage sponsorships",                "GLOBAL"),
+            ("accounting.view",              "accounting",  "view",           "View accounting records",            "GLOBAL"),
+            ("accounting.expense.record",    "accounting",  "expense",        "Record school expenses",             "GLOBAL"),
+            ("accounting.report",            "accounting",  "report",         "View accounting reports",            "GLOBAL"),
+            ("reports.view",                 "reports",     "view",           "Access reports module",              "GLOBAL"),
+            ("reports.academic",             "reports",     "academic",       "Academic reports",                   "GLOBAL"),
+            ("reports.finance",              "reports",     "finance",        "Finance reports",                    "GLOBAL"),
+            ("reports.welfare",              "reports",     "welfare",        "Welfare reports",                    "GLOBAL"),
+            ("reports.inventory",            "reports",     "inventory",      "Inventory reports",                  "GLOBAL"),
+            ("settings.view",                "settings",    "view",           "View settings",                      "GLOBAL"),
+            ("settings.school.manage",       "settings",    "school",         "Manage school info",                 "GLOBAL"),
+            ("settings.years.manage",        "settings",    "years",          "Manage academic years",              "GLOBAL"),
+            ("settings.users.manage",        "settings",    "users",          "Manage all user accounts",           "GLOBAL"),
+            ("settings.teachers.manage",     "settings",    "teachers",       "Create and manage teacher accounts", "GLOBAL"),
+            ("settings.roles.manage",        "settings",    "roles",          "Manage roles and permissions",       "GLOBAL"),
+            ("library.view",                 "library",     "view",           "View library catalogue",             "GLOBAL"),
+            ("library.checkout",             "library",     "checkout",       "Issue and return books",             "GLOBAL"),
+            ("library.manage",               "library",     "manage",         "Add and edit books",                 "GLOBAL"),
+            ("transport.view",               "transport",   "view",           "View routes and subscriptions",      "GLOBAL"),
+            ("transport.manage",             "transport",   "manage",         "Add and edit transport routes",      "GLOBAL"),
+            ("transport.assign",             "transport",   "assign",         "Assign students to routes",          "GLOBAL"),
+            ("health.view",                  "health",      "view",           "View health visit records",          "GLOBAL"),
+            ("health.record",                "health",      "record",         "Record health visits",               "GLOBAL"),
+            ("health.report",                "health",      "report",         "View health reports",                "GLOBAL"),
+            ("homework.view",                "homework",    "view",           "View homework assignments",          "CLASS"),
+            ("homework.assign",              "homework",    "assign",         "Create homework assignments",        "CLASS"),
+            ("homework.write",               "homework",    "write",          "Write homework",                     "CLASS"),
+            ("homework.grade",               "homework",    "grade",          "Grade homework submissions",         "CLASS"),
+            ("leave.review",                 "leave",       "review",         "Review student leave requests",      "GLOBAL"),
+            ("enrollment.view",              "enrollment",  "view",           "View enrollments",                   "GLOBAL"),
+            ("enrollment.manage",            "enrollment",  "manage",         "Manage enrollments",                 "GLOBAL"),
+            ("guardian.view",                "guardian",    "view",           "View guardian records",              "GLOBAL"),
+            ("guardian.manage",              "guardian",    "manage",         "Manage guardian records",            "GLOBAL"),
+            ("report_cards.view",            "report_cards","view",           "View report cards",                  "GLOBAL"),
+            ("report_cards.generate",        "report_cards","generate",       "Generate report cards",              "GLOBAL"),
+            ("report_cards.publish",         "report_cards","publish",        "Publish report cards",               "GLOBAL"),
+            ("report_cards.comment",         "report_cards","comment",        "Add comments to report cards",       "GLOBAL"),
+            ("audit.view",                   "audit",       "view",           "View audit log",                     "GLOBAL"),
+            ("portal.student.grades",        "portal",      "student.grades",    "Student: view own grades",        "OWN"),
+            ("portal.student.homework",      "portal",      "student.homework",  "Student: view and submit homework","OWN"),
+            ("portal.parent.grades",         "portal",      "parent.grades",     "Parent: view children's grades",  "OWN"),
+            ("portal.parent.fees",           "portal",      "parent.fees",       "Parent: view fee balances",       "OWN"),
+            ("portal.parent.leave",          "portal",      "parent.leave",      "Parent: submit leave requests",   "OWN"),
+        ]
+        execute_many(
+            "INSERT INTO permissions(code,domain,action,description,scope_type)"
+            " VALUES(%s,%s,%s,%s,%s) ON CONFLICT(code) DO NOTHING",
+            _ALL_PERMISSIONS,
+        )
+
+        for role_name, info in ROLES.items():
+            execute(
+                "INSERT INTO roles(name,label,color) VALUES(%s,%s,%s)"
+                " ON CONFLICT(name) DO UPDATE SET label=EXCLUDED.label, color=EXCLUDED.color",
+                (role_name, info["label"], info["color"]),
+            )
+
+        rp_count = fetch_one("SELECT COUNT(*) AS n FROM role_permissions")
+        if rp_count and rp_count["n"] == 0:
+            for role_name, perm_codes in _DEFAULT_ROLE_PERMISSIONS.items():
+                role_row = fetch_one("SELECT id FROM roles WHERE name=%s", (role_name,))
+                if not role_row:
+                    continue
+                role_id = role_row["id"]
+                pairs = []
+                for perm_code in perm_codes:
+                    perm_row = fetch_one("SELECT id FROM permissions WHERE code=%s", (perm_code,))
+                    if perm_row:
+                        pairs.append((role_id, perm_row["id"]))
+                if pairs:
+                    execute_many(
+                        "INSERT INTO role_permissions(role_id,permission_id)"
+                        " VALUES(%s,%s) ON CONFLICT DO NOTHING",
+                        pairs,
+                    )
+    except Exception as _e:
+        log.warning("RBAC seed failed: %s", _e)
+
     log.info("PostgreSQL schema initialised")

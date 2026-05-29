@@ -17,6 +17,11 @@ from database.db import ROLES, _DEFAULT_ROLE_PERMISSIONS, get_connection
 
 
 def run():
+    import os
+    if os.environ.get("DATABASE_URL"):
+        # PostgreSQL: tables and RBAC seed handled by pg_schema.run() on every startup
+        print("  [005] RBAC tables — skipped (PostgreSQL mode, handled by pg_schema)")
+        return
     conn = get_connection()
     cur  = conn.cursor()
 

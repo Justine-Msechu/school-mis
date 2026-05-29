@@ -185,6 +185,13 @@ def fetch_one(sql: str, params: Any = (), conn=None) -> dict | None:
             cur.execute(adapted, params or ())
             row = cur.fetchone()
             return dict(row) if row else None
+    except Exception:
+        if own:
+            try:
+                c.rollback()
+            except Exception:
+                pass
+        raise
     finally:
         if own:
             _put_conn(c)
@@ -198,6 +205,13 @@ def fetch_all(sql: str, params: Any = (), conn=None) -> list[dict]:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(adapted, params or ())
             return [dict(r) for r in cur.fetchall()]
+    except Exception:
+        if own:
+            try:
+                c.rollback()
+            except Exception:
+                pass
+        raise
     finally:
         if own:
             _put_conn(c)

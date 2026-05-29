@@ -152,8 +152,48 @@ _DEFAULT_ROLE_PERMISSIONS = {
 
 def get_connection():
     if _DATABASE_URL:
-        from backend.core.db import _get_conn
-        return _get_conn()
+        from backend.core.db import _get_conn, _put_conn
+
+        class _PooledConn:
+            """Wraps a psycopg2 pool connection so close() returns it to pool."""
+            __slots__ = ("_c", "_done")
+
+            def __init__(self, c):
+                self._c = c
+                self._done = False
+
+            def close(self):
+                if not self._done:
+                    self._done = True
+                    try:
+                        self._c.rollback()
+                    except Exception:
+                        pass
+                    _put_conn(self._c)
+
+            def __del__(self):
+                self.close()
+
+            def cursor(self, *args, **kwargs):
+                return self._c.cursor(*args, **kwargs)
+
+            def commit(self):
+                return self._c.commit()
+
+            def rollback(self):
+                return self._c.rollback()
+
+            def execute(self, sql, params=()):
+                return self._c.execute(sql, params)
+
+            def executemany(self, sql, params):
+                return self._c.executemany(sql, params)
+
+            def __getattr__(self, name):
+                return getattr(self._c, name)
+
+        return _PooledConn(_get_conn())
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
