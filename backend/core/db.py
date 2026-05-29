@@ -53,8 +53,15 @@ _PRAGMA_TABLE_INFO = re.compile(
 )
 _PRAGMA = re.compile(r"^\s*PRAGMA\s", re.I)
 _INSERT_OR = re.compile(r"\bINSERT\s+OR\s+(?:IGNORE|REPLACE)\s+INTO\b", re.I)
-_DATETIME_NOW = re.compile(r"datetime\('now'(?:,[^)']*)?\)", re.I)
-_DATE_NOW = re.compile(r"\bdate\('now'(?:,[^)']*)?\)", re.I)
+# datetime('now') and datetime('now', '+N unit') — captures optional quoted modifier
+_DATETIME_NOW = re.compile(r"datetime\(\s*'now'\s*(?:,\s*'([^']*)'\s*)?\)", re.I)
+# date('now') and date('now', '+N unit')
+_DATE_NOW = re.compile(r"\bdate\(\s*'now'\s*(?:,\s*'([^']*)'\s*)?\)", re.I)
+# sqlite_master table-existence check → information_schema equivalent
+_SQLITE_MASTER = re.compile(
+    r"SELECT\s+\w+\s+FROM\s+sqlite_master\s+WHERE\s+type\s*=\s*'table'\s+AND\s+name\s*=\s*'(\w+)'",
+    re.I,
+)
 _INT_PK_AI = re.compile(r"\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b", re.I)
 _INT_PK = re.compile(r"\bINTEGER\s+PRIMARY\s+KEY\b(?!\s*,)", re.I)
 _RAND_BLOB_LOWER = re.compile(
@@ -81,6 +88,41 @@ _STRFTIME_FMT_MAP = {
     "%Y-W%W":   'IYYY-"W"IW',
     "%d %b":    "DD Mon",
 }
+
+
+_INTERVAL_PAT = re.compile(r'^([+-]?)(\d+)\s+(\w+)$')
+
+
+def _datetime_now_sub(m: re.Match) -> str:
+    """Convert datetime('now', '+/-N unit') → PostgreSQL NOW() expression."""
+    mod = (m.group(1) or "").strip()
+    if mod:
+        mm = _INTERVAL_PAT.match(mod)
+        if mm:
+            sign, n, unit = mm.group(1) or '+', int(mm.group(2)), mm.group(3)
+            op = '-' if sign == '-' else '+'
+            return f"(NOW() {op} INTERVAL '{n} {unit}')::text"
+    return "NOW()::text"
+
+
+def _date_now_sub(m: re.Match) -> str:
+    """Convert date('now', '+/-N unit') → PostgreSQL CURRENT_DATE expression."""
+    mod = (m.group(1) or "").strip()
+    if mod:
+        mm = _INTERVAL_PAT.match(mod)
+        if mm:
+            sign, n, unit = mm.group(1) or '+', int(mm.group(2)), mm.group(3)
+            op = '-' if sign == '-' else '+'
+            return f"(CURRENT_DATE {op} INTERVAL '{n} {unit}')::text"
+    return "CURRENT_DATE::text"
+
+
+def _sqlite_master_sub(m: re.Match) -> str:
+    tbl = m.group(1)
+    return (
+        f"SELECT table_name AS name FROM information_schema.tables "
+        f"WHERE table_type='BASE TABLE' AND table_schema='public' AND table_name='{tbl}'"
+    )
 
 
 def _strftime_now_sub(m: re.Match) -> str:
@@ -129,9 +171,12 @@ def _adapt(sql: str) -> tuple[str, bool]:
     # INSERT OR IGNORE/REPLACE INTO → INSERT INTO
     sql = _INSERT_OR.sub("INSERT INTO", sql)
 
-    # Datetime functions
-    sql = _DATETIME_NOW.sub("NOW()::text", sql)
-    sql = _DATE_NOW.sub("CURRENT_DATE::text", sql)
+    # sqlite_master table-check → information_schema
+    sql = _SQLITE_MASTER.sub(_sqlite_master_sub, sql)
+
+    # Datetime functions (handles both bare and modifier forms)
+    sql = _DATETIME_NOW.sub(_datetime_now_sub, sql)
+    sql = _DATE_NOW.sub(_date_now_sub, sql)
     # strftime with 'now' → TO_CHAR(CURRENT_DATE, ...) — must run before general strftime
     sql = _STRFTIME_NOW.sub(_strftime_now_sub, sql)
     # strftime with a column reference → TO_CHAR(col::timestamp, ...)

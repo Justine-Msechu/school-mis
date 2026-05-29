@@ -20,14 +20,6 @@ log = logging.getLogger(__name__)
 
 
 class AuditService:
-    def __init__(self, conn=None):
-        self._conn = conn  # optional: if None, gets thread-local connection
-
-    def _db(self):
-        if self._conn:
-            return self._conn
-        from backend.core.db import _get_conn
-        return _get_conn()
 
     def log(
         self,
@@ -40,13 +32,11 @@ class AuditService:
         detail: str = "",
     ) -> None:
         try:
-            conn = self._db()
-            conn.execute(
-                """
-                INSERT INTO audit_log
-                    (user_id, action, table_name, record_id, detail, ts, before_state, after_state)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+            from backend.core.db import execute as db_execute
+            db_execute(
+                """INSERT INTO audit_log
+                       (user_id, action, table_name, record_id, detail, ts, before_state, after_state)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     actor.get("id") if isinstance(actor, dict) else actor,
                     action,
@@ -58,9 +48,11 @@ class AuditService:
                     json.dumps(after) if after is not None else None,
                 ),
             )
-            conn.commit()
         except Exception:
-            log.exception("AuditService.log failed — table=%s action=%s record=%s", table_name, action, record_id)
+            log.exception(
+                "AuditService.log failed — table=%s action=%s record=%s",
+                table_name, action, record_id,
+            )
 
     def get_history(
         self,
@@ -68,19 +60,16 @@ class AuditService:
         record_id: int,
         limit: int = 50,
     ) -> list[dict]:
-        conn = self._db()
-        rows = conn.execute(
-            """
-            SELECT al.*, u.username, u.full_name
-            FROM audit_log al
-            LEFT JOIN users u ON u.id = al.user_id
-            WHERE al.table_name = ? AND al.record_id = ?
-            ORDER BY al.ts DESC
-            LIMIT ?
-            """,
+        from backend.core.db import fetch_all
+        return fetch_all(
+            """SELECT al.*, u.username, u.full_name
+               FROM audit_log al
+               LEFT JOIN users u ON u.id = al.user_id
+               WHERE al.table_name = ? AND al.record_id = ?
+               ORDER BY al.ts DESC
+               LIMIT ?""",
             (table_name, record_id, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
 
     def get_recent(
         self,
@@ -89,7 +78,8 @@ class AuditService:
         table_name: str | None = None,
         action: str | None = None,
     ) -> list[dict]:
-        where = ["1=1"]
+        from backend.core.db import fetch_all
+        where: list[str] = ["1=1"]
         params: list = []
         if actor_id:
             where.append("al.user_id = ?")
@@ -101,19 +91,15 @@ class AuditService:
             where.append("al.action = ?")
             params.append(action)
         params.append(limit)
-        conn = self._db()
-        rows = conn.execute(
-            f"""
-            SELECT al.*, u.username, u.full_name, u.role
-            FROM audit_log al
-            LEFT JOIN users u ON u.id = al.user_id
-            WHERE {' AND '.join(where)}
-            ORDER BY al.ts DESC
-            LIMIT ?
-            """,
+        return fetch_all(
+            f"""SELECT al.*, u.username, u.full_name, u.role
+                FROM audit_log al
+                LEFT JOIN users u ON u.id = al.user_id
+                WHERE {' AND '.join(where)}
+                ORDER BY al.ts DESC
+                LIMIT ?""",
             params,
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
 
 
 # Singleton instance
