@@ -11,6 +11,7 @@ export interface SetupPayload {
   school_phone:   string;
   school_email:   string;
   school_type:    string;
+  plan_name:      string;
   admin_username: string;
   admin_fullname: string;
   admin_password: string;

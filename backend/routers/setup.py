@@ -41,6 +41,7 @@ class SetupPayload(BaseModel):
     school_phone:   str = ""
     school_email:   str = ""
     school_type:    str = "primary"     # primary | secondary | mixed
+    plan_name:      str = "premium"     # basic | standard | premium
     admin_username: str
     admin_fullname: str
     admin_password: str
@@ -67,12 +68,17 @@ def initialize(body: SetupPayload):
     if fetch_one("SELECT id FROM users WHERE username=?", (body.admin_username.strip(),)):
         raise HTTPException(400, "That username is already taken.")
 
+    # Validate plan
+    plan_name = body.plan_name.lower().strip()
+    if plan_name not in ("basic", "standard", "premium"):
+        plan_name = "premium"
+
     # 1. Create the school record
     trial_ends = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
     school_id = execute(
         """INSERT INTO schools (name, plan, max_users, is_active, subscription_status, trial_ends)
-           VALUES (?, 'trial', 50, 1, 'trial', ?)""",
-        (body.school_name.strip(), trial_ends),
+           VALUES (?, ?, 50, 1, 'trialing', ?)""",
+        (body.school_name.strip(), plan_name, trial_ends),
     )
 
     # 2. Seed school_config
@@ -107,9 +113,29 @@ def initialize(body: SetupPayload):
             (user_id, admin_role["id"]),
         )
 
+    # 5. Create trial subscription in subscriptions_v2 (non-critical fallback exists)
+    try:
+        plan_row = fetch_one(
+            "SELECT id FROM subscription_plans WHERE name=? AND billing_interval='monthly' AND is_active=1 LIMIT 1",
+            (plan_name,),
+        )
+        if plan_row and school_id:
+            execute(
+                """INSERT INTO subscriptions_v2
+                   (organization_id, plan_id, status, provider,
+                    current_period_start, current_period_end, trial_end)
+                   VALUES (?, ?, 'trialing', 'trial', ?, ?, ?)""",
+                (school_id, plan_row["id"],
+                 datetime.utcnow().strftime("%Y-%m-%d"),
+                 trial_ends, trial_ends),
+            )
+    except Exception:
+        pass  # Non-critical — legacy schools.subscription_status fallback still grants trial access
+
     return {
         "ok": True,
         "school_name": body.school_name.strip(),
+        "plan_name": plan_name,
         "trial_ends": trial_ends,
         "message": "Setup complete. Please log in with your admin account.",
     }

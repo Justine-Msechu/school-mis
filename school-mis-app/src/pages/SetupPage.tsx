@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, School, User, Check, ChevronRight, Eye, EyeOff } from "lucide-react";
+import {
+  BookOpen, School, User, Check, ChevronRight,
+  Eye, EyeOff, Star, Zap, Shield,
+} from "lucide-react";
 import { initializeSystem } from "@/api/setup";
 
 const INPUT = "w-full h-10 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white text-gray-900";
-const LABEL = "block text-xs font-semibold text-gray-600 mb-1";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -16,10 +18,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const STEPS = [
-  { icon: School, title: "School Information",  desc: "Tell us about your school" },
-  { icon: User,   title: "Admin Account",        desc: "Create your administrator login" },
-  { icon: Check,  title: "Finish Setup",          desc: "Review and complete" },
+  { icon: School,  title: "School Information", desc: "Tell us about your school" },
+  { icon: Star,    title: "Choose Your Plan",   desc: "30-day free trial on any plan" },
+  { icon: User,    title: "Admin Account",      desc: "Create your administrator login" },
+  { icon: Check,   title: "Finish Setup",        desc: "Review and complete" },
 ];
+
+const PLANS = [
+  {
+    id: "basic",
+    name: "Basic",
+    icon: Zap,
+    price: 50_000,
+    desc: "Perfect for small schools just getting started",
+    features: ["Students & Classes", "Attendance tracking", "Grades & Report Cards", "Basic Finance & Fees", "Email support"],
+    popular: false,
+    color: "text-cyan-600",
+  },
+  {
+    id: "standard",
+    name: "Standard",
+    icon: Star,
+    price: 100_000,
+    desc: "Everything you need to run a full school",
+    features: ["Everything in Basic", "Payroll Management", "Transport & Inventory", "Library & Welfare", "NGO Partners", "Priority support"],
+    popular: true,
+    color: "text-violet-600",
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    icon: Shield,
+    price: 200_000,
+    desc: "Unlimited power for large schools and networks",
+    features: ["Everything in Standard", "AI Chat Assistant", "Multi-school network", "Advanced analytics", "API access", "Dedicated support"],
+    popular: false,
+    color: "text-emerald-600",
+  },
+] as const;
 
 export default function SetupPage() {
   const navigate = useNavigate();
@@ -35,6 +71,7 @@ export default function SetupPage() {
     school_phone:   "",
     school_email:   "",
     school_type:    "primary",
+    plan_name:      "standard",
     admin_username: "",
     admin_fullname: "",
     admin_password: "",
@@ -48,7 +85,7 @@ export default function SetupPage() {
     if (step === 0) {
       if (!form.school_name.trim()) { setError("School name is required."); return false; }
     }
-    if (step === 1) {
+    if (step === 2) {
       if (!form.admin_username.trim()) { setError("Username is required."); return false; }
       if (!form.admin_fullname.trim()) { setError("Full name is required."); return false; }
       if (form.admin_password.length < 8) { setError("Password must be at least 8 characters."); return false; }
@@ -72,22 +109,26 @@ export default function SetupPage() {
         school_phone:   form.school_phone.trim(),
         school_email:   form.school_email.trim(),
         school_type:    form.school_type,
+        plan_name:      form.plan_name,
         admin_username: form.admin_username.trim(),
         admin_fullname: form.admin_fullname.trim(),
         admin_password: form.admin_password,
       });
       setDone(true);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail ?? "Setup failed. Please try again.");
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(msg ?? "Setup failed. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
+  const selectedPlan = PLANS.find((p) => p.id === form.plan_name) ?? PLANS[1];
+
   if (done) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="modal-card p-6 sm:p-8 text-center">
+        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 text-center max-w-sm w-full">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
             <Check size={32} className="text-green-600" />
           </div>
@@ -95,8 +136,11 @@ export default function SetupPage() {
           <p className="text-gray-600 mb-1">
             <strong>{form.school_name}</strong> is ready to use.
           </p>
+          <p className="text-sm text-gray-500 mb-1">
+            Your <strong className="capitalize">{selectedPlan.name}</strong> plan is active.
+          </p>
           <p className="text-sm text-gray-500 mb-6">
-            You have a 30-day free trial. Log in with <strong>{form.admin_username}</strong> to get started.
+            30-day free trial started. Log in with <strong>{form.admin_username}</strong>.
           </p>
           <button
             onClick={() => navigate("/login")}
@@ -138,7 +182,7 @@ export default function SetupPage() {
                 </span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`w-16 h-0.5 mx-1 mb-4 ${i < step ? "bg-green-400" : "bg-gray-200"}`} />
+                <div className={`w-12 h-0.5 mx-1 mb-4 ${i < step ? "bg-green-400" : "bg-gray-200"}`} />
               )}
             </div>
           ))}
@@ -198,8 +242,62 @@ export default function SetupPage() {
               </div>
             )}
 
-            {/* Step 1 — Admin account */}
+            {/* Step 1 — Plan selection */}
             {step === 1 && (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-gray-500 mb-1">
+                  All plans include a <strong>30-day free trial</strong>. No credit card required to start.
+                </p>
+                {PLANS.map((plan) => {
+                  const PlanIcon = plan.icon;
+                  const isSelected = form.plan_name === plan.id;
+                  return (
+                    <div
+                      key={plan.id}
+                      onClick={() => set("plan_name", plan.id)}
+                      className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${
+                        isSelected
+                          ? "border-violet-600 bg-violet-50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      {plan.popular && (
+                        <span className="absolute top-3 right-3 text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-medium">
+                          Most Popular
+                        </span>
+                      )}
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-0.5 ${plan.color}`}>
+                          <PlanIcon size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="font-semibold text-gray-900">{plan.name}</h3>
+                            <span className="text-sm font-bold text-gray-800 whitespace-nowrap">
+                              TZS {plan.price.toLocaleString()}<span className="text-xs font-normal text-gray-500">/mo</span>
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5 mb-2">{plan.desc}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {plan.features.map((f) => (
+                              <span key={f} className="text-xs bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">{f}</span>
+                            ))}
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-600 flex items-center justify-center">
+                            <Check size={12} className="text-white" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Step 2 — Admin account */}
+            {step === 2 && (
               <div className="flex flex-col gap-4">
                 <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700">
                   This account will have full administrator access. Keep the credentials safe.
@@ -240,32 +338,32 @@ export default function SetupPage() {
               </div>
             )}
 
-            {/* Step 2 — Review */}
-            {step === 2 && (
+            {/* Step 3 — Review */}
+            {step === 3 && (
               <div className="flex flex-col gap-4">
                 <div className="rounded-xl border border-gray-100 overflow-hidden">
-                  <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    School
-                  </div>
+                  <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">School</div>
                   <div className="px-4 py-3 flex flex-col gap-1.5 text-sm">
                     <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="font-medium">{form.school_name}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Type</span><span className="capitalize">{form.school_type}</span></div>
                     {form.school_address && <div className="flex justify-between"><span className="text-gray-500">Address</span><span className="text-right max-w-[60%]">{form.school_address}</span></div>}
                   </div>
                 </div>
-                <div className="rounded-xl border border-gray-100 overflow-hidden">
-                  <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Admin Account
+                <div className="rounded-xl border border-violet-200 bg-violet-50 overflow-hidden">
+                  <div className="px-4 py-2 bg-violet-100 text-xs font-semibold text-violet-700 uppercase tracking-wide">Subscription Plan</div>
+                  <div className="px-4 py-3 flex flex-col gap-1.5 text-sm">
+                    <div className="flex justify-between"><span className="text-gray-500">Plan</span><span className="font-semibold capitalize text-violet-700">{selectedPlan.name}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Price after trial</span><span>TZS {selectedPlan.price.toLocaleString()}/month</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Trial</span><span className="text-green-600 font-medium">30 days free</span></div>
                   </div>
+                </div>
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">Admin Account</div>
                   <div className="px-4 py-3 flex flex-col gap-1.5 text-sm">
                     <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="font-medium">{form.admin_fullname}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Username</span><span className="font-mono">{form.admin_username}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Password</span><span>{"•".repeat(form.admin_password.length)}</span></div>
                   </div>
-                </div>
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-100 text-xs text-amber-700 flex gap-2">
-                  <span>⏱</span>
-                  <span>You'll get a <strong>30-day free trial</strong>. No credit card needed to start.</span>
                 </div>
               </div>
             )}
@@ -274,12 +372,12 @@ export default function SetupPage() {
           {/* Footer */}
           <div className="px-6 pb-6 flex justify-between items-center">
             {step > 0 ? (
-              <button onClick={() => setStep((s) => s - 1)}
+              <button onClick={() => { setError(""); setStep((s) => s - 1); }}
                 className="h-9 px-4 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 Back
               </button>
             ) : <div />}
-            {step < 2 ? (
+            {step < 3 ? (
               <button onClick={next}
                 className="h-9 px-5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-lg flex items-center gap-1.5 transition-colors">
                 Continue <ChevronRight size={15} />
