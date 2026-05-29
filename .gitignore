@@ -51,3 +51,8 @@ SchoolMIS.desktop
 dist/
 build/
 *.spec
+
+# Auto-fix agent
+tools/.env
+tools/.autofix_state.json
+tools/autofix.log

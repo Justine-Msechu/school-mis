@@ -1,0 +1,52 @@
+version: "3.9"
+
+# Isolated sandbox for the auto-fix agent.
+# Uses separate container names and port 18765 so it never conflicts
+# with the production stack running on port 80/8765.
+#
+# Usage (managed automatically by tools/auto_fix_agent.py):
+#   docker compose -f docker-compose.test.yml up --build -d --wait
+#   python tools/smoketest.py
+#   docker compose -f docker-compose.test.yml down -v --remove-orphans
+
+services:
+
+  # ── Fresh PostgreSQL (data wiped on every down -v) ─────────────────────────
+  test-db:
+    image: postgres:15-alpine
+    container_name: mis-test-db
+    environment:
+      POSTGRES_DB:       school_mis_test
+      POSTGRES_USER:     school_mis_test
+      POSTGRES_PASSWORD: test_secret_123
+    tmpfs:
+      - /var/lib/postgresql/data   # in-memory — faster, completely isolated
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_mis_test -d school_mis_test"]
+      interval:     5s
+      timeout:      3s
+      retries:      12
+      start_period: 5s
+
+  # ── Backend built from local working tree (includes patched files) ──────────
+  test-backend:
+    build:
+      context:    .
+      dockerfile: Dockerfile.backend
+    container_name: mis-test-backend
+    restart: "no"
+    depends_on:
+      test-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://school_mis_test:test_secret_123@test-db:5432/school_mis_test
+    ports:
+      - "18765:8765"   # host:container — does NOT conflict with production :8765
+    healthcheck:
+      test:         ["CMD", "curl", "-sf", "http://localhost:8765/api/health"]
+      interval:     5s
+      timeout:      5s
+      retries:      20
+      start_period: 25s
+
+# No named volumes — everything is ephemeral and destroyed with  down -v
