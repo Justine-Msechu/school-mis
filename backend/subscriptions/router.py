@@ -74,6 +74,29 @@ async def select_initial_plan(body: SelectInitialPlanRequest, user: Usr):
         raise HTTPException(400, "Invalid plan name")
 
     if plan_name == "trial":
+        # Enforce trial one-time only
+        if school.get("trial_ends"):
+            raise HTTPException(
+                400,
+                "Your school has already used its free trial. "
+                "Please choose a paid plan to continue.",
+            )
+        past_trial = await asyncio.to_thread(
+            lambda: fetch_one(
+                """SELECT id FROM subscriptions_v2
+                   WHERE organization_id=?
+                     AND status IN ('trialing','active','expired','canceled')
+                   LIMIT 1""",
+                (org_id,),
+            )
+        )
+        if past_trial:
+            raise HTTPException(
+                400,
+                "Your school has already used its free trial. "
+                "Please choose a paid plan to continue.",
+            )
+
         from datetime import datetime, timedelta
         trial_ends = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
         await asyncio.to_thread(

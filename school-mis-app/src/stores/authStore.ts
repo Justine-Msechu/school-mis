@@ -2,18 +2,31 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/api/auth";
 
+// sessionStorage key for non-rememberMe sessions (survives page refresh, not new tab)
+const _SESSION_KEY = "mis-auth-session";
+
 // Read persisted auth synchronously before React's first render.
-// Only restores the session if the user explicitly chose "Remember me".
+// Checks localStorage first (rememberMe=true), then sessionStorage (rememberMe=false).
 const _readPersisted = (): { isLoggedIn: boolean; user: User | null; token: string | null; mustChangePw: boolean; rememberMe: boolean } => {
   try {
+    // 1. localStorage — only if user explicitly chose "Remember me"
     const raw = localStorage.getItem("mis-auth");
-    if (!raw) return { isLoggedIn: false, user: null, token: null, mustChangePw: false, rememberMe: false };
-    const parsed = JSON.parse(raw) as { state?: { user?: User; token?: string; mustChangePw?: boolean; rememberMe?: boolean } };
-    const { user, token, mustChangePw, rememberMe } = parsed?.state ?? {};
-    // Only restore if rememberMe was true AND we have a valid token
-    if (rememberMe && token && user) {
-      sessionStorage.setItem("mis_token", token);
-      return { isLoggedIn: true, user, token, mustChangePw: mustChangePw ?? false, rememberMe: true };
+    if (raw) {
+      const parsed = JSON.parse(raw) as { state?: { user?: User; token?: string; mustChangePw?: boolean; rememberMe?: boolean } };
+      const { user, token, mustChangePw, rememberMe } = parsed?.state ?? {};
+      if (rememberMe && token && user) {
+        sessionStorage.setItem("mis_token", token);
+        return { isLoggedIn: true, user, token, mustChangePw: mustChangePw ?? false, rememberMe: true };
+      }
+    }
+    // 2. sessionStorage — non-rememberMe sessions (page refresh safe, not cross-tab)
+    const session = sessionStorage.getItem(_SESSION_KEY);
+    if (session) {
+      const { user, token, mustChangePw } = JSON.parse(session) as { user?: User; token?: string; mustChangePw?: boolean };
+      if (token && user) {
+        sessionStorage.setItem("mis_token", token);
+        return { isLoggedIn: true, user, token, mustChangePw: mustChangePw ?? false, rememberMe: false };
+      }
     }
   } catch { /* storage unavailable or corrupt */ }
   return { isLoggedIn: false, user: null, token: null, mustChangePw: false, rememberMe: false };
@@ -45,16 +58,22 @@ export const useAuthStore = create<AuthState>()(
 
       login(user, token, mustChangePw = false, rememberMe = false) {
         sessionStorage.setItem("mis_token", token);
-        set({ isLoggedIn: true, user, token, mustChangePw, rememberMe });
-        // When "remember me" is off, wipe any previously persisted session
-        // so closing the browser doesn't restore this new session either.
-        if (!rememberMe) {
+        if (rememberMe) {
+          // Persist to localStorage so new tabs / browser restarts restore the session.
+          // (Zustand's persist middleware writes this automatically via partialize.)
+          sessionStorage.removeItem(_SESSION_KEY);
+        } else {
+          // Store full session in sessionStorage so page refresh doesn't log the user out.
+          // sessionStorage is tab-scoped — closing the tab clears it automatically.
+          sessionStorage.setItem(_SESSION_KEY, JSON.stringify({ user, token, mustChangePw }));
           localStorage.removeItem("mis-auth");
         }
+        set({ isLoggedIn: true, user, token, mustChangePw, rememberMe });
       },
 
       logout() {
         sessionStorage.removeItem("mis_token");
+        sessionStorage.removeItem(_SESSION_KEY);
         localStorage.removeItem("mis-auth");
         set({ isLoggedIn: false, user: null, token: null, mustChangePw: false, rememberMe: false });
       },
