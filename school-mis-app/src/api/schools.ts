@@ -92,6 +92,16 @@ export interface AnnouncementPayload {
   expires_at?:  string | null;
 }
 
+export interface PlatformUser {
+  id:          number;
+  username:    string;
+  full_name:   string;
+  role:        string;
+  is_active:   number;
+  school_id:   number | null;
+  school_name: string | null;
+}
+
 // ── Public ────────────────────────────────────────────────────────────────────
 
 export const registerSchool = (body: RegisterSchoolPayload) =>
@@ -134,6 +144,9 @@ export const createAnnouncement = (body: AnnouncementPayload) =>
 
 export const deleteAnnouncement = (id: number) =>
   api.delete<{ ok: boolean }>(`/superadmin/announcements/${id}`);
+
+export const getSuperAdminUsers = () =>
+  api.get<PlatformUser[]>("/superadmin/users").then((r) => r.data);
 
 // ── School-facing ─────────────────────────────────────────────────────────────
 

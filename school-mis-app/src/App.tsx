@@ -46,6 +46,7 @@ const PlatformFeaturesPage      = lazy(() => import("@/pages/platform/PlatformFe
 const PlatformAnnouncementsPage = lazy(() => import("@/pages/platform/PlatformAnnouncementsPage"));
 const ErrorLogsPage             = lazy(() => import("@/pages/platform/ErrorLogsPage"));
 const PlatformMediaPage         = lazy(() => import("@/pages/platform/PlatformMediaPage"));
+const PlatformRbacPage          = lazy(() => import("@/pages/platform/PlatformRbacPage"));
 
 // ── Shared page-level loading fallback ───────────────────────────────────────
 function PageLoader() {
@@ -106,6 +107,7 @@ function AuthenticatedApp() {
           <Route path="/platform/audit"         element={<AuditLogPage />} />
           <Route path="/platform/errors"        element={<ErrorLogsPage />} />
           <Route path="/platform/media"         element={<PlatformMediaPage />} />
+          <Route path="/platform/rbac"          element={<PlatformRbacPage />} />
           <Route path="/platform/settings"      element={<PlatformSettingsPage />} />
           <Route path="/*"                      element={<Navigate to="/platform" replace />} />
         </Routes>

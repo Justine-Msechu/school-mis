@@ -13,6 +13,7 @@ Superadmin only:
   POST /api/superadmin/schools/{id}/reset-admin-password
   GET  /api/superadmin/feature-flags
   PUT  /api/superadmin/feature-flags/{plan}/{module}
+  GET  /api/superadmin/users
   GET  /api/superadmin/announcements
   POST /api/superadmin/announcements
   DELETE /api/superadmin/announcements/{id}
@@ -215,6 +216,27 @@ async def list_schools(_user: dict = Depends(_require_superadmin)):
                    (SELECT COUNT(*) FROM users u WHERE u.school_id = s.id AND u.is_active = 1) AS user_count
                FROM schools s
                ORDER BY s.created_at DESC""",
+            (),
+        )
+
+    rows = await asyncio.to_thread(_db)
+    return [dict(r) for r in rows]
+
+
+# ── Superadmin: list all users across all schools ──────────────────────────────
+
+@router.get("/superadmin/users")
+async def list_all_users(_user: dict = Depends(_require_superadmin)):
+    """Return all non-platform users across every school for cross-school RBAC management."""
+    def _db():
+        return fetch_all(
+            """SELECT
+                   u.id, u.username, u.full_name, u.role, u.is_active,
+                   s.id AS school_id, s.name AS school_name
+               FROM users u
+               LEFT JOIN schools s ON s.id = u.school_id
+               WHERE u.role != 'superadmin'
+               ORDER BY s.name, u.full_name""",
             (),
         )
 

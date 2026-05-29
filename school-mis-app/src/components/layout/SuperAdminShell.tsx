@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import {
   LayoutDashboard, Building2, Shield, Settings,
-  LogOut, BookOpen, X, Menu, Palette, Layers, Megaphone, Bug, Bell, Images,
+  LogOut, BookOpen, X, Menu, Palette, Layers, Megaphone, Bug, Bell, Images, KeyRound,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, THEMES } from "@/stores/themeStore";
@@ -17,6 +17,7 @@ const NAV = [
   { icon: Layers,          label: "Module Access",   to: "/platform/features" },
   { icon: Megaphone,       label: "Announcements",   to: "/platform/announcements" },
   { icon: Images,          label: "Landing Media",   to: "/platform/media" },
+  { icon: KeyRound,        label: "Roles & Access",  to: "/platform/rbac" },
   { icon: Shield,          label: "Audit Log",       to: "/platform/audit" },
   { icon: Bug,             label: "Error Logs",      to: "/platform/errors" },
   { icon: Settings,        label: "Settings",        to: "/platform/settings" },
