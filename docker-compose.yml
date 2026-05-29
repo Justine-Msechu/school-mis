@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
 
-  # ── PostgreSQL 15 ──────────────────────────────────────────────────────────
+  # ── 1. PostgreSQL ──────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: school-mis-db
@@ -20,18 +20,20 @@ services:
       retries:  5
       start_period: 15s
 
-  # ── FastAPI backend (8 uvicorn workers) ───────────────────────────────────
-  school-mis:
-    build: .
-    image: school-mis:latest
-    container_name: school-mis-app
+  # ── 2. FastAPI backend ─────────────────────────────────────
+  backend:
+    build:
+      context:    .
+      dockerfile: Dockerfile.backend
+    image: school-mis-backend:latest
+    container_name: school-mis-backend
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://school_mis:school_mis_secret@postgres:5432/school_mis
-      # Optional: payment gateway keys
+      # Uncomment to enable payment gateways:
       # FLW_SECRET_KEY:      your_flutterwave_key
       # PAYSTACK_SECRET_KEY: your_paystack_key
     volumes:
@@ -45,41 +47,41 @@ services:
       retries:  3
       start_period: 20s
 
-  # ── Nginx reverse proxy (port 80 → app:8765) ──────────────────────────────
+  # ── 3. React frontend (nginx serving built SPA) ────────────
+  frontend:
+    build:
+      context:    .
+      dockerfile: Dockerfile.frontend
+    image: school-mis-frontend:latest
+    container_name: school-mis-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout:  5s
+      retries:  3
+      start_period: 10s
+
+  # ── 4. Nginx reverse proxy (80 + 443) ─────────────────────
   nginx:
     image: nginx:1.25-alpine
     container_name: school-mis-nginx
     restart: unless-stopped
     depends_on:
-      school-mis:
+      backend:
+        condition: service_healthy
+      frontend:
         condition: service_healthy
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout:  5s
-      retries:  3
-
-  # ── Optional: Cloudflare Tunnel for external HTTPS access ─────────────────
-  # Steps:
-  #   1. cloudflare.com → Zero Trust → Networks → Tunnels → Create tunnel
-  #   2. Copy token, set TUNNEL_TOKEN below, uncomment block
-  #   3. docker compose up -d
-  #
-  # cloudflare-tunnel:
-  #   image: cloudflare/cloudflared:latest
-  #   container_name: school-mis-tunnel
-  #   restart: unless-stopped
-  #   command: tunnel --no-autoupdate run
-  #   environment:
-  #     - TUNNEL_TOKEN=${TUNNEL_TOKEN}
-  #   depends_on:
-  #     nginx:
-  #       condition: service_healthy
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
 
 volumes:
-  pg_data:    # PostgreSQL data — persists across container rebuilds
-  uploads:    # Uploaded files (photos, documents)
+  pg_data:   # PostgreSQL data — survives container rebuilds
+  uploads:   # Uploaded media files (landing page images, etc.)
