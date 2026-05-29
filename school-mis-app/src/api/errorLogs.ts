@@ -14,6 +14,7 @@ export interface ErrorLogItem {
   message:     string;
   stack?:      string | null;
   context?:    string | null;
+  request_id?: string | null;
   resolved:    number;
   resolved_at: string | null;
 }
@@ -24,11 +25,12 @@ export interface ErrorLogList {
 }
 
 export const reportFrontendError = (body: {
-  message:    string;
-  stack?:     string;
-  path?:      string;
+  message:     string;
+  stack?:      string;
+  path?:       string;
   error_type?: string;
-  context?:   Record<string, unknown>;
+  context?:    Record<string, unknown>;
+  request_id?: string;
 }) => api.post("/error-logs/report", body).catch(() => {/* never throw */});
 
 export const getErrorLogs = (params?: {

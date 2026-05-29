@@ -6,7 +6,16 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach token on every request
+// Last X-Request-ID seen — included in error reports so backend & frontend logs correlate.
+let _lastRequestId: string | null = null;
+export const getLastRequestId = (): string | null => _lastRequestId;
+
+function makeRequestId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+// Attach token + X-Request-ID on every request
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem("mis_token") || localStorage.getItem("mis_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -22,13 +31,23 @@ api.interceptors.request.use((config) => {
     }
   } catch { /* ignore */ }
 
+  const rid = makeRequestId();
+  config.headers["X-Request-ID"] = rid;
+  _lastRequestId = rid;
+
   return config;
 });
 
-// Handle 401 and 402
+// Handle 401 and 402; capture X-Request-ID from failed responses
 api.interceptors.response.use(
   (r) => r,
   (err) => {
+    // Keep the request ID from the failed response so error reports can include it
+    const rid =
+      err.response?.headers?.["x-request-id"] ||
+      err.config?.headers?.["X-Request-ID"];
+    if (rid) _lastRequestId = rid;
+
     if (err.response?.status === 401) {
       // Clear auth state properly so the next render shows the landing page —
       // no hard page reload, which would restart the flicker loop.

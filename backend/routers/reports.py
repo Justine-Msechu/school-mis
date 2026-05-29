@@ -1,12 +1,11 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
-from backend.deps import require_auth
+from backend.deps import require_auth, rate_limit
 from backend.core.authz import compute_effective_permissions
 from backend.core.security import require_permission
+from backend.core.cache import cache_get, cache_set
 from database.db import fetch_all, fetch_one
 
-from backend.deps import rate_limit
-from fastapi import Depends
 router = APIRouter(tags=["reports"], dependencies=[Depends(rate_limit(max_calls=60, window_secs=60, scope="reports"))])
 Usr = Annotated[dict, Depends(require_auth)]
 
@@ -22,6 +21,12 @@ def _get_teacher_class(user_id: int) -> int | None:
 
 @router.get("/attendance-summary")
 def attendance_summary(user: Usr, class_id: int = Query(None), month: str = Query(None)):
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:att:{class_id}:{month}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     where = ["1=1"]
     params: list = []
     if class_id:
@@ -40,11 +45,19 @@ def attendance_summary(user: Usr, class_id: int = Query(None), month: str = Quer
             GROUP BY a.student_id ORDER BY rate ASC""",
         params,
     )
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=120)
+    return result
 
 
 @router.get("/fee-collection")
 def fee_collection(user: Usr, academic_year_id: int = Query(None)):
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:fee:{academic_year_id}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     where = "WHERE 1=1"
     params: list = []
     if academic_year_id:
@@ -61,11 +74,19 @@ def fee_collection(user: Usr, academic_year_id: int = Query(None)):
             GROUP BY fs.fee_type_id ORDER BY ft.name""",
         params,
     )
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=180)
+    return result
 
 
 @router.get("/grade-summary")
 def grade_summary(user: Usr, exam_id: int = Query(None)):
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:grade:{exam_id}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     where = "WHERE 1=1"
     params: list = []
     if exam_id:
@@ -87,12 +108,21 @@ def grade_summary(user: Usr, exam_id: int = Query(None)):
             GROUP BY st.class_id, g.subject_id ORDER BY c.name, s.name""",
         params,
     )
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=180)
+    return result
 
 
 @router.get("/overview")
 def overview(user: Usr):
-    perms  = compute_effective_permissions(user["id"])
+    school_id = user.get("school_id", 0)
+    user_id   = user["id"]
+    ck = f"school:{school_id}:rpt:overview:{user_id}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
+    perms  = compute_effective_permissions(user_id)
     is_all = "*" in perms
     def can(p: str) -> bool:
         return is_all or p in perms
@@ -108,6 +138,7 @@ def overview(user: Usr):
     if can("reports.finance") or can("finance.view"):
         result["total_expenses"] = dict(fetch_one("SELECT COALESCE(SUM(amount),0) as n FROM expenses") or {}).get("n", 0)
         result["total_revenue"]  = dict(fetch_one("SELECT COALESCE(SUM(amount_paid),0) as n FROM fee_payments") or {}).get("n", 0)
+    cache_set(ck, result, ttl=120)
     return result
 
 
@@ -487,6 +518,12 @@ def fee_collection_by_class(
 ):
     """Billed vs collected per class, for the bar chart."""
     require_permission(user, "finance.view")
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:acc-fee:{academic_year_id}:{term}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     where = ["1=1"]
     params: list = []
     if academic_year_id:
@@ -507,13 +544,21 @@ def fee_collection_by_class(
             ORDER BY c.name""",
         params,
     )
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=300)
+    return result
 
 
 @router.get("/accounting/monthly-income")
 def monthly_income(user: Usr, year: int = Query(None)):
     """Payment totals grouped by month, for the line/bar chart."""
     require_permission(user, "finance.view")
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:acc-income:{year}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     params: list = []
     year_filter = ""
     if year:
@@ -529,7 +574,9 @@ def monthly_income(user: Usr, year: int = Query(None)):
             ORDER BY month""",
         params,
     )
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=300)
+    return result
 
 
 @router.get("/accounting/expense-breakdown")
@@ -540,6 +587,12 @@ def expense_breakdown(
 ):
     """Expenses grouped by category, for the pie chart."""
     require_permission(user, "finance.view")
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:acc-exp:{from_date}:{to_date}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     where = ["1=1"]
     params: list = []
     if from_date:
@@ -557,7 +610,9 @@ def expense_breakdown(
             ORDER BY total DESC""",
         params,
     )
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=300)
+    return result
 
 
 # ── Inventory reports ─────────────────────────────────────────────────────────
@@ -565,14 +620,19 @@ def expense_breakdown(
 @router.get("/inventory/overview")
 def inventory_overview(user: Usr):
     """Summary stats for the storekeeper dashboard."""
-    from backend.deps import require_auth  # user already verified
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:inv:overview"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     total     = fetch_one("SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1")
     low       = fetch_one("SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1 AND stock_qty <= reorder_qty")
     value     = fetch_one("SELECT COALESCE(SUM(stock_qty * unit_price),0) AS v FROM inventory_items WHERE is_active=1")
     pending   = fetch_one("SELECT COUNT(*) AS n FROM inventory_requests WHERE status='pending'")
     today_in  = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='stock_in' AND DATE(created_at)=DATE('now')")
     today_out = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='issued' AND DATE(created_at)=DATE('now')")
-    return {
+    result = {
         "total_items":      dict(total)["n"]   if total   else 0,
         "low_stock_count":  dict(low)["n"]     if low     else 0,
         "stock_value":      dict(value)["v"]   if value   else 0,
@@ -580,11 +640,18 @@ def inventory_overview(user: Usr):
         "today_stock_in":   dict(today_in)["n"]  if today_in  else 0,
         "today_issued":     dict(today_out)["n"] if today_out else 0,
     }
+    cache_set(ck, result, ttl=180)
+    return result
 
 
 @router.get("/inventory/by-category")
 def inventory_by_category(user: Usr):
     """Items count and total value per main category."""
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:inv:by-category"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
     rows = fetch_all("""
         SELECT
             COALESCE(main_category, 'Uncategorized') AS category,
@@ -596,12 +663,19 @@ def inventory_by_category(user: Usr):
         GROUP BY COALESCE(main_category, 'Uncategorized')
         ORDER BY total_value DESC
     """)
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=180)
+    return result
 
 
 @router.get("/inventory/monthly-movements")
 def inventory_monthly_movements(user: Usr, months: int = Query(12)):
     """Monthly stock_in vs issued quantities for the last N months."""
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:inv:movements:{months}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
     rows = fetch_all("""
         SELECT
             strftime('%Y-%m', created_at) AS month,
@@ -613,7 +687,9 @@ def inventory_monthly_movements(user: Usr, months: int = Query(12)):
         GROUP BY month
         ORDER BY month
     """, (f"-{months}",))
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    cache_set(ck, result, ttl=180)
+    return result
 
 
 @router.get("/inventory/type-distribution")
@@ -652,6 +728,12 @@ def inventory_low_stock_detail(user: Usr):
 def income_vs_expense(user: Usr, year: int = Query(None)):
     """Monthly income vs expense for the combo chart."""
     require_permission(user, "finance.view")
+    school_id = user.get("school_id", 0)
+    ck = f"school:{school_id}:rpt:acc-ive:{year}"
+    hit = cache_get(ck)
+    if hit is not None:
+        return hit
+
     y = str(year) if year else None
     income_rows = fetch_all(
         "SELECT strftime('%Y-%m', payment_date) AS month, COALESCE(SUM(amount),0) AS income "
@@ -670,7 +752,9 @@ def income_vs_expense(user: Usr, year: int = Query(None)):
     income_map  = {dict(r)["month"]: dict(r)["income"]  for r in income_rows}
     expense_map = {dict(r)["month"]: dict(r)["expense"] for r in expense_rows}
     months = sorted(set(income_map) | set(expense_map))
-    return [
+    result = [
         {"month": m, "income": income_map.get(m, 0), "expense": expense_map.get(m, 0)}
         for m in months
     ]
+    cache_set(ck, result, ttl=300)
+    return result

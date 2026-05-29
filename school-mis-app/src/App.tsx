@@ -45,6 +45,7 @@ const PlatformSettingsPage      = lazy(() => import("@/pages/platform/PlatformSe
 const PlatformFeaturesPage      = lazy(() => import("@/pages/platform/PlatformFeaturesPage"));
 const PlatformAnnouncementsPage = lazy(() => import("@/pages/platform/PlatformAnnouncementsPage"));
 const ErrorLogsPage             = lazy(() => import("@/pages/platform/ErrorLogsPage"));
+const PlatformMediaPage         = lazy(() => import("@/pages/platform/PlatformMediaPage"));
 
 // ── Shared page-level loading fallback ───────────────────────────────────────
 function PageLoader() {
@@ -104,6 +105,7 @@ function AuthenticatedApp() {
           <Route path="/platform/announcements" element={<PlatformAnnouncementsPage />} />
           <Route path="/platform/audit"         element={<AuditLogPage />} />
           <Route path="/platform/errors"        element={<ErrorLogsPage />} />
+          <Route path="/platform/media"         element={<PlatformMediaPage />} />
           <Route path="/platform/settings"      element={<PlatformSettingsPage />} />
           <Route path="/*"                      element={<Navigate to="/platform" replace />} />
         </Routes>
@@ -154,7 +156,13 @@ export default function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/landing"  element={<LandingPage />} />
-            <Route path="/register" element={isLoggedIn ? <Navigate to={home} replace /> : <RegisterPage />} />
+            <Route path="/register" element={
+              // Superadmin can always access the registration page (testing / onboarding).
+              // All other logged-in users are redirected home.
+              isLoggedIn && user?.role !== "superadmin"
+                ? <Navigate to={home} replace />
+                : <RegisterPage />
+            } />
             <Route path="/setup"    element={<SetupRoute />} />
             <Route path="/login"    element={isLoggedIn ? <Navigate to={home} replace /> : <LoginPage />} />
             <Route path="/*"        element={

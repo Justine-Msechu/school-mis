@@ -6,11 +6,12 @@ import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [username,    setUsername]    = useState("");
+  const [password,    setPassword]    = useState("");
+  const [showPw,      setShowPw]      = useState(false);
+  const [rememberMe,  setRememberMe]  = useState(false);
+  const [error,       setError]       = useState("");
+  const [loading,     setLoading]     = useState(false);
   const { login: storeLogin } = useAuthStore();
   const navigate = useNavigate();
 
@@ -21,7 +22,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { token, user, must_change_pw } = await login(username.trim(), password);
-      storeLogin(user, token, must_change_pw);
+      storeLogin(user, token, must_change_pw, rememberMe);
       navigate(user.role === "superadmin" ? "/platform" : "/");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -88,7 +89,26 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" variant="primary" className="w-full mt-2 h-10" loading={loading}>
+            {/* Remember me */}
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <div
+                onClick={() => setRememberMe(v => !v)}
+                className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                  rememberMe ? "bg-violet-600 border-violet-600" : "border-gray-300 bg-white"
+                }`}
+              >
+                {rememberMe && (
+                  <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+              <span className="text-xs text-gray-600">
+                Remember me on this device
+              </span>
+            </label>
+
+            <Button type="submit" variant="primary" className="w-full mt-1 h-10" loading={loading}>
               Sign In
             </Button>
           </form>

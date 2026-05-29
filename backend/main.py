@@ -1,6 +1,7 @@
 """FastAPI backend — enterprise-grade, clean architecture."""
 
 import sys
+import uuid
 import asyncio
 import logging
 from datetime import datetime
@@ -31,6 +32,8 @@ from backend.routers import setup as setup_router
 from backend.routers import subscription as subscription_router
 from backend.routers import schools as schools_router
 from backend.routers import error_logs as error_logs_router
+from backend.routers import health_monitor as health_monitor_router
+from backend.routers import landing_media as landing_media_router
 from backend.subscriptions.router import router as new_subscription_router
 from backend.subscriptions.webhooks.router import router as webhooks_router
 
@@ -72,6 +75,7 @@ async def lifespan(app: FastAPI):
         "015_ngo", "016_student_sponsorship", "017_welfare_extended",
         "018_security", "019_subscription_v2", "020_superadmin",
         "021_multitenant_fix", "022_platform_features", "023_error_logs",
+        "024_request_id", "025_health_alerts", "026_landing_media",
     ]
     for _mig_name in _migrations:
         _path = _os.path.join(_mig_dir, f"{_mig_name}.py")
@@ -110,7 +114,23 @@ async def lifespan(app: FastAPI):
             log.warning("SQLite post-init warning: %s", e)
 
     log.info("School MIS API v5.1 started (db=%s)", "postgresql" if _use_pg else "sqlite")
+
+    # 4. Start background health monitor
+    _monitor_task = None
+    try:
+        from backend.monitoring.health_monitor import monitor_loop
+        _monitor_task = asyncio.create_task(monitor_loop())
+    except Exception as _e:
+        log.warning("Health monitor could not start: %s", _e)
+
     yield
+
+    if _monitor_task:
+        _monitor_task.cancel()
+        try:
+            await _monitor_task
+        except asyncio.CancelledError:
+            pass
     log.info("School MIS API shutting down")
 
 
@@ -140,12 +160,25 @@ _SUBSCRIPTION_EXEMPT = (
     "/api/webhooks/",
     "/api/ai/",
     "/api/error-logs/report",
+    "/api/platform/health/",
+    "/api/landing/",
+    "/uploads/",
     "/api/health",
     "/assets/",
     "/favicon",
     "/manifest",
     "/robots",
 )
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Assign a UUID to every request; thread it through logs and responses."""
+    rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = rid
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = rid
+    return response
+
 
 @app.middleware("http")
 async def subscription_middleware(request: Request, call_next):
@@ -270,7 +303,9 @@ app.include_router(subscription_router.router,  prefix="/api/subscription")
 app.include_router(new_subscription_router,     prefix="/api/subscriptions")
 app.include_router(webhooks_router,             prefix="/api/webhooks")
 app.include_router(ai.router,                   prefix="/api/ai")
-app.include_router(error_logs_router.router,    prefix="/api/error-logs")
+app.include_router(error_logs_router.router,         prefix="/api/error-logs")
+app.include_router(health_monitor_router.router,    prefix="/api/platform/health")
+app.include_router(landing_media_router.router,     prefix="/api/landing/media")
 
 
 @app.get("/api/health")
@@ -283,6 +318,12 @@ def health_check():
 # routes so the whole system is accessible via a single port.
 import os as _os
 from fastapi.responses import FileResponse as _FileResponse
+
+# ── Serve uploaded landing media ──────────────────────────────────────────────
+_uploads_dir = Path(__file__).parent / "uploads"
+_uploads_dir.mkdir(parents=True, exist_ok=True)
+from fastapi.staticfiles import StaticFiles as _SF
+app.mount("/uploads", _SF(directory=str(_uploads_dir)), name="uploads")
 
 _static_dir = _os.environ.get("SCHOOL_MIS_STATIC_DIR", "").strip()
 

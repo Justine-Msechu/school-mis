@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { getPlatformStats, type PlatformStats } from "@/api/schools";
 import { useImpersonationStore } from "@/stores/impersonationStore";
+import SystemHealthPanel from "@/components/platform/SystemHealthPanel";
 
 const PLAN_COLOR: Record<string, string> = {
   trial:    "#0891B2",
@@ -120,6 +121,9 @@ export default function PlatformDashboard() {
               </div>
             </div>
           )}
+
+          {/* System health */}
+          <SystemHealthPanel />
 
           {/* Stat cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9 gap-4">

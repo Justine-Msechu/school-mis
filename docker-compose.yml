@@ -35,7 +35,7 @@ services:
       # FLW_SECRET_KEY:      your_flutterwave_key
       # PAYSTACK_SECRET_KEY: your_paystack_key
     volumes:
-      - uploads:/app/uploads
+      - uploads:/app/backend/uploads
     expose:
       - "8765"
     healthcheck:

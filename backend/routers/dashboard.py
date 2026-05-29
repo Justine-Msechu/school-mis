@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from backend.deps import require_auth
 from backend.core.authz import compute_effective_permissions
+from backend.core.cache import cache_get, cache_set
 from database.db import fetch_one, fetch_all
 
 router = APIRouter(tags=["dashboard"])
@@ -18,10 +19,17 @@ def _n(row) -> int:
 
 @router.get("/stats")
 def get_stats(user: Usr):
-    user_id = user["id"]
-    role    = user.get("role", "")
-    perms   = compute_effective_permissions(user_id)
-    is_all  = "*" in perms
+    user_id   = user["id"]
+    school_id = user.get("school_id", 0)
+    role      = user.get("role", "")
+
+    cache_key = f"school:{school_id}:dash:stats:{user_id}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    perms  = compute_effective_permissions(user_id)
+    is_all = "*" in perms
 
     def can(p: str) -> bool:
         return is_all or p in perms
@@ -143,4 +151,5 @@ def get_stats(user: Usr):
         except Exception:
             result["recent_activity"] = []
 
+    cache_set(cache_key, result, ttl=60)
     return result

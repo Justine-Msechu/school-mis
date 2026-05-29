@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 const host = process.env.TAURI_DEV_HOST;
+// VITE_API_HOST lets you dev against a remote backend (e.g. the Mac Mini).
+// Usage:  VITE_API_HOST=http://192.168.1.8:8765 npm run dev
+const apiHost = process.env.VITE_API_HOST || "http://127.0.0.1:8765";
 
 export default defineConfig(async () => ({
   plugins: [react()],
@@ -23,7 +26,11 @@ export default defineConfig(async () => ({
     },
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8765",
+        target: apiHost,
+        changeOrigin: true,
+      },
+      "/uploads": {
+        target: apiHost,
         changeOrigin: true,
       },
     },

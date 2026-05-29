@@ -70,6 +70,9 @@ function ErrorRow({ item, onResolve }: { item: ErrorLogItem; onResolve: () => vo
               {detail.error_type && (
                 <p className="text-xs"><span className="font-medium text-gray-600">Type:</span> <span className="font-mono">{detail.error_type}</span></p>
               )}
+              {detail.request_id && (
+                <p className="text-xs"><span className="font-medium text-gray-600">Request ID:</span> <span className="font-mono text-violet-700">{detail.request_id}</span></p>
+              )}
               {detail.stack && (
                 <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-48 whitespace-pre-wrap">
                   {detail.stack}

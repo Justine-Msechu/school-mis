@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import {
   LayoutDashboard, Building2, Shield, Settings,
-  LogOut, BookOpen, X, Menu, Palette, Layers, Megaphone, Bug,
+  LogOut, BookOpen, X, Menu, Palette, Layers, Megaphone, Bug, Bell, Images,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore, THEMES } from "@/stores/themeStore";
 import { logout } from "@/api/auth";
+import { getAlertCount, type AlertCount } from "@/api/healthMonitor";
 import "@/stores/themeStore";
 
 const NAV = [
@@ -15,6 +16,7 @@ const NAV = [
   { icon: Building2,       label: "Schools",         to: "/platform/schools" },
   { icon: Layers,          label: "Module Access",   to: "/platform/features" },
   { icon: Megaphone,       label: "Announcements",   to: "/platform/announcements" },
+  { icon: Images,          label: "Landing Media",   to: "/platform/media" },
   { icon: Shield,          label: "Audit Log",       to: "/platform/audit" },
   { icon: Bug,             label: "Error Logs",      to: "/platform/errors" },
   { icon: Settings,        label: "Settings",        to: "/platform/settings" },
@@ -97,8 +99,17 @@ function PlatformSidebar({ onClose }: { onClose: () => void }) {
 }
 
 function PlatformTopbar({ onMenuClick }: { onMenuClick: () => void }) {
-  const { theme, setTheme } = useThemeStore();
+  const navigate              = useNavigate();
+  const { theme, setTheme }   = useThemeStore();
   const [themeOpen, setThemeOpen] = useState(false);
+  const [alerts, setAlerts]   = useState<AlertCount>({ total: 0, critical: 0 });
+
+  useEffect(() => {
+    const fetch = () => getAlertCount().then(setAlerts).catch(() => {});
+    fetch();
+    const id = setInterval(fetch, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <header
@@ -117,6 +128,24 @@ function PlatformTopbar({ onMenuClick }: { onMenuClick: () => void }) {
           Full system ownership
         </p>
       </div>
+
+      {/* Health alert bell */}
+      <button
+        onClick={() => navigate("/platform")}
+        className="relative p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+        style={{ color: alerts.critical > 0 ? "#DC2626" : alerts.total > 0 ? "#D97706" : "var(--color-on-surface-muted)" }}
+        title={alerts.total > 0 ? `${alerts.total} active alert${alerts.total !== 1 ? "s" : ""}` : "System healthy"}
+      >
+        <Bell size={17} />
+        {alerts.critical > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+            {alerts.critical > 9 ? "9+" : alerts.critical}
+          </span>
+        )}
+        {alerts.critical === 0 && alerts.total > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full border-2 border-white" />
+        )}
+      </button>
 
       {/* Theme switcher */}
       <div className="relative">

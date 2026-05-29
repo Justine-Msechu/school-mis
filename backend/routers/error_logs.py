@@ -30,6 +30,7 @@ class FrontendErrorReport(BaseModel):
     path:       str | None = None
     error_type: str | None = None
     context:    dict | None = None
+    request_id: str | None = None
 
 
 # ── Internal helper — called from middleware ──────────────────────────────────
@@ -41,14 +42,15 @@ def log_backend_error(
     user:       dict | None = None,
 ):
     try:
-        path   = str(request.url.path)  if request else None
-        method = request.method          if request else None
-        tb     = traceback.format_exc()
+        path       = str(request.url.path) if request else None
+        method     = request.method         if request else None
+        request_id = getattr(request.state, "request_id", None) if request else None
+        tb         = traceback.format_exc()
         execute(
             """INSERT INTO error_logs
                (source, level, path, method, user_id, school_id, role,
-                error_type, message, stack)
-               VALUES ('backend','error',%s,%s,%s,%s,%s,%s,%s,%s)""",
+                error_type, message, stack, request_id)
+               VALUES ('backend','error',%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (
                 path, method,
                 user.get("id")        if user else None,
@@ -57,6 +59,7 @@ def log_backend_error(
                 type(exc).__name__,
                 str(exc)[:2000],
                 tb[:8000],
+                request_id,
             ),
         )
     except Exception as inner:
@@ -72,8 +75,8 @@ def report_frontend_error(body: FrontendErrorReport, request: Request, user: Usr
         execute(
             """INSERT INTO error_logs
                (source, level, path, user_id, school_id, role,
-                error_type, message, stack, context)
-               VALUES ('frontend','error',%s,%s,%s,%s,%s,%s,%s,%s)""",
+                error_type, message, stack, context, request_id)
+               VALUES ('frontend','error',%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (
                 body.path,
                 user.get("id"),
@@ -83,6 +86,7 @@ def report_frontend_error(body: FrontendErrorReport, request: Request, user: Usr
                 body.message[:2000],
                 (body.stack or "")[:8000],
                 json.dumps(body.context or {}),
+                body.request_id,
             ),
         )
     except Exception as e:

@@ -1,5 +1,6 @@
 import { Component, type ReactNode, type ErrorInfo } from "react";
 import { reportFrontendError } from "@/api/errorLogs";
+import { getLastRequestId } from "@/api/client";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 interface Props  { children: ReactNode; fallback?: ReactNode; }
@@ -19,6 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
       path:       window.location.pathname,
       error_type: error.name,
       context:    { componentStack: info.componentStack?.slice(0, 2000) },
+      request_id: getLastRequestId() ?? undefined,
     });
   }
 
@@ -58,6 +60,7 @@ export function installGlobalErrorHandlers() {
       path:       window.location.pathname,
       error_type: "GlobalError",
       context:    { filename: e.filename, lineno: e.lineno, colno: e.colno },
+      request_id: getLastRequestId() ?? undefined,
     });
   });
 
@@ -70,6 +73,7 @@ export function installGlobalErrorHandlers() {
       stack:      err?.stack,
       path:       window.location.pathname,
       error_type: "UnhandledRejection",
+      request_id: getLastRequestId() ?? undefined,
     });
   });
 }
