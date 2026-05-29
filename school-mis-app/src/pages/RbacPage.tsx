@@ -166,8 +166,9 @@ function RolesTab() {
 // ── Tab: User Roles ───────────────────────────────────────────────────────────
 
 function UserRolesTab() {
-  const { can } = useAuthStore();
+  const { can, user: currentUser } = useAuthStore();
   const canManage = can("settings.users.manage");
+  const isSuperadmin = currentUser?.role === "superadmin";
 
   const [users, setUsers]           = useState<AppUser[]>([]);
   const [allRoles, setAllRoles]     = useState<RbacRole[]>([]);
@@ -240,8 +241,10 @@ function UserRolesTab() {
   const availableRoles = allRoles.filter((r) => !assignedIds.has(r.id));
   const filteredUsers  = users.filter(
     (u) =>
-      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      u.username.toLowerCase().includes(search.toLowerCase())
+      // School admins never see superadmin accounts in the user list
+      (isSuperadmin || u.role !== "superadmin") &&
+      (u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+       u.username.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -352,8 +355,9 @@ function UserRolesTab() {
 // ── Tab: Permission Overrides ─────────────────────────────────────────────────
 
 function OverridesTab() {
-  const { can } = useAuthStore();
+  const { can, user: currentUser } = useAuthStore();
   const canManage = can("settings.users.manage");
+  const isSuperadmin = currentUser?.role === "superadmin";
 
   const [users, setUsers]           = useState<AppUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
@@ -418,8 +422,9 @@ function OverridesTab() {
 
   const filteredUsers = users.filter(
     (u) =>
-      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      u.username.toLowerCase().includes(search.toLowerCase())
+      (isSuperadmin || u.role !== "superadmin") &&
+      (u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+       u.username.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (

@@ -12,12 +12,19 @@ from database.db import fetch_all, fetch_one, execute
 router = APIRouter(tags=["rbac"])
 Usr = Annotated[dict, Depends(require_auth)]
 
+# Roles that belong to the platform layer — never visible/assignable by school admins.
+PLATFORM_ROLES = {"superadmin"}
+
+
+def _is_superadmin(user: dict) -> bool:
+    return user.get("role") == "superadmin"
+
 
 # ── Roles ──────────────────────────────────────────────────────────────────────
 
 @router.get("/roles")
 def list_roles(user: Usr):
-    """List all roles with their permissions."""
+    """List roles. School admins see only school-scoped roles; superadmin sees all."""
     if not authorize(user, "settings.roles.manage") and not authorize(user, "settings.users.manage"):
         raise HTTPException(403, "Permission denied")
     rows = fetch_all("""
@@ -31,6 +38,9 @@ def list_roles(user: Usr):
     """)
     result = []
     for r in rows:
+        # Hide platform-only roles from school admins
+        if not _is_superadmin(user) and r["name"] in PLATFORM_ROLES:
+            continue
         d = dict(r)
         d["permissions"] = [p for p in (d["permissions"] or "").split(",") if p]
         result.append(d)
@@ -362,6 +372,8 @@ def get_user_roles(uid: int, user: Usr):
     target = fetch_one("SELECT id, username, full_name, role FROM users WHERE id=?", (uid,))
     if not target:
         raise HTTPException(404, "User not found")
+    if not _is_superadmin(user) and target["role"] in PLATFORM_ROLES:
+        raise HTTPException(403, "School administrators cannot view platform account details")
     rows = fetch_all("""
         SELECT r.id, r.name, r.label, r.color
         FROM user_roles ur
@@ -381,15 +393,26 @@ def set_user_roles(uid: int, body: SetUserRolesPayload, user: Usr):
     """Replace all roles for a user."""
     if not authorize(user, "settings.users.manage"):
         raise HTTPException(403, "Permission denied: settings.users.manage")
-    target = fetch_one("SELECT id FROM users WHERE id=?", (uid,))
+    target = fetch_one("SELECT id, role FROM users WHERE id=?", (uid,))
     if not target:
         raise HTTPException(404, "User not found")
+
+    # School admins cannot manage superadmin accounts
+    if not _is_superadmin(user) and target["role"] in PLATFORM_ROLES:
+        raise HTTPException(403, "School administrators cannot manage platform accounts")
+
+    # School admins cannot assign platform-only roles
+    assigned_count = 0
     execute("DELETE FROM user_roles WHERE user_id=?", (uid,))
     for role_id in body.role_ids:
-        role = fetch_one("SELECT id FROM roles WHERE id=?", (role_id,))
-        if role:
-            execute(
-                "INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by) VALUES (?,?,?)",
-                (uid, role_id, user["id"]),
-            )
-    return {"ok": True, "user_id": uid, "roles_set": len(body.role_ids)}
+        role = fetch_one("SELECT id, name FROM roles WHERE id=?", (role_id,))
+        if not role:
+            continue
+        if not _is_superadmin(user) and role["name"] in PLATFORM_ROLES:
+            continue  # silently skip platform roles — school admin cannot grant them
+        execute(
+            "INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by) VALUES (?,?,?)",
+            (uid, role_id, user["id"]),
+        )
+        assigned_count += 1
+    return {"ok": True, "user_id": uid, "roles_set": assigned_count}
