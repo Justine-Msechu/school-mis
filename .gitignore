@@ -52,6 +52,9 @@ dist/
 build/
 *.spec
 
+# Secrets — never commit (.env.example is safe to commit, .env is not)
+.env
+
 # Auto-fix agent
 tools/.env
 tools/.autofix_state.json

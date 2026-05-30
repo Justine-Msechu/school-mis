@@ -1,5 +1,9 @@
 version: "3.9"
 
+# Secrets are loaded from .env (gitignored).
+# Copy .env.example → .env and fill in values before running.
+env_file: .env
+
 services:
 
   # ── 1. PostgreSQL ──────────────────────────────────────────
@@ -8,13 +12,13 @@ services:
     container_name: school-mis-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       school_mis
-      POSTGRES_USER:     school_mis
-      POSTGRES_PASSWORD: school_mis_secret
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U school_mis -d school_mis"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout:  5s
       retries:  5
@@ -32,10 +36,14 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://school_mis:school_mis_secret@postgres:5432/school_mis
-      # Uncomment to enable payment gateways:
-      # FLW_SECRET_KEY:      your_flutterwave_key
-      # PAYSTACK_SECRET_KEY: your_paystack_key
+      DATABASE_URL:      ${DATABASE_URL}
+      FINANCE_HMAC_KEY:  ${FINANCE_HMAC_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Payment gateways — blank values mean the provider is disabled (no error)
+      FLW_SECRET_KEY:      ${FLW_SECRET_KEY}
+      FLW_PUBLIC_KEY:      ${FLW_PUBLIC_KEY}
+      FLW_WEBHOOK_SECRET:  ${FLW_WEBHOOK_SECRET}
+      PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY}
     volumes:
       - uploads:/app/backend/uploads
     expose:
