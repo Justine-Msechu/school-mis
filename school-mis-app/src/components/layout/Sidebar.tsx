@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import {
   LayoutDashboard, Users, GraduationCap, BookOpen,
-  Award, Calendar, Library, DollarSign, Building2,
+  Award, Calendar, CalendarDays, Library, DollarSign, Building2,
   Bus, Package, Heart, HandHeart, TrendingUp,
   BarChart2, Settings, LogOut, ChevronDown, Shield,
   UserCheck, FileText, UsersRound, ShieldCheck, Banknote, Handshake, X,
@@ -42,11 +42,12 @@ const NAV_GROUPS: NavGroupDef[] = [
   {
     label: "Academics",
     items: [
-      { icon: Award,      label: "Grades",        to: "/grades",        perm: "grades.view" },
-      { icon: Calendar,   label: "Attendance",    to: "/attendance",    perm: "attendance.view" },
-      { icon: UserCheck,  label: "Enrollment",    to: "/enrollment",    perm: "enrollment.view" },
-      { icon: FileText,   label: "Report Cards",  to: "/report-cards",  perm: "report_cards.view" },
-      { icon: Library,    label: "Library",       to: "/library",       perm: "library.view" },
+      { icon: Award,        label: "Grades",        to: "/grades",        perm: "grades.view" },
+      { icon: Calendar,     label: "Attendance",    to: "/attendance",    perm: "attendance.view" },
+      { icon: CalendarDays, label: "Timetable",     to: "/timetable",     perm: "timetable.view" },
+      { icon: UserCheck,    label: "Enrollment",    to: "/enrollment",    perm: "enrollment.view" },
+      { icon: FileText,     label: "Report Cards",  to: "/report-cards",  perm: "report_cards.view" },
+      { icon: Library,      label: "Library",       to: "/library",       perm: "library.view" },
     ],
   },
   {

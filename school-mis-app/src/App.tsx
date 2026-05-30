@@ -39,6 +39,7 @@ const RbacPage                  = lazy(() => import("@/pages/RbacPage"));
 const PayrollPage               = lazy(() => import("@/pages/PayrollPage"));
 const NGOPage                   = lazy(() => import("@/pages/NGOPage"));
 const SubscriptionPage          = lazy(() => import("@/pages/SubscriptionPage"));
+const TimetablePage             = lazy(() => import("@/pages/TimetablePage"));
 const SuperAdminPage            = lazy(() => import("@/pages/SuperAdminPage"));
 const PlatformDashboard         = lazy(() => import("@/pages/platform/PlatformDashboard"));
 const PlatformSettingsPage      = lazy(() => import("@/pages/platform/PlatformSettingsPage"));
@@ -141,6 +142,7 @@ function AuthenticatedApp() {
         <Route path="/rbac"         element={<AdminRoute><RbacPage /></AdminRoute>} />
         <Route path="/payroll"      element={<PermRoute perm="payroll.view"><PayrollPage /></PermRoute>} />
         <Route path="/ngo"          element={<PermRoute perm="ngo.view"><NGOPage /></PermRoute>} />
+        <Route path="/timetable"    element={<PermRoute perm="timetable.view"><TimetablePage /></PermRoute>} />
         <Route path="/subscription" element={<AdminRoute><SubscriptionPage /></AdminRoute>} />
       </Routes>
     </AppShell>

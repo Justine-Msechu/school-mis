@@ -66,6 +66,7 @@ const LABELS: Record<string, string> = {
   classes:        "Classes",
   grades:         "Grades & Examinations",
   attendance:     "Attendance",
+  timetable:      "Timetable",
   library:        "Library",
   finance:        "Finance",
   accounting:     "Accounting",
