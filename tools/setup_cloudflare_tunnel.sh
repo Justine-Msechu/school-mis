@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Sets up a Cloudflare Tunnel on this Mac Mini so that
+# Sets up a Cloudflare Tunnel on this Ubuntu machine so that
 # maarifahub.co.tz → nginx (localhost:80) via Cloudflare.
 #
-# Run once on the Mac Mini:
+# Run once on the Mac Mini (Ubuntu):
 #   bash tools/setup_cloudflare_tunnel.sh
 
 set -e
@@ -11,7 +11,7 @@ TUNNEL_NAME="school-mis"
 DOMAIN="maarifahub.co.tz"
 WWW_DOMAIN="www.maarifahub.co.tz"
 NGINX_PORT=80
-CONFIG_DIR="$HOME/.cloudflared"
+CONFIG_DIR="/etc/cloudflared"
 CONFIG_FILE="$CONFIG_DIR/config.yml"
 
 # ── colours ───────────────────────────────────────────────────────
@@ -28,18 +28,22 @@ step "1/6  Installing cloudflared"
 if command -v cloudflared &>/dev/null; then
     info "Already installed: $(cloudflared --version)"
 else
-    if ! command -v brew &>/dev/null; then
-        echo "Homebrew not found. Install it first: https://brew.sh"
-        exit 1
-    fi
-    brew install cloudflared
+    # Official Cloudflare apt repo
+    sudo mkdir -p /usr/share/keyrings
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+        | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] \
+https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" \
+        | sudo tee /etc/apt/sources.list.d/cloudflared.list
+    sudo apt-get update -qq
+    sudo apt-get install -y cloudflared
     info "Installed: $(cloudflared --version)"
 fi
 
 # ── 2. Authenticate ───────────────────────────────────────────────
 step "2/6  Logging in to Cloudflare"
-info "A browser window will open — pick the maarifahub.co.tz zone and authorise."
-info "If you are on an SSH session without a browser, copy the URL it prints and open it on another device."
+info "cloudflared will print a URL — open it in any browser on any device."
+info "Select the maarifahub.co.tz zone and authorise."
 cloudflared tunnel login
 
 # ── 3. Create tunnel ─────────────────────────────────────────────
@@ -55,10 +59,10 @@ info "Tunnel ID: $TUNNEL_ID"
 
 # ── 4. Write config ───────────────────────────────────────────────
 step "4/6  Writing $CONFIG_FILE"
-CRED_FILE="$CONFIG_DIR/$TUNNEL_ID.json"
+CRED_FILE="$HOME/.cloudflared/$TUNNEL_ID.json"
 
-mkdir -p "$CONFIG_DIR"
-cat > "$CONFIG_FILE" <<EOF
+sudo mkdir -p "$CONFIG_DIR"
+sudo tee "$CONFIG_FILE" > /dev/null <<EOF
 tunnel: $TUNNEL_ID
 credentials-file: $CRED_FILE
 
@@ -71,7 +75,7 @@ ingress:
   - service: http_status:404
 EOF
 
-info "Written."
+info "Written to $CONFIG_FILE"
 
 # ── 5. Route DNS ─────────────────────────────────────────────────
 step "5/6  Routing DNS ($DOMAIN and $WWW_DOMAIN → tunnel)"
@@ -79,22 +83,23 @@ cloudflared tunnel route dns "$TUNNEL_NAME" "$DOMAIN"
 cloudflared tunnel route dns "$TUNNEL_NAME" "$WWW_DOMAIN"
 info "CNAME records created in Cloudflare (proxied)."
 
-# ── 6. Install as a launchd service ──────────────────────────────
-step "6/6  Installing cloudflared as a system service (auto-starts on boot)"
+# ── 6. Install as a systemd service ──────────────────────────────
+step "6/6  Installing cloudflared as a systemd service (auto-starts on boot)"
 sudo cloudflared service install
-sudo launchctl load /Library/LaunchDaemons/com.cloudflare.cloudflared.plist 2>/dev/null || true
+sudo systemctl enable cloudflared
+sudo systemctl start cloudflared
 
-# verify
 sleep 2
-if sudo launchctl list | grep -q cloudflared; then
-    info "Service running."
+if systemctl is-active --quiet cloudflared; then
+    info "Service is running."
 else
-    info "Service may need a moment — check with: sudo launchctl list | grep cloudflared"
+    info "Service did not start cleanly — check: sudo journalctl -u cloudflared -n 50"
 fi
 
 echo
 echo "${bold}${green}Done!${reset}"
-echo "  Test: open https://$DOMAIN in a browser."
-echo "  Logs: sudo tail -f /Library/Logs/com.cloudflare.cloudflared.log"
-echo "  Stop: sudo launchctl unload /Library/LaunchDaemons/com.cloudflare.cloudflared.plist"
-echo "  Start: sudo launchctl load /Library/LaunchDaemons/com.cloudflare.cloudflared.plist"
+echo "  Test:   open https://$DOMAIN in a browser"
+echo "  Logs:   sudo journalctl -u cloudflared -f"
+echo "  Stop:   sudo systemctl stop cloudflared"
+echo "  Start:  sudo systemctl start cloudflared"
+echo "  Status: sudo systemctl status cloudflared"
