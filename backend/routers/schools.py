@@ -134,6 +134,7 @@ async def register_school(body: RegisterPayload):
                 "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
                 (user_id, admin_role["id"]),
             )
+        _seed_demo_data(school_id, user_id)
         return {
             "ok": True,
             "school_name": body.school_name,
@@ -142,6 +143,111 @@ async def register_school(body: RegisterPayload):
         }
 
     return await asyncio.to_thread(_db)
+
+
+def _seed_demo_data(school_id: int, admin_user_id: int) -> None:
+    """Insert demo data so a newly registered school has something to show."""
+    from datetime import date
+    try:
+        year = date.today().year
+        label = f"{year}/{year + 1}"
+
+        # Academic year
+        ay_id = execute(
+            """INSERT INTO academic_years (label, start_date, end_date, is_current, school_id)
+               VALUES (?, ?, ?, 1, ?)""",
+            (label, f"{year}-01-01", f"{year}-12-31", school_id),
+        )
+
+        # Two teachers
+        t1_id = execute(
+            "INSERT INTO teachers (first_name, last_name, gender, phone, role, hire_date) VALUES (?,?,?,?,?,?)",
+            ("Amina", "Mwangi", "Female", "+255 712 000 001", "Class Teacher", f"{year}-01-15"),
+        )
+        t2_id = execute(
+            "INSERT INTO teachers (first_name, last_name, gender, phone, role, hire_date) VALUES (?,?,?,?,?,?)",
+            ("John", "Ochieng", "Male", "+255 712 000 002", "Subject Teacher", f"{year}-01-15"),
+        )
+
+        # Teacher user accounts (must_change_pw=1 so they set their own password)
+        import bcrypt
+        _pw = bcrypt.hashpw(b"teacher123", bcrypt.gensalt(10)).decode()
+        execute(
+            "INSERT INTO users (username,password_hash,salt,pw_scheme,full_name,role,is_active,must_change_pw,school_id,teacher_id) VALUES (?,?,'','bcrypt',?,?,1,1,?,?)",
+            ("amina.mwangi", _pw, "Amina Mwangi", "class_teacher", school_id, t1_id),
+        )
+        execute(
+            "INSERT INTO users (username,password_hash,salt,pw_scheme,full_name,role,is_active,must_change_pw,school_id,teacher_id) VALUES (?,?,'','bcrypt',?,?,1,1,?,?)",
+            ("john.ochieng", _pw, "John Ochieng", "subject_teacher", school_id, t2_id),
+        )
+
+        # Two classes
+        c1_id = execute(
+            "INSERT INTO classes (name, grade_level, academic_year_id, teacher_id, capacity) VALUES (?,?,?,?,?)",
+            ("Grade 1A", 1, ay_id, t1_id, 40),
+        )
+        c2_id = execute(
+            "INSERT INTO classes (name, grade_level, academic_year_id, teacher_id, capacity) VALUES (?,?,?,?,?)",
+            ("Grade 2B", 2, ay_id, t2_id, 40),
+        )
+
+        # Four students (2 per class)
+        students_data = [
+            ("ADM001", "Fatuma",  "Hassan",   "Female", "2016-03-12", c1_id),
+            ("ADM002", "Michael", "Kariuki",  "Male",   "2016-07-04", c1_id),
+            ("ADM003", "Grace",   "Mutua",    "Female", "2015-11-20", c2_id),
+            ("ADM004", "James",   "Ndirangu", "Male",   "2015-05-18", c2_id),
+        ]
+        s_ids = []
+        for adm, fn, ln, gender, dob, cid in students_data:
+            sid = execute(
+                """INSERT INTO students
+                   (admission_no, first_name, last_name, gender, date_of_birth,
+                    class_id, enrollment_date, is_active)
+                   VALUES (?,?,?,?,?,?,?,1)""",
+                (adm, fn, ln, gender, dob, cid, f"{year}-01-15"),
+            )
+            s_ids.append((sid, cid))
+
+        # Fee type + structures + bills
+        ft_id = execute(
+            "INSERT INTO fee_types (name, amount, term) VALUES (?,?,?)",
+            ("Tuition Fee", 150000, 1),
+        )
+        for sid, cid in s_ids:
+            fs_id = execute(
+                "INSERT INTO fee_structures (academic_year_id, class_id, fee_type_id, amount, term) VALUES (?,?,?,?,?)",
+                (ay_id, cid, ft_id, 150000, 1),
+            )
+            execute(
+                """INSERT INTO student_bills
+                   (student_id, fee_structure_id, academic_year_id, amount_due, amount_paid, balance, term)
+                   VALUES (?,?,?,?,0,?,1)""",
+                (sid, fs_id, ay_id, 150000, 150000),
+            )
+
+        # Sample attendance (last 5 school days)
+        from datetime import timedelta
+        today = date.today()
+        school_days = []
+        d = today
+        while len(school_days) < 5:
+            if d.weekday() < 5:
+                school_days.append(d.isoformat())
+            d -= timedelta(days=1)
+        for sid, cid in s_ids:
+            for i, att_date in enumerate(school_days):
+                try:
+                    execute(
+                        "INSERT INTO attendance (student_id, class_id, date, status, recorded_by) VALUES (?,?,?,?,?)",
+                        (sid, cid, att_date, "absent" if i == 4 else "present", admin_user_id),
+                    )
+                except Exception:
+                    pass
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Demo seed failed (non-fatal): %s", e)
 
 
 # ── Superadmin: platform-wide stats ───────────────────────────────────────────

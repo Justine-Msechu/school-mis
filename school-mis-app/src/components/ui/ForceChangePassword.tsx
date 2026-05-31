@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
 import { changePassword } from "@/api/auth";
+import api from "@/api/client";
 import { useAuthStore } from "@/stores/authStore";
 import { useToast } from "@/components/ui/Toast";
 
@@ -92,6 +93,17 @@ export default function ForceChangePassword() {
             className="mt-2 h-10 w-full bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
           >
             {loading ? "Saving…" : "Set New Password"}
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              try { await api.post("/auth/dismiss-force-change"); } catch { /* ignore */ }
+              setMustChangePw(false);
+            }}
+            className="h-8 w-full text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Skip for now
           </button>
         </form>
       </div>

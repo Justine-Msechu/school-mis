@@ -271,6 +271,13 @@ def me(user: Usr):
     }
 
 
+@router.post("/dismiss-force-change")
+def dismiss_force_change(user: Usr):
+    """Clear the must_change_pw flag for the current user (self-service escape hatch)."""
+    execute("UPDATE users SET must_change_pw=0 WHERE id=?", (user["id"],))
+    return {"ok": True}
+
+
 @router.get("/sessions")
 def list_sessions(user: Usr):
     """Return a user's active sessions (for a 'Manage devices' UI)."""
