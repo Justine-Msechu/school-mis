@@ -47,6 +47,10 @@ _DDL: list[str] = [
         school_id INTEGER REFERENCES schools(id),
         UNIQUE(key, school_id)
     )""",
+    # Partial unique index so ON CONFLICT DO NOTHING works for global (school_id IS NULL) rows.
+    # The composite UNIQUE(key, school_id) allows duplicate (key, NULL) pairs in PostgreSQL
+    # because NULL != NULL — this index closes that gap.
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_school_config_global_key ON school_config(key) WHERE school_id IS NULL",
 
     # ── Academic calendar ─────────────────────────────────────────────────────
     """CREATE TABLE IF NOT EXISTS academic_years (
@@ -72,19 +76,23 @@ _DDL: list[str] = [
 
     # ── Teachers ──────────────────────────────────────────────────────────────
     """CREATE TABLE IF NOT EXISTS teachers (
-        id            SERIAL PRIMARY KEY,
-        first_name    TEXT    NOT NULL,
-        last_name     TEXT    NOT NULL,
-        gender        TEXT    CHECK(gender IN ('Male','Female','Other')),
-        phone         TEXT,
-        email         TEXT,
-        role          TEXT    DEFAULT 'Teacher',
-        qualification TEXT,
-        hire_date     TEXT,
-        is_active     INTEGER DEFAULT 1,
-        notes         TEXT,
-        created_at    TEXT    DEFAULT CURRENT_DATE::text,
-        deleted_at    TEXT
+        id                     SERIAL PRIMARY KEY,
+        first_name             TEXT    NOT NULL,
+        last_name              TEXT    NOT NULL,
+        employee_no            TEXT    UNIQUE,
+        gender                 TEXT    CHECK(gender IN ('Male','Female','Other')),
+        date_of_birth          TEXT,
+        phone                  TEXT,
+        email                  TEXT,
+        subject_specialization TEXT,
+        role                   TEXT    DEFAULT 'Teacher',
+        qualification          TEXT,
+        joining_date           TEXT,
+        hire_date              TEXT,
+        is_active              INTEGER DEFAULT 1,
+        notes                  TEXT,
+        created_at             TEXT    DEFAULT CURRENT_DATE::text,
+        deleted_at             TEXT
     )""",
 
     # ── Users ─────────────────────────────────────────────────────────────────
@@ -1101,7 +1109,18 @@ def run() -> None:
         except Exception as exc:
             log.debug("Schema DDL skipped (%s): %.80s", exc, stmt.strip()[:80])
 
-    # 2. Seed expense categories
+    # 2. Seed sequence counters for auto-generated IDs (idempotent)
+    try:
+        for seq_key in ("student_adm_seq", "teacher_emp_seq"):
+            execute(
+                "INSERT INTO school_config (key, value) VALUES (%s, '0')"
+                " ON CONFLICT DO NOTHING",
+                (seq_key,),
+            )
+    except Exception:
+        pass
+
+    # 3. Seed expense categories
     try:
         execute_many(
             "INSERT INTO expense_categories(name,account_code) VALUES(%s,%s)"

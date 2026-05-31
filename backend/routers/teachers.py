@@ -32,18 +32,21 @@ def _audit(user_id: int, action: str, record_id: int, detail: str):
 
 @router.get("")
 def list_teachers(user: Usr, search: str = Query(""), include_inactive: bool = Query(False)):
-    where = ["t.deleted_at IS NULL"]
+    where = []
     params: list = []
     if not include_inactive:
+        # Exclude soft-deleted and deactivated teachers from the default list
+        where.append("t.deleted_at IS NULL")
         where.append("t.is_active = 1")
     if search:
         where.append("(t.first_name || ' ' || t.last_name LIKE ? OR t.employee_no LIKE ? OR t.subject_specialization LIKE ?)")
         params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+    where_clause = " AND ".join(where) if where else "1=1"
     rows = fetch_all(
         f"""SELECT t.*, u.id as user_id, u.username, u.role, u.is_active as user_active
             FROM teachers t
             LEFT JOIN users u ON u.teacher_id = t.id
-            WHERE {' AND '.join(where)}
+            WHERE {where_clause}
             ORDER BY t.last_name, t.first_name""",
         params,
     )

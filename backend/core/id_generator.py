@@ -19,6 +19,12 @@ def _year() -> int:
 
 def _next_seq(config_key: str) -> int:
     """Increment the counter atomically and return the new value."""
+    # Ensure the row exists first (handles PostgreSQL fresh installs where
+    # migration 004 is SQLite-only and never seeds school_config in PG mode)
+    execute(
+        "INSERT OR IGNORE INTO school_config (key, value) VALUES (?, '0')",
+        (config_key,),
+    )
     execute(
         "UPDATE school_config SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = ?",
         (config_key,),
