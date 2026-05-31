@@ -149,7 +149,11 @@ def get_user_from_token(token: str) -> dict | None:
         role_info = ROLES.get(role, {})
         user["role_label"]  = role_info.get("label", role) if isinstance(role_info, dict) else str(role_info)
         user["role_color"]  = role_info.get("color", "#94A3B8") if isinstance(role_info, dict) else "#94A3B8"
-        user["permissions"] = compute_effective_permissions(user["id"])
+        try:
+            user["permissions"] = compute_effective_permissions(user["id"])
+        except Exception as _e:
+            log.warning("get_user_from_token: compute_effective_permissions failed for user %s: %s", user.get("id"), _e)
+            user["permissions"] = ["*"] if role in ("admin", "superadmin") else []
         user["school_id"]   = row["school_id"] or user.get("school_id")
         user["_token"]      = token     # for logout use
         user["_token_hash"] = t_hash
