@@ -177,6 +177,14 @@ def _adapt(sql: str) -> tuple[str, bool]:
     # Datetime functions (handles both bare and modifier forms)
     sql = _DATETIME_NOW.sub(_datetime_now_sub, sql)
     sql = _DATE_NOW.sub(_date_now_sub, sql)
+
+    # Dynamic date: date('now', %s || ' months') → CURRENT_DATE + (%s || ' months')::interval
+    # (runs after ?→%s so the placeholder is already %s)
+    sql = re.sub(
+        r"\bdate\('now',\s*%s\s*\|\|\s*'([^']*)'\s*\)",
+        lambda m: f"(CURRENT_DATE + (%s || '{m.group(1)}')::interval)",
+        sql, flags=re.I,
+    )
     # strftime with 'now' → TO_CHAR(CURRENT_DATE, ...) — must run before general strftime
     sql = _STRFTIME_NOW.sub(_strftime_now_sub, sql)
     # strftime with a column reference → TO_CHAR(col::timestamp, ...)

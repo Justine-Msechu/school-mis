@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.deps import require_auth, hydrate_session
-from backend.core.db import _get_conn
+from backend.core.db import _get_conn, execute as db_execute, fetch_one as db_fetch_one
 from backend.core.security import require_permission
 from backend.core.exceptions import AppError
 from backend.services.grades_service import GradesApprovalService
@@ -67,27 +67,22 @@ class ExamPayload(BaseModel):
 @router.post("/exams")
 def create_exam(body: ExamPayload, user: Usr):
     require_permission(user, "grades.view")
-    conn = _get_conn()
-    cur = conn.execute(
+    exam_id = db_execute(
         "INSERT INTO exams (name, term, academic_year_id, start_date, end_date, status) VALUES (?,?,?,?,?,?)",
         (body.name, body.term, body.academic_year_id, body.start_date, body.end_date, body.status),
     )
-    conn.commit()
-    row = conn.execute("SELECT * FROM exams WHERE id=?", (cur.lastrowid,)).fetchone()
-    return dict(row)
+    return db_fetch_one("SELECT * FROM exams WHERE id=?", (exam_id,)) or {}
 
 
 @router.put("/exams/{exam_id}")
 def update_exam(exam_id: int, body: ExamPayload, user: Usr):
     require_permission(user, "grades.view")
-    conn = _get_conn()
-    conn.execute(
+    db_execute(
         "UPDATE exams SET name=?, term=?, academic_year_id=?, start_date=?, end_date=?, status=? WHERE id=?",
         (body.name, body.term, body.academic_year_id, body.start_date, body.end_date, body.status, exam_id),
     )
-    conn.commit()
-    row = conn.execute("SELECT * FROM exams WHERE id=?", (exam_id,)).fetchone()
-    return dict(row) if row else HTTPException(404, "Exam not found")
+    row = db_fetch_one("SELECT * FROM exams WHERE id=?", (exam_id,))
+    return row if row else HTTPException(404, "Exam not found")
 
 
 # ── Grade sheet ────────────────────────────────────────────────────────────────
@@ -295,14 +290,11 @@ class HomeworkPayload(BaseModel):
 @router.post("/homework")
 def create_homework(body: HomeworkPayload, user: Usr):
     require_permission(user, "homework.write")
-    conn = _get_conn()
-    cur = conn.execute(
+    hw_id = db_execute(
         "INSERT INTO homework_assignments (class_id, subject_id, title, instructions, deadline, max_points, created_by) VALUES (?,?,?,?,?,?,?)",
         (body.class_id, body.subject_id, body.title, body.instructions, body.deadline, body.max_points, user.get("id")),
     )
-    conn.commit()
-    row = conn.execute("SELECT * FROM homework_assignments WHERE id=?", (cur.lastrowid,)).fetchone()
-    return dict(row)
+    return db_fetch_one("SELECT * FROM homework_assignments WHERE id=?", (hw_id,)) or {}
 
 
 @router.get("/homework/{hw_id}/submissions")

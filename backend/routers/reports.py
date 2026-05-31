@@ -38,11 +38,12 @@ def attendance_summary(user: Usr, class_id: int = Query(None), month: str = Quer
                    COUNT(*) as total_days,
                    SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) as present,
                    SUM(CASE WHEN a.status='absent'  THEN 1 ELSE 0 END) as absent,
-                   ROUND(100.0 * SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) / COUNT(*), 1) as rate
+                   ROUND(CAST(100.0 * SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) / COUNT(*) AS NUMERIC), 1) as rate
             FROM attendance a
             JOIN students s ON s.id=a.student_id
             WHERE {' AND '.join(where)}
-            GROUP BY a.student_id ORDER BY rate ASC""",
+            GROUP BY a.student_id, s.first_name, s.last_name, s.admission_no
+            ORDER BY rate ASC""",
         params,
     )
     result = [dict(r) for r in rows]
@@ -94,7 +95,7 @@ def grade_summary(user: Usr, exam_id: int = Query(None)):
     rows = fetch_all(
         f"""SELECT c.name as class_name, s.name as subject_name,
                    COUNT(g.id) as total,
-                   ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100),1) as avg_pct,
+                   ROUND(CAST(AVG(CAST(g.score AS FLOAT)/NULLIF(g.max_score,0)*100) AS NUMERIC),1) as avg_pct,
                    SUM(CASE WHEN g.grade_letter='A' THEN 1 ELSE 0 END) as a_count,
                    SUM(CASE WHEN g.grade_letter='B' THEN 1 ELSE 0 END) as b_count,
                    SUM(CASE WHEN g.grade_letter='C' THEN 1 ELSE 0 END) as c_count,
@@ -105,7 +106,8 @@ def grade_summary(user: Usr, exam_id: int = Query(None)):
             JOIN classes c ON c.id=st.class_id
             JOIN subjects s ON s.id=g.subject_id
             {where}
-            GROUP BY st.class_id, g.subject_id ORDER BY c.name, s.name""",
+            GROUP BY st.class_id, g.subject_id, c.name, s.name
+            ORDER BY c.name, s.name""",
         params,
     )
     result = [dict(r) for r in rows]
@@ -214,7 +216,7 @@ def my_subject_averages(user: Usr, exam_id: int = Query(None), subject_id: int =
             params.append(exam_id)
 
         row = fetch_one(
-            f"""SELECT ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100),1) AS avg_pct,
+            f"""SELECT ROUND(CAST(AVG(CAST(g.score AS FLOAT)/NULLIF(g.max_score,0)*100) AS NUMERIC),1) AS avg_pct,
                        COUNT(g.id) AS total_students,
                        SUM(CASE WHEN g.grade_letter='A' THEN 1 ELSE 0 END) AS a,
                        SUM(CASE WHEN g.grade_letter='B' THEN 1 ELSE 0 END) AS b,
@@ -249,7 +251,7 @@ def my_subject_term_comparison(user: Usr, subject_id: int = Query(None)):
     for a in assignments:
         rows = fetch_all(
             """SELECT e.term,
-                      ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100),1) AS avg_pct
+                      ROUND(CAST(AVG(CAST(g.score AS FLOAT)/NULLIF(g.max_score,0)*100) AS NUMERIC),1) AS avg_pct
                FROM grades g
                JOIN exams e ON e.id=g.exam_id
                WHERE g.subject_id=? AND g.class_id=?
@@ -390,7 +392,7 @@ def my_class_subject_averages(user: Usr, exam_id: int = Query(None)):
 
     rows = fetch_all(
         f"""SELECT s.name AS subject,
-                   ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100), 1) AS avg_pct,
+                   ROUND(CAST(AVG(CAST(g.score AS FLOAT)/NULLIF(g.max_score,0)*100) AS NUMERIC), 1) AS avg_pct,
                    COUNT(g.id) AS total_students,
                    SUM(CASE WHEN g.grade_letter='A' THEN 1 ELSE 0 END) AS a,
                    SUM(CASE WHEN g.grade_letter='B' THEN 1 ELSE 0 END) AS b,
@@ -417,7 +419,7 @@ def my_class_term_comparison(user: Usr):
     rows = fetch_all(
         """SELECT e.term,
                   s.name AS subject,
-                  ROUND(AVG(CAST(g.score AS REAL)/NULLIF(g.max_score,0)*100), 1) AS avg_pct
+                  ROUND(CAST(AVG(CAST(g.score AS FLOAT)/NULLIF(g.max_score,0)*100) AS NUMERIC), 1) AS avg_pct
            FROM grades g
            JOIN exams e ON e.id=g.exam_id
            JOIN subjects s ON s.id=g.subject_id
@@ -449,7 +451,7 @@ def my_class_attendance_trend(user: Usr):
                   strftime('%d %b', MIN(date)) AS week_label,
                   COUNT(*) AS total,
                   SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,
-                  ROUND(100.0*SUM(CASE WHEN status='present' THEN 1 ELSE 0 END)/COUNT(*), 1) AS rate
+                  ROUND(CAST(100.0*SUM(CASE WHEN status='present' THEN 1 ELSE 0 END)/COUNT(*) AS NUMERIC), 1) AS rate
            FROM attendance
            WHERE class_id=?
              AND date >= date('now', '-98 days')
@@ -540,7 +542,7 @@ def fee_collection_by_class(
             JOIN students s ON s.id = sb.student_id
             LEFT JOIN classes c ON c.id = s.class_id
             WHERE {' AND '.join(where)}
-            GROUP BY s.class_id
+            GROUP BY s.class_id, c.name
             ORDER BY c.name""",
         params,
     )
@@ -629,9 +631,12 @@ def inventory_overview(user: Usr):
     total     = fetch_one("SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1")
     low       = fetch_one("SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1 AND stock_qty <= reorder_qty")
     value     = fetch_one("SELECT COALESCE(SUM(stock_qty * unit_price),0) AS v FROM inventory_items WHERE is_active=1")
-    pending   = fetch_one("SELECT COUNT(*) AS n FROM inventory_requests WHERE status='pending'")
-    today_in  = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='stock_in' AND DATE(created_at)=DATE('now')")
-    today_out = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='issued' AND DATE(created_at)=DATE('now')")
+    today_in  = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='stock_in' AND DATE(created_at::timestamp)=CURRENT_DATE")
+    today_out = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE type='issued' AND DATE(created_at::timestamp)=CURRENT_DATE")
+    try:
+        pending = fetch_one("SELECT COUNT(*) AS n FROM inventory_requests WHERE status='pending'")
+    except Exception:
+        pending = None
     result = {
         "total_items":      dict(total)["n"]   if total   else 0,
         "low_stock_count":  dict(low)["n"]     if low     else 0,
@@ -654,13 +659,13 @@ def inventory_by_category(user: Usr):
         return hit
     rows = fetch_all("""
         SELECT
-            COALESCE(main_category, 'Uncategorized') AS category,
+            COALESCE(main_category, category, 'Uncategorized') AS category,
             COUNT(*) AS item_count,
             COALESCE(SUM(stock_qty), 0) AS total_qty,
             COALESCE(SUM(stock_qty * unit_price), 0) AS total_value
         FROM inventory_items
         WHERE is_active = 1
-        GROUP BY COALESCE(main_category, 'Uncategorized')
+        GROUP BY COALESCE(main_category, category, 'Uncategorized')
         ORDER BY total_value DESC
     """)
     result = [dict(r) for r in rows]
@@ -697,12 +702,12 @@ def inventory_type_distribution(user: Usr):
     """Consumable vs asset breakdown."""
     rows = fetch_all("""
         SELECT
-            COALESCE(item_type, 'consumable') AS item_type,
+            COALESCE(item_type, category, 'consumable') AS item_type,
             COUNT(*) AS count,
             COALESCE(SUM(stock_qty * unit_price), 0) AS value
         FROM inventory_items
         WHERE is_active = 1
-        GROUP BY COALESCE(item_type, 'consumable')
+        GROUP BY COALESCE(item_type, category, 'consumable')
     """)
     return [dict(r) for r in rows]
 
@@ -712,7 +717,7 @@ def inventory_low_stock_detail(user: Usr):
     """Low-stock items with gap to reorder level, for the report table."""
     rows = fetch_all("""
         SELECT id, name,
-               COALESCE(main_category,'') AS main_category,
+               COALESCE(main_category, category, '') AS main_category,
                COALESCE(location,'') AS location,
                stock_qty AS quantity, reorder_qty, unit,
                COALESCE(unit_price,0) AS unit_price,

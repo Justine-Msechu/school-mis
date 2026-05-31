@@ -18,7 +18,8 @@ def list_classes(user: Usr):
            FROM classes c
            LEFT JOIN teachers t ON t.id = c.teacher_id
            LEFT JOIN students s ON s.class_id = c.id AND s.is_active = 1
-           GROUP BY c.id
+           GROUP BY c.id, c.name, c.grade_level, c.capacity, c.room,
+                    c.teacher_id, t.first_name, t.last_name
            ORDER BY c.grade_level, c.name"""
     )
     return [dict(r) for r in rows]
