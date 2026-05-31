@@ -34,6 +34,7 @@ from backend.routers import schools as schools_router
 from backend.routers import error_logs as error_logs_router
 from backend.routers import health_monitor as health_monitor_router
 from backend.routers import landing_media as landing_media_router
+from backend.routers import portal as portal_router
 from backend.subscriptions.router import router as new_subscription_router
 from backend.subscriptions.webhooks.router import router as webhooks_router
 
@@ -306,6 +307,7 @@ app.include_router(ai.router,                   prefix="/api/ai")
 app.include_router(error_logs_router.router,         prefix="/api/error-logs")
 app.include_router(health_monitor_router.router,    prefix="/api/platform/health")
 app.include_router(landing_media_router.router,     prefix="/api/landing/media")
+app.include_router(portal_router.router,            prefix="/api/portal")
 
 
 @app.get("/api/health")

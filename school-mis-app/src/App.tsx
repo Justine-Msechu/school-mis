@@ -6,6 +6,7 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 // ── Always-eager: tiny shells needed on every page ───────────────────────────
 import AppShell         from "@/components/layout/AppShell";
 import SuperAdminShell  from "@/components/layout/SuperAdminShell";
+import PortalShell      from "@/components/layout/PortalShell";
 import ForceChangePassword from "@/components/ui/ForceChangePassword";
 import { getSetupStatus } from "@/api/setup";
 import { useImpersonationStore } from "@/stores/impersonationStore";
@@ -40,6 +41,8 @@ const PayrollPage               = lazy(() => import("@/pages/PayrollPage"));
 const NGOPage                   = lazy(() => import("@/pages/NGOPage"));
 const SubscriptionPage          = lazy(() => import("@/pages/SubscriptionPage"));
 const TimetablePage             = lazy(() => import("@/pages/TimetablePage"));
+const StudentPortalPage         = lazy(() => import("@/pages/portal/StudentPortalPage"));
+const ParentPortalPage          = lazy(() => import("@/pages/portal/ParentPortalPage"));
 const SuperAdminPage            = lazy(() => import("@/pages/SuperAdminPage"));
 const PlatformDashboard         = lazy(() => import("@/pages/platform/PlatformDashboard"));
 const PlatformSettingsPage      = lazy(() => import("@/pages/platform/PlatformSettingsPage"));
@@ -96,6 +99,26 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function AuthenticatedApp() {
   const { user } = useAuthStore();
   const { active: isImpersonating } = useImpersonationStore();
+
+  if (user?.role === "student_portal") {
+    return (
+      <PortalShell>
+        <Routes>
+          <Route path="/*" element={<StudentPortalPage />} />
+        </Routes>
+      </PortalShell>
+    );
+  }
+
+  if (user?.role === "parent_portal") {
+    return (
+      <PortalShell>
+        <Routes>
+          <Route path="/*" element={<ParentPortalPage />} />
+        </Routes>
+      </PortalShell>
+    );
+  }
 
   if (user?.role === "superadmin" && !isImpersonating) {
     return (

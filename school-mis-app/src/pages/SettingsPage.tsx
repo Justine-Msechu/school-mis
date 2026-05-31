@@ -4,13 +4,15 @@ import { getUsers, getRoles, createUser, updateUser, toggleUserActive, getConfig
 import { getTeachers, type Teacher } from "@/api/teachers";
 import { getSubscriptionStatus, activateSubscription, type SubscriptionInfo } from "@/api/subscription";
 import { getSubjects, createSubject, updateSubject, toggleSubject, type Subject } from "@/api/subjects";
+import { listPortalAccounts, createStudentAccount, createParentAccount, deletePortalAccount, type PortalAccounts } from "@/api/portal";
+import { getStudents } from "@/api/students";
 import { useAuthStore } from "@/stores/authStore";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRow from "@/components/ui/SkeletonRow";
 
-type Tab = "users" | "school" | "years" | "subscription" | "subjects";
+type Tab = "users" | "school" | "years" | "subscription" | "subjects" | "portal";
 
 const INPUT = "w-full h-9 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -657,6 +659,186 @@ function SubjectsTab() {
   );
 }
 
+// ── Portal Accounts tab ──────────────────────────────────────────────────────
+
+type PortalForm = { student_id: string; username: string; password: string; full_name: string; relation: string };
+const EMPTY_FORM: PortalForm = { student_id: "", username: "", password: "", full_name: "", relation: "Parent" };
+
+function PortalAccountsTab() {
+  const [data, setData]       = useState<PortalAccounts | null>(null);
+  const [students, setStudents] = useState<{ id: number; first_name: string; last_name: string; admission_no: string }[]>([]);
+  const [form, setForm]       = useState<PortalForm>(EMPTY_FORM);
+  const [mode, setMode]       = useState<"student" | "parent">("student");
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [err, setErr]         = useState("");
+
+  const load = () => listPortalAccounts().then(setData).catch(() => {});
+
+  useEffect(() => {
+    load();
+    getStudents({}).then(r => setStudents(r.items)).catch(() => {});
+  }, []);
+
+  const set = (k: keyof PortalForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleCreate = async () => {
+    if (!form.student_id || !form.username || !form.password || !form.full_name) {
+      setErr("All fields are required."); return;
+    }
+    setSaving(true); setErr("");
+    try {
+      if (mode === "student") {
+        await createStudentAccount({ student_id: +form.student_id, username: form.username, password: form.password, full_name: form.full_name });
+      } else {
+        await createParentAccount({ student_id: +form.student_id, username: form.username, password: form.password, full_name: form.full_name, relation: form.relation });
+      }
+      setForm(EMPTY_FORM); setShowForm(false); load();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? "Failed to create account.");
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (userId: number) => {
+    if (!confirm("Delete this portal account? The user will no longer be able to log in.")) return;
+    await deletePortalAccount(userId).catch(() => {});
+    load();
+  };
+
+  const studentOptions = students.map(s => ({ value: s.id, label: `${s.first_name} ${s.last_name} (${s.admission_no})` }));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button variant="primary" icon={<Plus size={15} />} onClick={() => { setShowForm(o => !o); setErr(""); }}>
+          New Portal Account
+        </Button>
+      </div>
+
+      {showForm && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <h3 className="font-semibold text-gray-800">Create Portal Account</h3>
+          <div className="flex gap-2">
+            {(["student", "parent"] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${mode === m ? "bg-violet-600 text-white border-violet-600" : "border-gray-200 text-gray-600 hover:border-violet-300"}`}>
+                {m === "student" ? "Student Account" : "Parent Account"}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Student *</label>
+              <select value={form.student_id} onChange={set("student_id")} className={INPUT}>
+                <option value="">Select student…</option>
+                {studentOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Full Name *</label>
+              <input className={INPUT} value={form.full_name} onChange={set("full_name")} placeholder={mode === "student" ? "Student's full name" : "Parent/Guardian name"} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Username *</label>
+              <input className={INPUT} value={form.username} onChange={set("username")} placeholder="Login username" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Password *</label>
+              <input className={INPUT} type="password" value={form.password} onChange={set("password")} placeholder="Min. 6 characters" />
+            </div>
+            {mode === "parent" && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Relation</label>
+                <select value={form.relation} onChange={set("relation")} className={INPUT}>
+                  {["Parent", "Mother", "Father", "Guardian", "Uncle", "Aunt", "Grandparent", "Sibling"].map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          {err && <p className="text-red-500 text-sm">{err}</p>}
+          <div className="flex gap-2 justify-end pt-1">
+            <button onClick={() => { setShowForm(false); setErr(""); }} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+            <Button variant="primary" onClick={handleCreate} disabled={saving}>{saving ? "Creating…" : "Create Account"}</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Student accounts */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Student Accounts ({data?.student_accounts.length ?? 0})</h3>
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+              <tr>
+                <th className="px-4 py-3">Student</th>
+                <th className="px-4 py-3">Adm. No</th>
+                <th className="px-4 py-3">Username</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {!data
+                ? <tr><td colSpan={4} className="py-8 text-center text-gray-400 text-sm">Loading…</td></tr>
+                : data.student_accounts.length === 0
+                ? <tr><td colSpan={4} className="py-8 text-center text-gray-400 text-sm">No student portal accounts yet.</td></tr>
+                : data.student_accounts.map(a => (
+                  <tr key={a.user_id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium">{a.student_name}</td>
+                    <td className="px-4 py-3 text-gray-500">{a.admission_no}</td>
+                    <td className="px-4 py-3 text-gray-500">@{a.username}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => handleDelete(a.user_id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Parent accounts */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Parent Accounts ({data?.parent_accounts.length ?? 0})</h3>
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+              <tr>
+                <th className="px-4 py-3">Parent Name</th>
+                <th className="px-4 py-3">Student</th>
+                <th className="px-4 py-3">Relation</th>
+                <th className="px-4 py-3">Username</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {!data
+                ? <tr><td colSpan={5} className="py-8 text-center text-gray-400 text-sm">Loading…</td></tr>
+                : data.parent_accounts.length === 0
+                ? <tr><td colSpan={5} className="py-8 text-center text-gray-400 text-sm">No parent portal accounts yet.</td></tr>
+                : data.parent_accounts.map(a => (
+                  <tr key={a.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium">{a.full_name}</td>
+                    <td className="px-4 py-3 text-gray-500">{a.student_name} ({a.admission_no})</td>
+                    <td className="px-4 py-3 text-gray-500">{a.relation}</td>
+                    <td className="px-4 py-3 text-gray-500">@{a.username}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => handleDelete(a.user_id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { can } = useAuthStore();
   const canAllUsers    = can("settings.users.manage");
@@ -707,6 +889,7 @@ export default function SettingsPage() {
     canSchool   && { key: "school"       as Tab, label: "School Info" },
     canYears    && { key: "years"        as Tab, label: "Academic Years" },
     canSubjects && { key: "subjects"     as Tab, label: "Subjects" },
+    canAllUsers && { key: "portal"       as Tab, label: "Portal Accounts" },
     canSchool   && { key: "subscription" as Tab, label: "Subscription" },
   ].filter(Boolean) as Array<{ key: Tab; label: string }>;
 
@@ -790,6 +973,7 @@ export default function SettingsPage() {
       {tab === "school"        && <SchoolInfoTab />}
       {tab === "years"         && <AcademicYearsTab />}
       {tab === "subjects"      && <SubjectsTab />}
+      {tab === "portal"        && <PortalAccountsTab />}
       {tab === "subscription"  && <SubscriptionTab />}
 
       {editUser !== null && (
