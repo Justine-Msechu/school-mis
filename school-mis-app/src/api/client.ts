@@ -49,12 +49,16 @@ api.interceptors.response.use(
     if (rid) _lastRequestId = rid;
 
     if (err.response?.status === 401) {
-      // Clear auth state properly so the next render shows the landing page —
-      // no hard page reload, which would restart the flicker loop.
-      // Dynamic import avoids a circular-module reference at init time.
-      import("@/stores/authStore").then(({ useAuthStore }) => {
-        useAuthStore.getState().logout();
-      });
+      // Don't logout if we JUST logged in — the session INSERT on the backend
+      // can lag behind the first auth check by a few hundred ms, producing a
+      // spurious 401 that should not end the session.
+      const loginAt = Number(sessionStorage.getItem("mis_login_at") || 0);
+      const msSinceLogin = Date.now() - loginAt;
+      if (msSinceLogin > 8_000) {
+        import("@/stores/authStore").then(({ useAuthStore }) => {
+          useAuthStore.getState().logout();
+        });
+      }
     }
     if (err.response?.status === 402) {
       const detail = err.response.data?.detail ?? {};

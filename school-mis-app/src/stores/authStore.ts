@@ -58,6 +58,10 @@ export const useAuthStore = create<AuthState>()(
 
       login(user, token, mustChangePw = false, rememberMe = false) {
         sessionStorage.setItem("mis_token", token);
+        // Record login time so the 401 interceptor can ignore transient errors
+        // that fire in the first few seconds after login (e.g. refreshPermissions
+        // racing with the session INSERT completing on the backend).
+        sessionStorage.setItem("mis_login_at", String(Date.now()));
         if (rememberMe) {
           // Persist to localStorage so new tabs / browser restarts restore the session.
           // (Zustand's persist middleware writes this automatically via partialize.)
