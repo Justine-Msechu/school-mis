@@ -129,3 +129,57 @@ def delete_media(media_id: int, user: Usr):
 
     execute("DELETE FROM landing_media WHERE id=%s", (media_id,))
     return {"ok": True}
+
+
+# ── Contact form ──────────────────────────────────────────────────────────────
+
+class ContactPayload(BaseModel):
+    name:    str
+    email:   str
+    phone:   str = ""
+    school:  str = ""
+    message: str
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @staticmethod
+    def _check(v: str, field: str, max_len: int = 500) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError(f"{field} is required")
+        if len(v) > max_len:
+            raise ValueError(f"{field} is too long")
+        return v
+
+
+@router.post("/contact", status_code=201)
+def submit_contact(body: ContactPayload):
+    name    = body.name.strip()
+    email   = body.email.strip()
+    message = body.message.strip()
+
+    if not name or not email or not message:
+        raise HTTPException(400, "Name, email, and message are required")
+    if "@" not in email:
+        raise HTTPException(400, "Invalid email address")
+
+    execute(
+        """INSERT INTO contact_inquiries (name, email, phone, school, message)
+           VALUES (?,?,?,?,?)""",
+        (name, email, body.phone.strip(), body.school.strip(), message),
+    )
+    log.info("Contact inquiry from %s <%s> — %s", name, email, body.school.strip())
+    return {"ok": True}
+
+
+@router.get("/contact/inquiries")
+def list_inquiries(user: Usr):
+    from backend.core.security import require_permission
+    require_permission(user, "superadmin")
+    rows = fetch_all(
+        "SELECT * FROM contact_inquiries ORDER BY created_at DESC LIMIT 200",
+        (),
+    )
+    return [dict(r) for r in rows]

@@ -130,7 +130,8 @@ function BannerCarousel({ banners }: { banners: LandingMediaItem[] }) {
 export default function LandingPage() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [contact, setContact] = useState({ name: "", email: "", phone: "", school: "", message: "" });
+  const [contact, setContact]       = useState({ name: "", email: "", phone: "", school: "", message: "" });
+  const [contactState, setContactState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [media, setMedia] = useState<LandingMediaItem[]>([]);
 
   useEffect(() => {
@@ -141,6 +142,26 @@ export default function LandingPage() {
   const posters     = media.filter(m => m.media_type === "poster");
   const screenshots = media.filter(m => m.media_type === "screenshot");
   const hasMedia    = media.length > 0;
+
+  const handleContactSubmit = async () => {
+    const { name, email, message } = contact;
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setContactState("error");
+      return;
+    }
+    setContactState("sending");
+    try {
+      await fetch("/api/landing/media/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contact),
+      }).then(r => { if (!r.ok) throw new Error(); });
+      setContactState("sent");
+      setContact({ name: "", email: "", phone: "", school: "", message: "" });
+    } catch {
+      setContactState("error");
+    }
+  };
 
   const navLinks = [
     { label: "Home",         href: "#home" },
@@ -501,9 +522,24 @@ export default function LandingPage() {
                   rows={4} placeholder="Tell us about your school…"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
               </div>
-              <button className="w-full py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors">
-                Send Message
-              </button>
+              {contactState === "sent" ? (
+                <div className="w-full py-2.5 text-sm font-semibold text-center text-green-700 bg-green-50 rounded-xl border border-green-200">
+                  ✓ Message sent! We'll be in touch soon.
+                </div>
+              ) : (
+                <>
+                  {contactState === "error" && (
+                    <p className="text-xs text-red-500">Please fill in your name, email, and message.</p>
+                  )}
+                  <button
+                    onClick={handleContactSubmit}
+                    disabled={contactState === "sending"}
+                    className="w-full py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-xl transition-colors"
+                  >
+                    {contactState === "sending" ? "Sending…" : "Send Message"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
