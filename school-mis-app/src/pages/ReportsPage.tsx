@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { BarChart3, Users, BookOpen, DollarSign, Activity, Download } from "lucide-react";
-import { downloadCSV } from "@/utils/export";
+import { BarChart3, Users, BookOpen, DollarSign, Activity, Download, Printer } from "lucide-react";
+import { downloadCSV, printTable } from "@/utils/export";
 import { getReportsOverview, getAttendanceSummaryReport, getGradeSummaryReport, type ReportsOverview, type AttendanceSummaryRow, type GradeSummaryRow } from "@/api/reports";
 import { getExams } from "@/api/grades";
 import StatCard from "@/components/ui/StatCard";
@@ -70,22 +70,46 @@ export default function ReportsPage() {
           <p className="text-sm text-gray-500 mt-0.5">School-wide analytics and summaries</p>
         </div>
         {tab === "attendance" && attRows.length > 0 && (
-          <button
-            onClick={() => downloadCSV("Attendance_Summary", ["Student","Adm No","Days","Present","Absent","Rate %"],
-              attRows.map((r) => [r.student_name, r.admission_no, r.total_days, r.present, r.absent, r.rate]))}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Download size={14} /> Export CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => printTable(
+                "Attendance Summary", `Generated ${new Date().toLocaleDateString()}`,
+                ["Student","Adm No","Days","Present","Absent","Rate %"],
+                attRows.map((r) => [r.student_name, r.admission_no, r.total_days, r.present, r.absent, `${r.rate}%`])
+              )}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Printer size={14} /> Print PDF
+            </button>
+            <button
+              onClick={() => downloadCSV("Attendance_Summary", ["Student","Adm No","Days","Present","Absent","Rate %"],
+                attRows.map((r) => [r.student_name, r.admission_no, r.total_days, r.present, r.absent, r.rate]))}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Download size={14} /> CSV
+            </button>
+          </div>
         )}
         {tab === "grades" && gradeRows.length > 0 && (
-          <button
-            onClick={() => downloadCSV("Grade_Summary", ["Class","Subject","Students","Avg %","A","B","C","D","F"],
-              gradeRows.map((r) => [r.class_name, r.subject_name, r.total, r.avg_pct ?? "", r.a_count, r.b_count, r.c_count, r.d_count, r.f_count]))}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Download size={14} /> Export CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => printTable(
+                "Grade Summary", `Generated ${new Date().toLocaleDateString()}`,
+                ["Class","Subject","Students","Avg %","A","B","C","D","F"],
+                gradeRows.map((r) => [r.class_name, r.subject_name, r.total, r.avg_pct != null ? `${r.avg_pct.toFixed(1)}%` : "—", r.a_count, r.b_count, r.c_count, r.d_count, r.f_count])
+              )}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Printer size={14} /> Print PDF
+            </button>
+            <button
+              onClick={() => downloadCSV("Grade_Summary", ["Class","Subject","Students","Avg %","A","B","C","D","F"],
+                gradeRows.map((r) => [r.class_name, r.subject_name, r.total, r.avg_pct ?? "", r.a_count, r.b_count, r.c_count, r.d_count, r.f_count]))}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Download size={14} /> CSV
+            </button>
+          </div>
         )}
       </div>
 

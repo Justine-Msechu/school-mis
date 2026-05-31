@@ -18,6 +18,30 @@ export function downloadCSV(filename: string, headers: string[], rows: (string |
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Print a titled table. headers and rows are plain strings/numbers.
+ * Optional footerHtml is appended below the table (e.g. totals).
+ */
+export function printTable(
+  title: string,
+  subtitle: string,
+  headers: string[],
+  rows: (string | number | null | undefined)[][],
+  footerHtml = "",
+) {
+  const ths = headers.map(h => `<th>${h}</th>`).join("");
+  const trs = rows.map(row =>
+    `<tr>${row.map(c => `<td>${c ?? "—"}</td>`).join("")}</tr>`
+  ).join("");
+  printHTML(title, `
+    <h1>${title}</h1>
+    ${subtitle ? `<h2>${subtitle}</h2>` : ""}
+    <p class="meta">Printed: ${new Date().toLocaleString()}</p>
+    <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+    ${footerHtml}
+  `);
+}
+
 /** Open a new window and print HTML content. */
 export function printHTML(title: string, bodyHtml: string) {
   const win = window.open("", "_blank", "width=900,height=700");

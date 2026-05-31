@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap, Lock, Unlock, ArrowRightLeft, Clock, CheckCircle, XCircle, Trash2, FileText, ShieldCheck, Copy } from "lucide-react";
-import { downloadCSV } from "@/utils/export";
+import { TrendingUp, TrendingDown, DollarSign, Plus, Search, Download, AlertTriangle, Zap, Lock, Unlock, ArrowRightLeft, Clock, CheckCircle, XCircle, Trash2, FileText, ShieldCheck, Copy, Printer } from "lucide-react";
+import { downloadCSV, printHTML } from "@/utils/export";
 import { getPayments, getFinanceSummary, recordPayment, getStudentBill, getOutstandingDebtors, createWaiver, deleteWaiver, carryForward, getLockedPeriods, lockPeriod, unlockPeriod, getLateFeeRules, createLateFeeRule, deleteLateFeeRule, applyLateFees, getInstallments, createInstallmentPlan, getPendingApprovals, approveAction, rejectAction, type Payment, type FinanceSummary, type StudentBill, type DebtorRow, type WaiverRecord, type LockedPeriod, type LateFeeRule, type InstallmentRow, type PendingApproval } from "@/api/finance";
 import { getInvoices, createInvoice, approveInvoice, issueControlNumber, payInvoice, voidInvoice, getInvoiceAudit, type Invoice, type AuditEntry } from "@/api/invoices";
 import { getStudents } from "@/api/students";
@@ -436,6 +436,57 @@ function StudentBillPanel() {
   const [waiverOpen, setWaiverOpen] = useState(false);
   const [payOpen, setPayOpen]   = useState(false);
 
+  const printFeeStatement = (s: SelectedStudent, b: StudentBill) => {
+    const TZS = (n: number) => `TZS ${(n ?? 0).toLocaleString()}`;
+    const billRows = b.bills.map(bill => `
+      <tr>
+        <td>${bill.fee_type_name}</td>
+        <td class="right">${TZS(bill.amount_due)}</td>
+        <td class="right">${bill.discount_amount > 0 ? TZS(bill.discount_amount) : "—"}</td>
+        <td class="right">${bill.amount_paid > 0 ? TZS(bill.amount_paid) : "—"}</td>
+        <td class="center">${bill.status}</td>
+        <td>${bill.due_date || "—"}</td>
+      </tr>`).join("");
+    const payRows = b.payments.map(p => `
+      <tr>
+        <td>${p.payment_date}</td>
+        <td class="right">${TZS(p.amount_paid)}</td>
+        <td>${p.method || "—"}</td>
+        <td>${p.reference || "—"}</td>
+      </tr>`).join("");
+    printHTML(`Fee Statement — ${s.name}`, `
+      <h1>Fee Statement</h1>
+      <h2>${s.name} &nbsp;|&nbsp; ${s.admission_no}${s.class_name ? ` &nbsp;|&nbsp; ${s.class_name}` : ""}</h2>
+      <p class="meta">Printed: ${new Date().toLocaleString()}</p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0;font-size:11px">
+        <div style="border:1px solid #e5e7eb;padding:8px;border-radius:6px">
+          <div style="color:#6b7280;font-size:9px;text-transform:uppercase">Total Billed</div>
+          <div style="font-weight:bold">${TZS(b.total_billed)}</div>
+        </div>
+        <div style="border:1px solid #e5e7eb;padding:8px;border-radius:6px">
+          <div style="color:#6b7280;font-size:9px;text-transform:uppercase">Total Paid</div>
+          <div style="font-weight:bold;color:#059669">${TZS(b.total_paid)}</div>
+        </div>
+        <div style="border:1px solid ${b.balance > 0 ? "#fca5a5" : "#e5e7eb"};padding:8px;border-radius:6px;background:${b.balance > 0 ? "#fef2f2" : ""}">
+          <div style="color:${b.balance > 0 ? "#dc2626" : "#6b7280"};font-size:9px;text-transform:uppercase">Balance Due</div>
+          <div style="font-weight:bold;color:${b.balance > 0 ? "#dc2626" : "#111"}">${TZS(b.balance)}</div>
+        </div>
+      </div>
+      ${b.bills.length > 0 ? `
+        <h2 style="margin-top:14px">Bills</h2>
+        <table>
+          <thead><tr><th>Fee Type</th><th class="right">Billed</th><th class="right">Discount</th><th class="right">Paid</th><th class="center">Status</th><th>Due Date</th></tr></thead>
+          <tbody>${billRows}</tbody>
+        </table>` : ""}
+      ${b.payments.length > 0 ? `
+        <h2 style="margin-top:14px">Payment History</h2>
+        <table>
+          <thead><tr><th>Date</th><th class="right">Amount</th><th>Method</th><th>Reference</th></tr></thead>
+          <tbody>${payRows}</tbody>
+        </table>` : ""}
+    `);
+  };
+
   const lookup = useCallback(async (s: SelectedStudent | null) => {
     if (!s) { setBill(null); return; }
     setLoading(true); setError(""); setBill(null);
@@ -503,6 +554,12 @@ function StudentBillPanel() {
                 + Grant Waiver
               </button>
             )}
+            <button
+              onClick={() => selected && printFeeStatement(selected, bill)}
+              className="flex items-center gap-1.5 h-8 px-3 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Printer size={14} /> Print Statement
+            </button>
           </div>
 
           {/* Bills table */}
