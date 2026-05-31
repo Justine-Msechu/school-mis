@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LogOut, GraduationCap, Menu, X } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { logout as apiLogout } from "@/api/auth";
+import NotificationBell from "@/components/layout/NotificationBell";
 
 const ROLE_LABEL: Record<string, string> = {
   student_portal: "Student Portal",
@@ -37,27 +38,30 @@ export default function PortalShell({ children }: Props) {
           </span>
         </div>
 
-        <div className="hidden sm:flex items-center gap-3">
-          <span className="text-sm" style={{ color: "var(--color-on-surface-muted)" }}>
-            {user?.full_name}
-          </span>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <div className="hidden sm:flex items-center gap-3">
+            <span className="text-sm" style={{ color: "var(--color-on-surface-muted)" }}>
+              {user?.full_name}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+              style={{ color: "var(--color-on-surface-muted)", borderColor: "var(--color-border)" }}
+            >
+              <LogOut size={14} /> Sign out
+            </button>
+          </div>
+
+          {/* Mobile menu toggle */}
           <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200"
-            style={{ color: "var(--color-on-surface-muted)", borderColor: "var(--color-border)" }}
+            className="sm:hidden p-1.5 rounded-lg"
+            style={{ color: "var(--color-on-surface-muted)" }}
+            onClick={() => setMenuOpen(o => !o)}
           >
-            <LogOut size={14} /> Sign out
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-
-        {/* Mobile menu toggle */}
-        <button
-          className="sm:hidden p-1.5 rounded-lg"
-          style={{ color: "var(--color-on-surface-muted)" }}
-          onClick={() => setMenuOpen(o => !o)}
-        >
-          {menuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
       </header>
 
       {/* Mobile dropdown */}

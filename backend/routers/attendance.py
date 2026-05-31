@@ -3,6 +3,7 @@ from datetime import date as Date
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from backend.deps import require_auth
+from backend.core.events import event_bus, Events
 from database.db import fetch_all, fetch_one, execute
 
 router = APIRouter(tags=["attendance"])
@@ -108,8 +109,18 @@ class LeaveReviewBody(BaseModel):
 
 @router.post("/leave-requests/{lr_id}/review")
 def review_leave(lr_id: int, body: LeaveReviewBody, user: Usr):
+    lr = fetch_one("SELECT * FROM leave_requests WHERE id=?", (lr_id,))
     execute(
         "UPDATE leave_requests SET status=?, review_note=?, reviewed_by=? WHERE id=?",
         (body.status, body.note, user.get("id"), lr_id),
     )
+    if lr:
+        event_bus.emit(Events.LEAVE_REVIEWED, {
+            "student_id":   lr["student_id"],
+            "submitted_by": lr["submitted_by"],
+            "approved":     body.status == "approved",
+            "review_note":  body.note,
+            "date_from":    lr["date_from"],
+            "date_to":      lr["date_to"],
+        }, actor_id=user.get("id"))
     return {"ok": True}
