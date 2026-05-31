@@ -14,11 +14,14 @@ Why bcrypt over SHA-256?
 """
 
 import hashlib
+import logging
 import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Annotated
+
+log = logging.getLogger(__name__)
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -134,7 +137,11 @@ def _user_to_dict(row) -> dict:
     role_info = ROLES.get(role, {})
     user["role_label"]  = role_info.get("label", role) if isinstance(role_info, dict) else str(role_info)
     user["role_color"]  = role_info.get("color", "#94A3B8") if isinstance(role_info, dict) else "#94A3B8"
-    user["permissions"] = compute_effective_permissions(user["id"])
+    try:
+        user["permissions"] = compute_effective_permissions(user["id"])
+    except Exception as e:
+        log.error("compute_effective_permissions failed for user %s: %s", user.get("id"), e, exc_info=True)
+        user["permissions"] = []
     if not user.get("full_name"):
         user["full_name"] = user.get("username", "")
     return user
