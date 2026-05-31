@@ -185,6 +185,19 @@ def _adapt(sql: str) -> tuple[str, bool]:
         lambda m: f"(CURRENT_DATE + (%s || '{m.group(1)}')::interval)",
         sql, flags=re.I,
     )
+    # Dynamic date: date('now', %s) → CURRENT_DATE + %s::interval
+    # Handles cases like date('now', '-30 days') passed as a parameter
+    sql = re.sub(
+        r"\bdate\('now',\s*%s\s*\)",
+        "(CURRENT_DATE + %s::interval)",
+        sql, flags=re.I,
+    )
+    # Dynamic datetime: datetime('now', %s) → NOW() + %s::interval
+    sql = re.sub(
+        r"\bdatetime\('now',\s*%s\s*\)",
+        "(NOW() + %s::interval)",
+        sql, flags=re.I,
+    )
     # strftime with 'now' → TO_CHAR(CURRENT_DATE, ...) — must run before general strftime
     sql = _STRFTIME_NOW.sub(_strftime_now_sub, sql)
     # strftime with a column reference → TO_CHAR(col::timestamp, ...)

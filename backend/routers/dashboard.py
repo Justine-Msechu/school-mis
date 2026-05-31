@@ -39,18 +39,27 @@ def get_stats(user: Usr):
 
     # ── School-wide counts ────────────────────────────────────────────────────
     if can("student.view"):
-        result["students"] = _n(fetch_one(
-            "SELECT COUNT(*) as n FROM students WHERE is_active=1"
-        ))
+        try:
+            result["students"] = _n(fetch_one(
+                "SELECT COUNT(*) as n FROM students WHERE is_active=1"
+            ))
+        except Exception:
+            result["students"] = 0
 
     if can("teachers.view"):
-        result["teachers"] = _n(fetch_one(
-            "SELECT COUNT(*) as n FROM users "
-            "WHERE role IN ('subject_teacher','class_teacher') AND is_active=1"
-        ))
+        try:
+            result["teachers"] = _n(fetch_one(
+                "SELECT COUNT(*) as n FROM users "
+                "WHERE role IN ('subject_teacher','class_teacher') AND is_active=1"
+            ))
+        except Exception:
+            result["teachers"] = 0
 
     if can("classes.view"):
-        result["classes"] = _n(fetch_one("SELECT COUNT(*) as n FROM classes"))
+        try:
+            result["classes"] = _n(fetch_one("SELECT COUNT(*) as n FROM classes"))
+        except Exception:
+            result["classes"] = 0
 
     # ── Finance ───────────────────────────────────────────────────────────────
     if can("finance.view"):
@@ -141,7 +150,8 @@ def get_stats(user: Usr):
     if can("audit.view"):
         try:
             rows = fetch_all(
-                """SELECT al.id, al.action, al.module, al.created_at,
+                """SELECT al.id, al.action, al.table_name AS module,
+                          al.ts AS created_at,
                           u.full_name as user_name
                    FROM audit_log al
                    LEFT JOIN users u ON u.id = al.user_id
