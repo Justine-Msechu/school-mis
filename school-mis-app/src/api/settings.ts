@@ -37,6 +37,9 @@ export const updateUser = (id: number, body: { full_name: string; role: string; 
 export const toggleUserActive = (id: number) =>
   api.post(`/settings/users/${id}/toggle-active`).then((r) => r.data);
 
+export const resetUserPassword = (id: number, newPassword: string) =>
+  api.post(`/settings/users/${id}/reset-password`, { new_password: newPassword }).then((r) => r.data);
+
 export interface AcademicYear {
   id: number;
   label: string;

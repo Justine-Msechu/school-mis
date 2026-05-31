@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star, CreditCard, CheckCircle, AlertTriangle, Clock, BookOpen } from "lucide-react";
-import { getUsers, getRoles, createUser, updateUser, toggleUserActive, getConfig, setConfig, getAcademicYears, createAcademicYear, setCurrentYear, type AppUser, type Role, type AcademicYear } from "@/api/settings";
+import { Users, Plus, Edit2, ToggleLeft, ToggleRight, Save, Star, CreditCard, CheckCircle, AlertTriangle, Clock, BookOpen, KeyRound } from "lucide-react";
+import { getUsers, getRoles, createUser, updateUser, toggleUserActive, resetUserPassword, getConfig, setConfig, getAcademicYears, createAcademicYear, setCurrentYear, type AppUser, type Role, type AcademicYear } from "@/api/settings";
 import { getTeachers, type Teacher } from "@/api/teachers";
 import { getSubscriptionStatus, activateSubscription, type SubscriptionInfo } from "@/api/subscription";
 import { getSubjects, createSubject, updateSubject, toggleSubject, type Subject } from "@/api/subjects";
@@ -665,13 +665,17 @@ type PortalForm = { student_id: string; username: string; password: string; full
 const EMPTY_FORM: PortalForm = { student_id: "", username: "", password: "", full_name: "", relation: "Parent" };
 
 function PortalAccountsTab() {
-  const [data, setData]       = useState<PortalAccounts | null>(null);
-  const [students, setStudents] = useState<{ id: number; first_name: string; last_name: string; admission_no: string }[]>([]);
-  const [form, setForm]       = useState<PortalForm>(EMPTY_FORM);
-  const [mode, setMode]       = useState<"student" | "parent">("student");
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving]   = useState(false);
-  const [err, setErr]         = useState("");
+  const [data, setData]           = useState<PortalAccounts | null>(null);
+  const [students, setStudents]   = useState<{ id: number; first_name: string; last_name: string; admission_no: string }[]>([]);
+  const [form, setForm]           = useState<PortalForm>(EMPTY_FORM);
+  const [mode, setMode]           = useState<"student" | "parent">("student");
+  const [showForm, setShowForm]   = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [err, setErr]             = useState("");
+  const [resetTarget, setResetTarget] = useState<{ id: number; name: string } | null>(null);
+  const [resetPw, setResetPw]     = useState("");
+  const [resetErr, setResetErr]   = useState("");
+  const [resetSaving, setResetSaving] = useState(false);
 
   const load = () => listPortalAccounts().then(setData).catch(() => {});
 
@@ -704,6 +708,18 @@ function PortalAccountsTab() {
     if (!confirm("Delete this portal account? The user will no longer be able to log in.")) return;
     await deletePortalAccount(userId).catch(() => {});
     load();
+  };
+
+  const handlePortalReset = async () => {
+    if (!resetTarget) return;
+    if (resetPw.length < 6) { setResetErr("Password must be at least 6 characters."); return; }
+    setResetSaving(true); setResetErr("");
+    try {
+      await resetUserPassword(resetTarget.id, resetPw);
+      setResetTarget(null); setResetPw("");
+    } catch (e: any) {
+      setResetErr(e?.response?.data?.detail ?? "Failed to reset password.");
+    } finally { setResetSaving(false); }
   };
 
   const studentOptions = students.map(s => ({ value: s.id, label: `${s.first_name} ${s.last_name} (${s.admission_no})` }));
@@ -790,7 +806,10 @@ function PortalAccountsTab() {
                     <td className="px-4 py-3 text-gray-500">{a.admission_no}</td>
                     <td className="px-4 py-3 text-gray-500">@{a.username}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => handleDelete(a.user_id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                      <div className="flex gap-1 justify-end">
+                        <button onClick={() => { setResetTarget({ id: a.user_id, name: a.full_name || a.student_name }); setResetPw(""); setResetErr(""); }} className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50">Reset PW</button>
+                        <button onClick={() => handleDelete(a.user_id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -826,7 +845,10 @@ function PortalAccountsTab() {
                     <td className="px-4 py-3 text-gray-500">{a.relation}</td>
                     <td className="px-4 py-3 text-gray-500">@{a.username}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => handleDelete(a.user_id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                      <div className="flex gap-1 justify-end">
+                        <button onClick={() => { setResetTarget({ id: a.user_id, name: a.full_name || a.student_name }); setResetPw(""); setResetErr(""); }} className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50">Reset PW</button>
+                        <button onClick={() => handleDelete(a.user_id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -835,6 +857,32 @@ function PortalAccountsTab() {
           </table>
         </div>
       </div>
+
+      {resetTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <KeyRound size={16} className="text-blue-600" /> Reset Password
+            </h3>
+            <p className="text-sm text-gray-500">
+              Setting a new password for <strong>{resetTarget.name}</strong>.
+              They will be required to change it on next login.
+            </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">New temporary password</label>
+              <input type="text" className={INPUT} value={resetPw} onChange={e => setResetPw(e.target.value)}
+                placeholder="Min. 6 characters" autoFocus />
+            </div>
+            {resetErr && <p className="text-red-500 text-sm">{resetErr}</p>}
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setResetTarget(null)} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+              <Button variant="primary" onClick={handlePortalReset} disabled={resetSaving}>
+                {resetSaving ? "Saving…" : "Reset Password"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -855,7 +903,11 @@ export default function SettingsPage() {
   const [roles, setRoles]   = useState<Role[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editUser, setEditUser] = useState<AppUser | null | "new">(null);
+  const [editUser, setEditUser]       = useState<AppUser | null | "new">(null);
+  const [resetUser, setResetUser]     = useState<AppUser | null>(null);
+  const [resetPw, setResetPw]         = useState("");
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetErr, setResetErr]       = useState("");
 
   useEffect(() => {
     getTeachers("").then(setTeachers).catch(() => {});
@@ -880,6 +932,18 @@ export default function SettingsPage() {
   const handleToggle = async (id: number) => {
     await toggleUserActive(id).catch(() => {});
     load();
+  };
+
+  const handleReset = async () => {
+    if (!resetUser) return;
+    if (resetPw.length < 6) { setResetErr("Password must be at least 6 characters."); return; }
+    setResetSaving(true); setResetErr("");
+    try {
+      await resetUserPassword(resetUser.id, resetPw);
+      setResetUser(null); setResetPw("");
+    } catch (e: any) {
+      setResetErr(e?.response?.data?.detail ?? "Failed to reset password.");
+    } finally { setResetSaving(false); }
   };
 
   const roleMap = Object.fromEntries(roles.map((r) => [r.key, r]));
@@ -953,10 +1017,15 @@ export default function SettingsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => setEditUser(u)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors">
+                          <button onClick={() => setEditUser(u)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors" title="Edit">
                             <Edit2 size={14} />
                           </button>
-                          <button onClick={() => handleToggle(u.id)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors">
+                          {canAllUsers && (
+                            <button onClick={() => { setResetUser(u); setResetPw(""); setResetErr(""); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Reset password">
+                              <KeyRound size={14} />
+                            </button>
+                          )}
+                          <button onClick={() => handleToggle(u.id)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Toggle active">
                             {u.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
                           </button>
                         </div>
@@ -975,6 +1044,38 @@ export default function SettingsPage() {
       {tab === "subjects"      && <SubjectsTab />}
       {tab === "portal"        && <PortalAccountsTab />}
       {tab === "subscription"  && <SubscriptionTab />}
+
+      {resetUser && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <KeyRound size={16} className="text-blue-600" /> Reset Password
+            </h3>
+            <p className="text-sm text-gray-500">
+              Setting a new password for <strong>{resetUser.full_name}</strong> (@{resetUser.username}).
+              They will be required to change it on next login.
+            </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">New temporary password</label>
+              <input
+                type="text"
+                className={INPUT}
+                value={resetPw}
+                onChange={e => setResetPw(e.target.value)}
+                placeholder="Min. 6 characters"
+                autoFocus
+              />
+            </div>
+            {resetErr && <p className="text-red-500 text-sm">{resetErr}</p>}
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setResetUser(null)} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+              <Button variant="primary" onClick={handleReset} disabled={resetSaving}>
+                {resetSaving ? "Saving…" : "Reset Password"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editUser !== null && (
         <UserForm

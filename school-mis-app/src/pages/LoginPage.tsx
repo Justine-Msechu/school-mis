@@ -111,6 +111,11 @@ export default function LoginPage() {
             <Button type="submit" variant="primary" className="w-full mt-1 h-10" loading={loading}>
               Sign In
             </Button>
+
+            <p className="text-center text-xs text-slate-500 mt-1">
+              Forgot your password?{" "}
+              <span className="text-slate-400">Contact your school administrator to reset it.</span>
+            </p>
           </form>
         </div>
 

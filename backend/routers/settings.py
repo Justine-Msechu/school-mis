@@ -216,6 +216,40 @@ def toggle_active(uid: int, user: Usr):
     return {"ok": True}
 
 
+class ResetPasswordPayload(BaseModel):
+    new_password: str
+
+
+@router.post("/users/{uid}/reset-password")
+def reset_password(uid: int, body: ResetPasswordPayload, user: Usr):
+    """Admin sets a temp password for any user in their school. User is forced to change it on next login."""
+    if not authorize(user, "settings.users.manage"):
+        raise HTTPException(403, "Insufficient permissions")
+    if len(body.new_password) < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+
+    school_id = user.get("school_id")
+    target = fetch_one("SELECT id, username FROM users WHERE id=? AND school_id=?", (uid, school_id))
+    if not target:
+        raise HTTPException(404, "User not found")
+
+    import bcrypt
+    pw_hash = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt(12)).decode()
+    execute(
+        "UPDATE users SET password_hash=?, salt='', pw_scheme='bcrypt', must_change_pw=1 WHERE id=?",
+        (pw_hash, uid),
+    )
+    try:
+        execute(
+            "INSERT INTO audit_log (user_id, action, table_name, record_id, detail) VALUES (?,?,?,?,?)",
+            (user["id"], "password_reset", "users", uid,
+             f"Admin reset password for user @{target['username']}"),
+        )
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 # ── Academic years ────────────────────────────────────────────────────────────
 
 @router.get("/academic-years")
