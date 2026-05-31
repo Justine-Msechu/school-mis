@@ -235,9 +235,10 @@ def reset_password(uid: int, body: ResetPasswordPayload, user: Usr):
 
     import bcrypt
     pw_hash = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt(12)).decode()
+    force_change = 0 if uid == user["id"] else 1
     execute(
-        "UPDATE users SET password_hash=?, salt='', pw_scheme='bcrypt', must_change_pw=1 WHERE id=?",
-        (pw_hash, uid),
+        "UPDATE users SET password_hash=?, salt='', pw_scheme='bcrypt', must_change_pw=? WHERE id=?",
+        (pw_hash, force_change, uid),
     )
     try:
         execute(
