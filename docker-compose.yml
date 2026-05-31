@@ -2,7 +2,6 @@ version: "3.9"
 
 # Secrets are loaded from .env (gitignored).
 # Copy .env.example → .env and fill in values before running.
-env_file: .env
 
 services:
 
