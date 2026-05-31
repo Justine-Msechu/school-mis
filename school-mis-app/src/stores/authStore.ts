@@ -105,11 +105,12 @@ export const useAuthStore = create<AuthState>()(
             user: s.user ? { ...s.user, permissions: fresh.permissions } : s.user,
             mustChangePw: fresh.must_change_pw,
           }));
-        } catch (err: unknown) {
-          // Only force-logout on 401 (token genuinely invalid).
-          // Network errors or 5xx on startup must NOT log the user out.
-          const status = (err as { response?: { status?: number } })?.response?.status;
-          if (status === 401) get().logout();
+        } catch {
+          // Do NOT call logout() here. The axios interceptor in client.ts owns
+          // the 401 → logout decision and enforces an 8-second grace period after
+          // login to absorb transient errors (DB commit lag, race conditions).
+          // Calling logout() directly here bypasses that grace period and causes
+          // immediate kick-out when AppShell mounts right after a fresh login.
         }
       },
     }),
