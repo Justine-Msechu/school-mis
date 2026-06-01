@@ -74,7 +74,9 @@ def get_stats(user: Usr):
     low     = fetch_one("SELECT COUNT(*) AS n FROM inventory_items WHERE is_active=1 AND stock_qty <= reorder_qty")
     value   = fetch_one("SELECT COALESCE(SUM(stock_qty * unit_price),0) AS v FROM inventory_items WHERE is_active=1")
     pending = fetch_one("SELECT COUNT(*) AS n FROM inventory_requests WHERE status='pending'")
-    today   = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE DATE(created_at)=DATE('now')")
+    import datetime
+    today_prefix = datetime.date.today().isoformat()  # e.g. "2026-06-01"
+    today   = fetch_one("SELECT COUNT(*) AS n FROM inventory_transactions WHERE created_at LIKE ?", (f"{today_prefix}%",))
     return {
         "total_items":      dict(total)["n"]   if total   else 0,
         "low_stock_count":  dict(low)["n"]     if low     else 0,

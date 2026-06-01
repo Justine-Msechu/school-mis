@@ -18,13 +18,11 @@ def class_status(class_id: int, academic_year_id: int, user: Usr):
                   CASE WHEN sp.action IS NOT NULL THEN 1 ELSE 0 END AS promoted,
                   sp.to_class_id AS promoted_to_class_id
            FROM students s
-           JOIN enrollments e ON e.student_id=s.id
-                             AND e.class_id=? AND e.academic_year_id=?
            LEFT JOIN student_promotions sp ON sp.student_id=s.id
                                           AND sp.academic_year_id=?
-           WHERE s.deleted_at IS NULL
+           WHERE s.class_id=? AND s.is_active=1 AND s.deleted_at IS NULL
            ORDER BY s.first_name, s.last_name""",
-        (class_id, academic_year_id, academic_year_id),
+        (academic_year_id, class_id),
     )
     return [dict(r) for r in rows]
 

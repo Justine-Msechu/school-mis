@@ -71,8 +71,12 @@ def save_attendance(body: SaveAttendanceBody, user: Usr):
 
 @router.get("/summary")
 def get_summary(user: Usr, class_id: int = Query(None), days: int = Query(30)):
-    where = "WHERE a.date >= date('now', ?)"
-    params: list = [f"-{days} days"]
+    import datetime
+    # Compute cutoff as a text string so TEXT column comparison works in both
+    # SQLite and PostgreSQL (avoids TEXT >= DATE type mismatch in PG).
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    where = "WHERE a.date >= ?"
+    params: list = [cutoff]
     if class_id:
         where += " AND a.class_id=?"
         params.append(class_id)

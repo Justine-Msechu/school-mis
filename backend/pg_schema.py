@@ -525,6 +525,56 @@ _DDL: list[str] = [
         created_at    TEXT    DEFAULT NOW()::text
     )""",
 
+    """CREATE TABLE IF NOT EXISTS welfare_counseling (
+        id              SERIAL PRIMARY KEY,
+        student_id      INTEGER NOT NULL REFERENCES students(id),
+        session_date    TEXT    NOT NULL,
+        reason          TEXT,
+        notes           TEXT,
+        counselor_id    INTEGER REFERENCES users(id),
+        follow_up_date  TEXT,
+        follow_up_done  INTEGER DEFAULT 0,
+        created_at      TEXT    DEFAULT NOW()::text
+    )""",
+
+    """CREATE TABLE IF NOT EXISTS welfare_visits (
+        id              SERIAL PRIMARY KEY,
+        student_id      INTEGER NOT NULL REFERENCES students(id),
+        visit_date      TEXT    NOT NULL,
+        address_visited TEXT,
+        findings        TEXT,
+        action_taken    TEXT,
+        next_visit_date TEXT,
+        officer_id      INTEGER REFERENCES users(id),
+        created_at      TEXT    DEFAULT NOW()::text
+    )""",
+
+    """CREATE TABLE IF NOT EXISTS welfare_distributions (
+        id                SERIAL PRIMARY KEY,
+        student_id        INTEGER NOT NULL REFERENCES students(id),
+        item_type         TEXT    NOT NULL,
+        quantity          REAL    DEFAULT 1,
+        unit              TEXT    DEFAULT 'pcs',
+        distribution_date TEXT    NOT NULL,
+        notes             TEXT,
+        distributed_by    INTEGER REFERENCES users(id),
+        created_at        TEXT    DEFAULT NOW()::text
+    )""",
+
+    """CREATE TABLE IF NOT EXISTS welfare_incidents (
+        id             SERIAL PRIMARY KEY,
+        student_id     INTEGER NOT NULL REFERENCES students(id),
+        incident_date  TEXT    NOT NULL,
+        incident_type  TEXT,
+        description    TEXT,
+        action_taken   TEXT,
+        reported_by    INTEGER REFERENCES users(id),
+        resolved       INTEGER DEFAULT 0,
+        resolved_date  TEXT,
+        resolved_by    INTEGER REFERENCES users(id),
+        created_at     TEXT    DEFAULT NOW()::text
+    )""",
+
     # ── Inventory ─────────────────────────────────────────────────────────────
     """CREATE TABLE IF NOT EXISTS inventory_items (
         id          SERIAL PRIMARY KEY,
@@ -1108,6 +1158,19 @@ def run() -> None:
             execute(stmt)
         except Exception as exc:
             log.debug("Schema DDL skipped (%s): %.80s", exc, stmt.strip()[:80])
+
+    # 2a. Add columns that exist in the router layer but were missing from the
+    #     original schema (safe for existing deployments — ADD COLUMN IF NOT EXISTS).
+    for _alter in [
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS employee_no TEXT UNIQUE",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS date_of_birth TEXT",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS subject_specialization TEXT",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS joining_date TEXT",
+    ]:
+        try:
+            execute(_alter)
+        except Exception:
+            pass
 
     # 2. Seed sequence counters for auto-generated IDs (idempotent)
     try:

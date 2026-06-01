@@ -1,12 +1,12 @@
 """
 BaseRepository — generic CRUD with soft-delete support.
 
-All domain repositories inherit from this class.
-The `conn` parameter is the thread-local SQLite connection from backend.core.db.
+Works in both SQLite (desktop) and PostgreSQL (server) modes by delegating
+all queries to the database.db helpers rather than using the raw connection.
+The `conn` parameter is kept for API compatibility but is not used.
 """
 
 from __future__ import annotations
-import sqlite3
 from typing import Any
 from backend.core.exceptions import NotFoundError
 
@@ -15,21 +15,23 @@ class BaseRepository:
     table: str = ""
     pk: str = "id"
 
-    def __init__(self, conn: sqlite3.Connection):
-        self.conn = conn
+    def __init__(self, conn=None):
+        self.conn = conn  # kept for API compatibility; not used directly
 
     def _q(self, sql: str, params: Any = ()) -> list[dict]:
-        cur = self.conn.execute(sql, params)
-        return [dict(r) for r in cur.fetchall()]
+        from database.db import fetch_all
+        rows = fetch_all(sql, params)
+        return [dict(r) for r in rows] if rows else []
 
     def _one(self, sql: str, params: Any = ()) -> dict | None:
-        cur = self.conn.execute(sql, params)
-        row = cur.fetchone()
-        return dict(row) if row else None
+        from database.db import fetch_one
+        r = fetch_one(sql, params)
+        return dict(r) if r else None
 
     def _exec(self, sql: str, params: Any = ()) -> int:
-        cur = self.conn.execute(sql, params)
-        return cur.lastrowid or 0
+        from database.db import execute
+        result = execute(sql, params)
+        return result or 0
 
     def get(self, id: int) -> dict | None:
         return self._one(

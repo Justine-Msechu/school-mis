@@ -88,8 +88,9 @@ STUDENT_SPONSORSHIP_SELECT = """
     SELECT sp.id AS sponsorship_id, sp.support_types, sp.fee_amount,
            sp.start_date, sp.end_date, sp.notes AS sponsorship_notes,
            sp.is_active, sp.created_at,
-           s.id AS student_id, s.full_name, s.student_id AS admission_no,
-           s.gender, s.date_of_birth,
+           s.id AS student_id,
+           (s.first_name || ' ' || s.last_name) AS full_name,
+           s.admission_no, s.gender, s.date_of_birth,
            c.name AS class_name,
            n.id AS ngo_id, n.name AS ngo_name
     FROM student_sponsorships sp
@@ -105,7 +106,7 @@ def get_ngo_students(ngo_id: int, user: Usr):
     if not row:
         raise HTTPException(404, "NGO not found")
     rows = fetch_all(
-        f"{STUDENT_SPONSORSHIP_SELECT} WHERE sp.ngo_id=? AND sp.is_active=1 AND s.is_active=1 ORDER BY s.full_name",
+        f"{STUDENT_SPONSORSHIP_SELECT} WHERE sp.ngo_id=? AND sp.is_active=1 AND s.is_active=1 ORDER BY s.last_name, s.first_name",
         (ngo_id,),
     )
     return [dict(r) for r in rows]
@@ -119,7 +120,7 @@ def list_sponsorships(user: Usr, ngo_id: Optional[int] = Query(None)):
         where += " AND sp.ngo_id=?"
         params.append(ngo_id)
     rows = fetch_all(
-        f"{STUDENT_SPONSORSHIP_SELECT} WHERE {where} ORDER BY s.full_name",
+        f"{STUDENT_SPONSORSHIP_SELECT} WHERE {where} ORDER BY s.last_name, s.first_name",
         params,
     )
     return [dict(r) for r in rows]
@@ -189,8 +190,8 @@ def ngo_report(ngo_id: int, user: Usr):
     rows = fetch_all("""
         SELECT
             s.id          AS student_id,
-            s.full_name,
-            s.student_id  AS admission_no,
+            (s.first_name || ' ' || s.last_name) AS full_name,
+            s.admission_no,
             c.name        AS class_name,
             sp.support_types,
             sp.fee_amount,
@@ -215,7 +216,7 @@ def ngo_report(ngo_id: int, user: Usr):
         JOIN students s ON s.id = sp.student_id AND s.is_active = 1
         LEFT JOIN classes c ON c.id = s.class_id
         WHERE sp.ngo_id = ? AND sp.is_active = 1
-        ORDER BY s.full_name
+        ORDER BY s.last_name, s.first_name
     """, (ngo_id,))
 
     students = [dict(r) for r in rows]

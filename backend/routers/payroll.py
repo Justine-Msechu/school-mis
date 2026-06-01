@@ -237,7 +237,7 @@ def ytd_summary(user: Usr, year: int = Query(...)):
     """Year-to-date totals per employee for finalized/approved runs in the given year."""
     require_permission(user, "payroll.view")
     rows = fetch_all(
-        """SELECT t.id AS teacher_id, t.first_name, t.last_name, t.employee_no,
+        """SELECT t.id AS teacher_id, t.first_name, t.last_name,
                   COUNT(pi.id) AS months_paid,
                   SUM(pi.gross_pay) AS ytd_gross,
                   SUM(pi.nssf_employee) AS ytd_nssf_employee,
