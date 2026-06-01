@@ -27,7 +27,7 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
 
-from backend.core.db import execute, fetch_all, fetch_one
+from database.db import execute, fetch_all, fetch_one
 
 log = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ def require_auth(
             except ValueError:
                 pass
         if not user.get("school_id"):
-            from backend.core.db import fetch_one as _fo
+            from database.db import fetch_one as _fo
             first = _fo("SELECT id FROM schools ORDER BY id LIMIT 1", ())
             if first:
                 user["school_id"] = first["id"]
